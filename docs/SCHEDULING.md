@@ -343,3 +343,44 @@ intervalli, processo morto che non resta «in esecuzione», soglia esatta a
 Il secondo tentativo e il conteggio per origine sono in
 `npm run test:coverage`; le quattro varianti della riga sullo stato del runner
 in `npm run test:cov-view`.
+
+---
+
+## 8. Produzione (dal 19/08/2026)
+
+Tre pezzi gratuiti, ognuno per ciò che sa fare:
+
+| Pezzo | Ruolo | Perché |
+|---|---|---|
+| Vercel Hobby | serve le pagine | il piano gratuito consente **un solo cron al giorno**: inadatto a 45 minuti |
+| GitHub Actions | esegue la raccolta | cron ogni 45 min, scrive direttamente su Neon |
+| Neon free | PostgreSQL | nessuna carta, nessuna scadenza |
+
+**Il runner interno è spento in produzione** (`SCHEDULER_ENABLED=false`). Su
+Vercel il processo non sopravvive fra due richieste: un loop in-process
+dichiarerebbe un "prossimo giro" che nessuno eseguirà. Il pannello mostra
+quindi «Raccolta automatica non attiva» — è la verità sul processo web, mentre
+la serie avanza lo stesso perché a raccogliere è GitHub Actions.
+
+### Il cron non è `*/45`
+
+`*/45 * * * *` **non** produce un giro ogni 45 minuti: il campo dei minuti si
+azzera a ogni ora, quindi scatta a :00 e :45 — 45 minuti, poi 15. Il workflow
+usa `7,52 * * * *` (45 e 75 minuti alternati, minuto 0 evitato perché
+congestionato). L'autorità sulla spaziatura minima resta il gate interno
+`COLLECT_INTERVAL_MINUTES=45`, che scarta i giri troppo ravvicinati.
+
+### Cosa conta per la serie N/10
+
+Solo `meta.trigger = "scheduled"`. `triggerOfRun` tratta ogni altro valore come
+`manual`. Il workflow passa `npm run job:collect -- --scheduled`: senza quel
+flag i giri del cron sarebbero contati come manuali e la serie resterebbe a
+zero per sempre.
+
+### Due trappole già pagate
+
+- `NODE_ENV=production` a livello di job fa saltare le devDependencies a
+  `npm ci`: drizzle-kit e tsx spariscono e la migrazione muore con «Please
+  install latest version of drizzle-orm». La variabile non si mette sul job.
+- `tsx --env-file=.env` esce con codice 9 dove `.env` non esiste (il runner CI,
+  giustamente). Gli script `job:*` usano `--env-file-if-exists`.
