@@ -1,0 +1,210 @@
+/**
+ * Pannello "Stato dati".
+ *
+ * Sta in alto perché è la premessa di tutto il resto: prima di leggere un
+ * numero, chi guarda deve sapere quanto è completo il quadro da cui viene.
+ * Dichiara le fonti, i buchi aperti e l'ultima raccolta riuscita.
+ */
+import type { DashboardStatus } from "@/lib/repo/dashboard";
+import { ND, fmtAgo, fmtDateTime, gapReasonLabel, sourceStatusLabel } from "./format";
+
+const BANNER_STYLES: Record<DashboardStatus["overall"], string> = {
+  ok: "border-emerald-300 bg-emerald-50 text-emerald-900",
+  partial: "border-orange-300 bg-orange-50 text-orange-900",
+  blocked: "border-red-300 bg-red-50 text-red-900",
+  no_data: "border-slate-400 bg-slate-100 text-slate-800",
+};
+
+const SOURCE_DOT: Record<string, string> = {
+  ok: "bg-emerald-500",
+  degraded: "bg-amber-500",
+  blocked: "bg-red-500",
+  disabled: "bg-slate-400",
+  unknown: "bg-slate-300",
+};
+
+function Stat({
+  label,
+  value,
+  hint,
+}: {
+  label: string;
+  value: string | number;
+  hint?: string;
+}) {
+  return (
+    <div className="rounded border border-slate-200 bg-white px-3 py-2">
+      <div className="text-[11px] leading-tight text-slate-500" title={hint}>
+        {label}
+      </div>
+      <div className="text-lg font-semibold tabular-nums text-slate-900">
+        {value}
+      </div>
+    </div>
+  );
+}
+
+export function StatusPanel({
+  status,
+  now,
+}: {
+  status: DashboardStatus;
+  now: Date;
+}) {
+  return (
+    <section
+      aria-labelledby="stato-dati"
+      className="rounded-lg border border-slate-200 bg-slate-50 p-4"
+    >
+      <h2
+        id="stato-dati"
+        className="mb-3 text-sm font-semibold tracking-wide text-slate-900 uppercase"
+      >
+        Stato dati
+      </h2>
+
+      {/* verdetto complessivo, pessimistico per scelta */}
+      <p
+        className={`mb-3 rounded border px-3 py-2 text-sm ${BANNER_STYLES[status.overall]}`}
+      >
+        {status.overallLabel}
+      </p>
+
+      <div className="mb-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
+        <Stat
+          label="Fonti attive"
+          value={`${status.sourcesOk}/${status.sources.length}`}
+          hint="Fonti che hanno risposto correttamente sul totale di quelle registrate."
+        />
+        <Stat
+          label="Partite oggi"
+          value={status.matchesToday}
+          hint="Partite con calcio d'inizio nella giornata italiana corrente."
+        />
+        <Stat
+          label="Partite monitorate"
+          value={status.matchesMonitored}
+          hint="Partite per cui esiste almeno una rilevazione di quota a registro."
+        />
+        <Stat
+          label="Rilevazioni oggi"
+          value={status.snapshotsToday}
+          hint="Quote registrate dal monitor nella giornata italiana corrente."
+        />
+      </div>
+
+      {/* elenco delle fonti */}
+      <div className="mb-3">
+        <h3 className="mb-1.5 text-xs font-semibold text-slate-700">Fonti</h3>
+        {status.sources.length === 0 ? (
+          <p className="text-xs text-slate-600">
+            Nessuna fonte ha ancora registrato un tentativo.
+          </p>
+        ) : (
+          <ul className="space-y-1">
+            {status.sources.map((s) => (
+              <li
+                key={s.key}
+                className="flex flex-wrap items-center gap-x-2 gap-y-0.5 rounded border border-slate-200 bg-white px-2.5 py-1.5 text-xs"
+              >
+                <span
+                  aria-hidden
+                  className={`h-2 w-2 shrink-0 rounded-full ${SOURCE_DOT[s.status] ?? "bg-slate-300"}`}
+                />
+                <span className="font-medium text-slate-900">{s.label}</span>
+                <span className="text-slate-600">
+                  {sourceStatusLabel(s.status)}
+                </span>
+                <span className="text-slate-400">·</span>
+                <span className="text-slate-600">
+                  ultimo successo {fmtAgo(s.lastSuccessAt, now)}
+                </span>
+                {s.avgLatencyMs !== null && (
+                  <>
+                    <span className="text-slate-400">·</span>
+                    <span className="text-slate-600 tabular-nums">
+                      latenza media {s.avgLatencyMs} ms
+                    </span>
+                  </>
+                )}
+                {s.consecutiveErrors > 0 && (
+                  <>
+                    <span className="text-slate-400">·</span>
+                    <span className="text-red-700 tabular-nums">
+                      {s.consecutiveErrors} errori consecutivi
+                    </span>
+                  </>
+                )}
+                {s.lastErrorMessage && (
+                  <span className="w-full text-slate-500">
+                    ultimo errore: {s.lastErrorMessage}
+                  </span>
+                )}
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+
+      {/* buchi dichiarati */}
+      <div className="mb-3">
+        <h3 className="mb-1.5 text-xs font-semibold text-slate-700">
+          Dati mancanti dichiarati
+        </h3>
+        {status.openGaps === 0 ? (
+          <p className="text-xs text-slate-600">
+            Nessun buco aperto rispetto a ciò che le fonti configurate espongono.
+          </p>
+        ) : (
+          <ul className="flex flex-wrap gap-1.5">
+            {status.gapsByReason.map((g) => (
+              <li
+                key={g.reason}
+                className="rounded border border-slate-200 bg-white px-2 py-1 text-xs text-slate-700"
+              >
+                <span className="font-medium tabular-nums">{g.count}</span>{" "}
+                {gapReasonLabel(g.reason)}
+              </li>
+            ))}
+          </ul>
+        )}
+        <p className="mt-1.5 text-[11px] leading-relaxed text-slate-500">
+          I buchi restano visibili finché non vengono colmati da una rilevazione
+          reale. Nessun valore mancante viene stimato o interpolato.
+        </p>
+      </div>
+
+      {/* tracciabilità della raccolta */}
+      <div className="border-t border-slate-200 pt-2.5 text-xs text-slate-600">
+        <div>
+          Ultimo giro del collector:{" "}
+          {status.lastRun ? (
+            <>
+              <span className="font-medium text-slate-900">
+                {status.lastRun.collectorKey}
+              </span>{" "}
+              — esito {status.lastRun.status}, {fmtDateTime(status.lastRun.startedAt)} (
+              {fmtAgo(status.lastRun.startedAt, now)}), {status.lastRun.snapshotsWritten}{" "}
+              rilevazioni scritte
+            </>
+          ) : (
+            <span className="text-slate-500">{ND} — nessun giro registrato</span>
+          )}
+        </div>
+        {status.lastRun?.status !== "success" && (
+          <div className="mt-0.5">
+            Ultimo giro riuscito:{" "}
+            {status.lastSuccessfulRun ? (
+              <>
+                {fmtDateTime(status.lastSuccessfulRun.startedAt)} (
+                {fmtAgo(status.lastSuccessfulRun.startedAt, now)})
+              </>
+            ) : (
+              <span className="text-slate-500">mai</span>
+            )}
+          </div>
+        )}
+      </div>
+    </section>
+  );
+}

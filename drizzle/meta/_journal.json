@@ -1,0 +1,27 @@
+{
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1787067991884,
+      "tag": "0000_init",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1787070258089,
+      "tag": "0001_sprint2_source_health_detected_price",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1787079859708,
+      "tag": "0002_sprint4_fair_closing_clv_basis",
+      "breakpoints": true
+    }
+  ]
+}

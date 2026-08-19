@@ -1,0 +1,92 @@
+# Giro di osservazione schedulato — vedi docs/SCHEDULING.md
+#
+# Limiti dichiarati di GitHub Actions, non aggirabili:
+#   - intervallo minimo reale 5 minuti ("* * * * *" non viene mai eseguito);
+#   - nessuna garanzia di puntualità, ritardi di decine di minuti nelle ore di punta;
+#   - sui repository PUBBLICI le schedule vengono disattivate dopo 60 giorni
+#     senza attività: serve un commit periodico o `gh workflow enable`;
+#   - parte solo dall'ultimo commit del branch di default.
+#
+# Il minuto 0 è volutamente evitato: è l'istante più congestionato.
+
+name: Osservazione DropAlert
+
+on:
+  schedule:
+    # Ogni 45 minuti. Attenzione: "*/45 * * * *" NON dà 45 minuti — il campo
+    # si azzera a ogni ora, producendo :00 e :45 (quindi 45 e 15 minuti
+    # alternati). Due voci esplicite a distanza reale di 45 e 75 minuti sono
+    # il compromesso più onesto possibile con un cron orario; il gate interno
+    # a COLLECT_INTERVAL_MINUTES resta l'autorità sulla spaziatura minima.
+    - cron: "7,52 * * * *"
+      timezone: Europe/Rome
+  workflow_dispatch:
+    inputs:
+      force:
+        description: "Ignora l'intervallo minimo fra due raccolte"
+        type: boolean
+        default: false
+
+# Un giro alla volta. Se il precedente è ancora in corso, questo aspetta
+# invece di raddoppiare il traffico verso la fonte.
+concurrency:
+  group: dropalert-collect
+  cancel-in-progress: false
+
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      NODE_ENV: production
+      # Intervallo applicato dal codice, non dal cron: un retry o una
+      # esecuzione manuale ravvicinata non producono traffico aggiuntivo.
+      COLLECT_INTERVAL_MINUTES: ${{ vars.COLLECT_INTERVAL_MINUTES || '45' }}
+      COLLECT_HORIZON_HOURS: ${{ vars.COLLECT_HORIZON_HOURS || '72' }}
+      COLLECT_MAX_FIXTURES: ${{ vars.COLLECT_MAX_FIXTURES || '25' }}
+      BETEXPLORER_ENABLED: "true"
+
+    steps:
+      - name: Codice
+        uses: actions/checkout@v4
+
+      - name: Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Dipendenze
+        run: npm ci
+
+      - name: Verifica configurazione database
+        run: |
+          if [ -z "$DATABASE_URL" ]; then
+            echo "::error::DATABASE_URL non configurato fra i secrets del repository."
+            echo "Il giro non parte: preferibile un fallimento visibile a una raccolta silenziosamente scartata."
+            exit 1
+          fi
+
+      - name: Migrazioni
+        run: npx drizzle-kit migrate
+
+      - name: Giro di osservazione
+        run: |
+          # --scheduled marca meta.trigger="scheduled": è l'unico valore che
+          # entra nella profondità della serie (N/10). Senza, il giro sarebbe
+          # contato come manuale e la serie non avanzerebbe mai.
+          if [ "${{ inputs.force }}" = "true" ]; then
+            npm run job:collect -- --scheduled --force
+          else
+            npm run job:collect -- --scheduled
+          fi
+
+# Perché il cron sta qui e non su Vercel: il piano Hobby consente una sola
+# esecuzione cron al giorno, incompatibile con un intervallo di 45 minuti.
+# Vercel serve le pagine, GitHub Actions esegue la raccolta e scrive su Neon.
+#
+# Alternativa a costo zero se il repository diventa privato e i 2.000
+# minuti/mese del piano Free si stringono: COLLECT_INTERVAL_MINUTES a 60 e
+# cron "7 * * * *". Si perde risoluzione sul movimento, non correttezza.
