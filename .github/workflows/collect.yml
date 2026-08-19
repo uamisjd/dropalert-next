@@ -40,7 +40,9 @@ jobs:
 
     env:
       DATABASE_URL: ${{ secrets.DATABASE_URL }}
-      NODE_ENV: production
+      # NODE_ENV NON è "production" a livello di job: con quel valore
+      # `npm ci` salta le devDependencies, e drizzle-kit/tsx (che servono a
+      # migrare ed eseguire il giro) non verrebbero installati.
       # Intervallo applicato dal codice, non dal cron: un retry o una
       # esecuzione manuale ravvicinata non producono traffico aggiuntivo.
       COLLECT_INTERVAL_MINUTES: ${{ vars.COLLECT_INTERVAL_MINUTES || '45' }}
@@ -59,7 +61,7 @@ jobs:
           cache: npm
 
       - name: Dipendenze
-        run: npm ci
+        run: npm ci --include=dev
 
       - name: Verifica configurazione database
         run: |
