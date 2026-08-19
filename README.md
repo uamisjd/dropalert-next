@@ -315,3 +315,4 @@ nessuna garanzia di puntualità, schedule **disattivate dopo 60 giorni** di
 inattività sui repository pubblici, ~2.000 minuti/mese sui privati nel piano
 Free. Dettagli, alternative e strategia di degradazione in
 **[`docs/SCHEDULING.md`](docs/SCHEDULING.md)**.
+ok
