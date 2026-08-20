@@ -27,7 +27,8 @@
     "test:view": "tsx src/lib/repo/__tests__/view.test.ts",
     "test:cov-view": "tsx src/lib/cov/__tests__/view.test.ts",
     "test:scheduler": "tsx --env-file=.env src/lib/pipeline/__tests__/scheduler.test.ts",
-    "test:settle": "tsx src/lib/settle/__tests__/outcome.test.ts"
+    "test:settle": "tsx src/lib/settle/__tests__/outcome.test.ts",
+    "backtest:r1": "tsx scripts/backtest-r1.ts"
   },
   "dependencies": {
     "drizzle-orm": "^0.45.2",
