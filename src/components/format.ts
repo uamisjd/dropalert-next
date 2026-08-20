@@ -102,6 +102,7 @@ export const GAP_REASON_LABELS: Record<string, string> = {
   stale_snapshot: "rilevazione ferma oltre la soglia",
   parse_error: "lettura della pagina fallita",
   rate_limited: "richieste limitate dalla fonte",
+  result_not_published: "risultato non ancora pubblicato dalla fonte",
 };
 
 /** Stato di una fonte, in italiano. */

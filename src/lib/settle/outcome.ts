@@ -49,6 +49,30 @@ export const MIN_OUTCOMES_FOR_TREND = 10;
 /** Avviso fisso che accompagna ogni numero della pagina /ieri. */
 export const OUTCOME_DISCLAIMER = "Non è un rendimento né un consiglio.";
 
+/**
+ * Oltre quante ore dal kickoff un risultato mancante non si chiama più
+ * «in attesa»: la partita è finita da un pezzo, e se il collector non ha
+ * trovato l'esito la fonte non lo ha ancora pubblicato. È la stessa
+ * soglia che il collector usa per decidere quali partite ritentare a
+ * ogni giro: una sola costante, letta da entrambi i lati.
+ */
+export const RESULT_GRACE_HOURS = 3;
+
+/**
+ * true quando il kickoff è più vecchio di `graceHours`: l'assenza del
+ * risultato va dichiarata («non pubblicato dalla fonte»), non aspettata
+ * all'infinito. Puro: nessun orologio interno.
+ */
+export function isResultOverdue(
+  kickoffAt: string,
+  now: Date,
+  graceHours: number = RESULT_GRACE_HOURS,
+): boolean {
+  const kickoff = new Date(kickoffAt).getTime();
+  if (!Number.isFinite(kickoff)) return false;
+  return now.getTime() - kickoff > graceHours * 3_600_000;
+}
+
 /** Il conteggio dei tre esiti. */
 export interface OutcomeTally {
   centrata: number;

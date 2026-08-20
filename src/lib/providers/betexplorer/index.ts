@@ -339,9 +339,14 @@ export function createBetexplorerProvider(
      * stiamo seguendo), così i tornei minori restano coperti: è il cuore
      * del monitor e non va sacrificato a una lista fissa di leghe grandi.
      */
-    async fetchResults(window: DateRange): Promise<ProviderResult<ResultDTO[]>> {
-      const leagues = options.resultLeagues ?? [];
-      if (leagues.length === 0) {
+    async fetchResults(
+      window: DateRange,
+      leagues?: string[],
+    ): Promise<ProviderResult<ResultDTO[]>> {
+      /* l'argomento vince sulle opzioni di costruzione: è il giro di
+         raccolta a sapere quali tornei controllare, giro per giro */
+      const list = leagues ?? options.resultLeagues ?? [];
+      if (list.length === 0) {
         return ok<ResultDTO[]>([], 0, 0);
       }
 
@@ -351,7 +356,7 @@ export function createBetexplorerProvider(
       let totalLatency = 0;
       let hardFailures = 0;
 
-      for (const league of leagues) {
+      for (const league of list) {
         const [countrySlug, leagueSlug] = league.split("/");
         if (!countrySlug || !leagueSlug) {
           missing.push(`Campionato "${league}" non interpretabile: saltato.`);
@@ -388,11 +393,11 @@ export function createBetexplorerProvider(
       }
 
       /* tutte le pagine fallite: è un errore della fonte, non un parziale */
-      if (hardFailures === leagues.length && leagues.length > 0) {
+      if (hardFailures === list.length && list.length > 0) {
         return fail<ResultDTO[]>(
           {
             kind: "http",
-            message: `Nessuna pagina risultati raggiungibile (${hardFailures}/${leagues.length}).`,
+            message: `Nessuna pagina risultati raggiungibile (${hardFailures}/${list.length}).`,
           },
           totalLatency,
           true,

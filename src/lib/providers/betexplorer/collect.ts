@@ -25,9 +25,12 @@ import {
   applyResults,
   declarePerBookmakerGap,
   ensureConsensusBookmaker,
+  findPendingResultMatches,
   upsertMatch,
   writeSnapshots,
+  MAX_RESULT_LEAGUES,
 } from "./ingest";
+import { recordGap } from "@/lib/pipeline/detect";
 import { matchKeyFor } from "./parse";
 import { parseExclusion, EXCLUSION_CODES } from "../exclusion-codes";
 import {
@@ -85,6 +88,8 @@ export interface CollectReport {
   snapshotsWritten: number;
   snapshotsSkipped: number;
   resultsUpdated: number;
+  /** partite con kickoff passato oltre la grazia ancora senza esito, dopo il tentativo di questo giro */
+  resultsPending: number;
   problems: string[];
   latencyMs: number;
   payloadBytes: number;
@@ -164,6 +169,7 @@ export async function collectBetexplorer(
         snapshotsWritten: 0,
         snapshotsSkipped: 0,
         resultsUpdated: 0,
+        resultsPending: 0,
         problems: [message],
         latencyMs,
         payloadBytes,
@@ -402,28 +408,78 @@ export async function collectBetexplorer(
     }
 
     /* --- 4. risultati ----------------------------------------------- */
+    /* Il canale precedente leggeva solo i campionati presenti
+       nell'elenco dei movimenti DI QUESTO giro: una competizione uscita
+       dall'elenco (partita giocata, drop finito) spariva anche dalla
+       lettura dei risultati, e l'esito non arrivava mai. Il contratto
+       adesso è l'opposto: ogni partita monitorata con kickoff passato
+       oltre la grazia viene cercata a OGNI giro, finché il risultato non
+       arriva o la fonte non dichiara — pagina letta — che non c'è. */
     let resultsUpdated = 0;
+    let resultsPending = 0;
 
-    if (withResults && leaguePaths.size > 0) {
-      const resultsCall = await runProviderCall<ResultDTO[]>(
-        provider,
-        "fetchResults",
-        () =>
-          provider.fetchResults({
-            from: window.from,
-            to: window.to,
-          }),
-      );
+    if (withResults) {
+      const pending = await findPendingResultMatches(now);
 
-      payloadBytes += resultsCall.stats.payloadBytes;
-      latencyMs += resultsCall.stats.latencyMs;
+      /* prima le competizioni in attesa (sono in ritardo), poi quelle
+         del giro corrente; tetto dichiarato, oltre si riprova al giro dopo */
+      const leaguesToCheck = [
+        ...new Set([...pending.map((p) => p.leaguePath), ...leaguePaths]),
+      ];
+      const capped = leaguesToCheck.slice(MAX_RESULT_LEAGUES);
+      if (capped.length > 0) {
+        problems.push(
+          `Tetto di ${MAX_RESULT_LEAGUES} campionati risultati per giro: ${capped.length} competizioni non controllate in questo giro, si riprova al prossimo.`,
+        );
+      }
+      const checkedLeagues = new Set(leaguesToCheck.slice(0, MAX_RESULT_LEAGUES));
 
-      if (!resultsCall.result.ok) {
-        problems.push(`Risultati non raccolti: ${resultsCall.result.error.message}`);
-      } else {
-        if (resultsCall.result.partial) problems.push(...resultsCall.result.missing);
-        const applied = await applyResults(resultsCall.result.data);
-        resultsUpdated = applied.updated;
+      if (checkedLeagues.size > 0) {
+        const resultsCall = await runProviderCall<ResultDTO[]>(
+          provider,
+          "fetchResults",
+          () =>
+            provider.fetchResults(
+              { from: window.from, to: window.to },
+              [...checkedLeagues],
+            ),
+        );
+
+        payloadBytes += resultsCall.stats.payloadBytes;
+        latencyMs += resultsCall.stats.latencyMs;
+
+        if (!resultsCall.result.ok) {
+          problems.push(`Risultati non raccolti: ${resultsCall.result.error.message}`);
+        } else {
+          if (resultsCall.result.partial) problems.push(...resultsCall.result.missing);
+          const applied = await applyResults(resultsCall.result.data);
+          resultsUpdated = applied.updated;
+
+          /* chi è ancora in attesa dopo il tentativo di questo giro:
+             o la pagina del suo campionato è stata letta e non lo
+             contiene → la fonte non ha pubblicato l'esito, si dichiara
+             (un solo gap aperto per partita, il giro dopo si ritenta);
+             o la pagina non è stata raggiungibile → nessuna dichiarazione,
+             perché la fonte non ha potuto dire niente */
+          const stillPending = await findPendingResultMatches(now);
+          resultsPending = stillPending.length;
+
+          const failedLeagues = new Set(
+            (resultsCall.result.partial ? resultsCall.result.missing : [])
+              .map((m) => (m.split(":")[0] ?? "").trim())
+              .filter((l) => l.includes("/")),
+          );
+
+          for (const p of stillPending) {
+            if (!checkedLeagues.has(p.leaguePath)) continue;
+            if (failedLeagues.has(p.leaguePath)) continue;
+            await recordGap({
+              matchId: p.matchId,
+              reason: "result_not_published",
+              detail: `Pagina risultati "${p.leaguePath}" letta il ${now.toISOString()} senza questa partita (kickoff ${p.kickoffAt.toISOString()}): la fonte non ha ancora pubblicato l'esito. Il giro successivo ritenterà.`,
+            });
+          }
+        }
       }
     }
 
@@ -464,6 +520,7 @@ export async function collectBetexplorer(
       snapshotsWritten,
       snapshotsSkipped,
       resultsUpdated,
+      resultsPending,
       problems,
       latencyMs,
       payloadBytes,
@@ -488,6 +545,7 @@ export async function collectBetexplorer(
           matchesCreated,
           snapshotsSkipped,
           resultsUpdated,
+          resultsPending,
           leagues: [...leaguePaths],
           perBookmakerOdds: false,
           /* esito del secondo e ultimo tentativo, anche quando è vuoto */

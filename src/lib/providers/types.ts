@@ -221,7 +221,17 @@ export interface OddsProvider {
 
   fetchFixtures(window: DateRange): Promise<ProviderResult<FixtureDTO[]>>;
   fetchOdds(fixture: FixtureRef): Promise<ProviderResult<OddsQuoteDTO[]>>;
-  fetchResults(window: DateRange): Promise<ProviderResult<ResultDTO[]>>;
+  /**
+ * Risultati finali per competizione. `leagues` è l'elenco
+ * "paese/lega" da interrogare: chi chiama decide quali tornei
+ * controllare (il giro corrente più le partite in attesa di esito),
+ * così i campionati minori restano coperti anche quando escono
+ * dall'elenco dei movimenti.
+ */
+fetchResults(
+  window: DateRange,
+  leagues?: string[],
+): Promise<ProviderResult<ResultDTO[]>>;
   healthCheck(): Promise<ProviderHealth>;
 
   /**

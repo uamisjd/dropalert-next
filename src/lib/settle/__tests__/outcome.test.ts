@@ -12,6 +12,7 @@ import {
   OUTCOME_DISCLAIMER,
   OUTCOME_LABELS_IT,
   isUnderpowered,
+  isResultOverdue,
   outcomeOf,
   settledCount,
   tallyOutcomes,
@@ -212,6 +213,31 @@ function main(): void {
       OUTCOME_DISCLAIMER === "Non è un rendimento né un consiglio.",
       `testo inatteso: ${OUTCOME_DISCLAIMER}`,
     );
+  });
+
+  /* ---------------- attesa scaduta ---------------- */
+
+  console.log("\n-- Attesa scaduta: oltre le 3 ore --\n");
+
+  const NOW = new Date("2026-08-20T18:00:00Z");
+
+  test("meno di tre ore dal kickoff: resta in attesa", () => {
+    assertEqual(isResultOverdue("2026-08-20T15:01:00Z", NOW), false);
+  });
+  test("tre ore esatte: ancora dentro la grazia, non oltre", () => {
+    assertEqual(isResultOverdue("2026-08-20T15:00:00Z", NOW), false);
+  });
+  test("oltre le tre ore: l'attesa scade e si dichiara", () => {
+    assertEqual(isResultOverdue("2026-08-20T14:59:00Z", NOW), true);
+  });
+  test("partita non ancora giocata: mai scaduta", () => {
+    assertEqual(isResultOverdue("2026-08-20T20:00:00Z", NOW), false);
+  });
+  test("ventidue ore dopo: scaduta, nessuna attesa eterna", () => {
+    assertEqual(isResultOverdue("2026-08-19T20:00:00Z", NOW), true);
+  });
+  test("istante illeggibile: non si dichiara scadenza su un dato rotto", () => {
+    assertEqual(isResultOverdue("non-una-data", NOW), false);
   });
 
   /* ---------------- mai dal CLV ---------------- */

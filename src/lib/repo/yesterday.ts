@@ -12,6 +12,7 @@
 import { and, desc, eq, inArray, sql as raw } from "drizzle-orm";
 import { db } from "@/db/client";
 import {
+  dataGaps,
   dropSignals,
   leagues,
   matches,
@@ -31,6 +32,8 @@ import {
   MIN_OUTCOMES_FOR_TREND,
   OUTCOME_DISCLAIMER,
   OUTCOME_LABELS_IT,
+  RESULT_GRACE_HOURS,
+  isResultOverdue,
   isUnderpowered,
   outcomeOf,
   settledCount,
@@ -67,6 +70,14 @@ export interface YesterdayItem {
   awayGoals: number | null;
   verdict: OutcomeVerdict;
   verdictLabel: string;
+  /**
+   * true quando l'attesa è scaduta: kickoff oltre le 3 ore e ancora
+   * nessun risultato. L'attesa eterna non esiste: o il risultato
+   * arriva, o la fonte non l'ha pubblicato e si dichiara.
+   */
+  resultOverdue: boolean;
+  /** motivo registrato dal collector (data_gaps), se la fonte ha dichiarato l'assenza */
+  resultNote: string | null;
 }
 
 export interface YesterdayView {
@@ -81,6 +92,10 @@ export interface YesterdayView {
   /** soglia dichiarata, esposta per non hardcodarla nella pagina */
   minForTrend: number;
   disclaimer: string;
+  /** ore oltre le quali un'esito mancante si dichiara non pubblicato */
+  graceHours: number;
+  /** partite in attesa oltre la grazia: attesa scaduta, fonte che non pubblica */
+  overduePending: number;
 }
 
 /**
@@ -181,8 +196,35 @@ export async function getYesterdayView(
       awayGoals,
       verdict,
       verdictLabel: OUTCOME_LABELS_IT[verdict],
+      resultOverdue: false,
+      resultNote: null,
     };
   });
+
+  /* il motivo delle attese scadute, dove il collector l'ha registrato */
+  const overdueIds = items.filter((i) => i.verdict === "in_attesa" && isResultOverdue(i.kickoffAt, now)).map((i) => i.matchId);
+  const notesByMatch = new Map<number, string>();
+  if (overdueIds.length > 0) {
+    const gaps = await db
+      .select({ matchId: dataGaps.matchId, detail: dataGaps.detail, observedFrom: dataGaps.observedFrom })
+      .from(dataGaps)
+      .where(
+        and(
+          inArray(dataGaps.matchId, overdueIds),
+          eq(dataGaps.reason, "result_not_published"),
+          eq(dataGaps.resolved, false),
+        ),
+      );
+    for (const g of gaps) {
+      if (g.matchId !== null && g.detail !== null) notesByMatch.set(g.matchId, g.detail);
+    }
+  }
+
+  for (const item of items) {
+    if (item.verdict !== "in_attesa") continue;
+    item.resultOverdue = isResultOverdue(item.kickoffAt, now);
+    item.resultNote = notesByMatch.get(item.matchId) ?? null;
+  }
 
   const tally = tallyOutcomes(items.map((i) => i.verdict));
 
@@ -194,5 +236,7 @@ export async function getYesterdayView(
     underpowered: isUnderpowered(tally),
     minForTrend: MIN_OUTCOMES_FOR_TREND,
     disclaimer: OUTCOME_DISCLAIMER,
+    graceHours: RESULT_GRACE_HOURS,
+    overduePending: items.filter((i) => i.verdict === "in_attesa" && i.resultOverdue).length,
   };
 }

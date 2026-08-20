@@ -27,15 +27,28 @@ const VERDICT_STYLES: Record<string, string> = {
   centrata: "border-emerald-300 bg-emerald-50 text-emerald-900",
   mancata: "border-red-300 bg-red-50 text-red-900",
   in_attesa: "border-slate-300 bg-slate-100 text-slate-700",
+  non_pubblicato: "border-amber-300 bg-amber-50 text-amber-900",
 };
 
 function VerdictBadge({ item }: { item: YesterdayItem }) {
+  /* l'attesa scade: oltre le tre ore dal kickoff senza risultato non si
+      aspetta più, si dichiara che la fonte non ha pubblicato */
+  if (item.verdict === "in_attesa" && item.resultOverdue) {
+    return (
+      <span
+        className={`inline-block rounded border px-2 py-0.5 text-xs font-semibold ${VERDICT_STYLES.non_pubblicato}`}
+        title={item.resultNote ?? "Risultato non pubblicato dalla fonte."}
+      >
+        Non pubblicato dalla fonte
+      </span>
+    );
+  }
   return (
     <span
       className={`inline-block rounded border px-2 py-0.5 text-xs font-semibold ${VERDICT_STYLES[item.verdict]}`}
       title={
         item.verdict === "in_attesa"
-          ? "Nessun risultato finale registrato per questa partita: l'esito non si indovina."
+          ? "Partita da meno di tre ore: il risultato può non essere ancora registrato."
           : `Gol finali ${item.homeGoals}–${item.awayGoals}: esito calcolato dal risultato, non dal CLV.`
       }
     >
@@ -71,9 +84,11 @@ function SignalRow({ item }: { item: YesterdayItem }) {
         {item.confidenceScore !== null
           ? ` (${item.confidenceScore.toFixed(0)}/100)`
           : ""}
-        {item.verdict === "in_attesa"
-          ? " — risultato finale non ancora registrato: resta in attesa, nessun esito inventato."
-          : ` — gol finali ${item.homeGoals}–${item.awayGoals}.`}
+        {item.verdict === "in_attesa" && item.resultOverdue
+          ? " — risultato non pubblicato dalla fonte: il collector verifica a ogni giro e lo dichiarerà appena arriva."
+          : item.verdict === "in_attesa"
+            ? " — partita recente: risultato in arrivo, nessun esito inventato."
+            : ` — gol finali ${item.homeGoals}–${item.awayGoals}.`}
       </p>
     </li>
   );
@@ -159,6 +174,12 @@ export default async function YesterdayPage() {
                 <div className="text-lg font-semibold tabular-nums text-slate-800">
                   {view.tally.in_attesa}
                 </div>
+                {view.overduePending > 0 ? (
+                  <div className="text-[10px] leading-tight text-amber-800">
+                    di cui {view.overduePending} oltre {view.graceHours} h: fonte che non
+                    pubblica
+                  </div>
+                ) : null}
               </div>
             </div>
 

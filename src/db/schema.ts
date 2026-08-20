@@ -92,6 +92,13 @@ export const gapReasonEnum = pgEnum("gap_reason", [
   "stale_snapshot",
   "parse_error",
   "rate_limited",
+  /**
+   * La pagina risultati della competizione è stata letta e la partita non
+   * c'è: la fonte non ha ancora pubblicato l'esito. È un'assenza dichiarata
+   * dalla fonte, non un fallimento del collector — e il giro successivo
+   * ritenterà finché il risultato non compare.
+   */
+  "result_not_published",
 ]);
 
 /**

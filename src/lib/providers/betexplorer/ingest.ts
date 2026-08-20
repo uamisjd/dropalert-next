@@ -13,10 +13,11 @@
  * - un dato che manca resta mancante e finisce in `data_gaps`;
  * - il bookmaker di consenso è dichiarato tale (`isSharp = false`).
  */
-import { and, eq, inArray, isNull } from "drizzle-orm";
+import { and, desc, eq, gt, inArray, isNull, lt, notInArray, sql as raw } from "drizzle-orm";
 import { db } from "@/db/client";
 import {
   bookmakers,
+  dataGaps,
   leagues,
   matches,
   oddsSnapshots,
@@ -321,7 +322,86 @@ export async function applyResults(results: ResultDTO[]): Promise<ResultWriteRep
       .where(and(eq(matches.id, matchId), isNull(matches.settledAt)))
       .returning({ id: matches.id });
     updated += touched.length;
+
+    /* il risultato è arrivato: il buco «non pubblicato» si chiude */
+    if (touched.length > 0) {
+      await db
+        .update(dataGaps)
+        .set({ resolved: true, observedTo: new Date() })
+        .where(
+          and(
+            eq(dataGaps.matchId, matchId),
+            eq(dataGaps.reason, "result_not_published"),
+            eq(dataGaps.resolved, false),
+          ),
+        );
+    }
   }
 
   return { updated, unknownMatches: results.length - byKey.size };
+}
+
+/* ------------------------------------------------------------------ */
+/* Partite in attesa di risultato                                      */
+/* ------------------------------------------------------------------ */
+
+/** Quanto indietro guardare per partite mai saldate: oltre, non si insiste. */
+export const RESULT_LOOKBACK_DAYS = 30;
+
+/** Tetto di campionati da interrogare per giro: cortesia verso la fonte. */
+export const MAX_RESULT_LEAGUES = 25;
+
+/** Una partita monitorata il cui esito manca ancora. */
+export interface PendingResultMatch {
+  matchId: number;
+  /** "paese/lega" per la pagina risultati della fonte */
+  leaguePath: string;
+  kickoffAt: Date;
+}
+
+/**
+ * Le partite monitorate il cui kickoff è passato oltre `graceHours` fa e
+ * che non hanno ancora un risultato registrato.
+ *
+ * È la lista di quelle che il giro dopo continua a cercare: il contratto
+ * è «si tenta a ogni giro, finché il risultato non arriva o la fonte non
+ * dichiara l'assenza». Una partita uscita dall'elenco dei movimenti resta
+ * qui finché è nella finestra di lookback — è il difetto che teneva le
+ * partite di Copa Venezuela in attesa per sempre.
+ *
+ * «Monitorata» significa con almeno una rilevazione di quota a registro:
+ * una riga importata senza mai una quota non è un'osservazione.
+ */
+export async function findPendingResultMatches(
+  now: Date,
+  graceHours: number = 3,
+  lookbackDays: number = RESULT_LOOKBACK_DAYS,
+): Promise<PendingResultMatch[]> {
+  const since = new Date(now.getTime() - lookbackDays * 24 * 3600_000);
+  const overdueSince = new Date(now.getTime() - graceHours * 3600_000);
+
+  const rows = await db
+    .selectDistinct({
+      matchId: matches.id,
+      kickoffAt: matches.kickoffAt,
+      leaguePath: leagues.externalRef,
+    })
+    .from(matches)
+    .innerJoin(oddsSnapshots, eq(oddsSnapshots.matchId, matches.id))
+    .innerJoin(leagues, eq(leagues.id, matches.leagueId))
+    .where(
+      and(
+        raw`${matches.key} not like 'demo-%'`,
+        lt(matches.kickoffAt, overdueSince),
+        gt(matches.kickoffAt, since),
+        isNull(matches.settledAt),
+        notInArray(matches.status, ["postponed", "cancelled"]),
+      ),
+    )
+    .orderBy(desc(matches.kickoffAt));
+
+  return rows
+    .filter((r): r is { matchId: number; kickoffAt: Date; leaguePath: string } =>
+      typeof r.leaguePath === "string" && r.leaguePath.length > 0)
+    .map((r) => ({ matchId: r.matchId, leaguePath: r.leaguePath, kickoffAt: r.kickoffAt }));
 }

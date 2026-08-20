@@ -1,0 +1,1 @@
+ALTER TYPE "public"."gap_reason" ADD VALUE 'result_not_published';
