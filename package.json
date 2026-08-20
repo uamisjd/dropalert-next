@@ -21,7 +21,7 @@
     "report:coverage": "tsx --env-file=.env src/scripts/run-coverage.ts",
     "job:analyze": "tsx --env-file-if-exists=.env src/scripts/run-analyze.ts",
     "test:providers": "tsx src/lib/providers/__tests__/providers.test.ts",
-    "job:collect": "tsx --env-file-if-exists=.env src/scripts/run-collect.ts",
+    "job:collect": "bash scripts/cycle.sh",
     "job:verify-results": "tsx --env-file-if-exists=.env src/scripts/verify-results.ts",
     "job:shape": "tsx --env-file-if-exists=.env src/scripts/build-shape-features.ts",
     "test:betexplorer": "tsx src/lib/providers/__tests__/betexplorer.test.ts",
