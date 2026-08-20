@@ -15,6 +15,7 @@ import {
 } from "@/lib/repo/dashboard";
 import { getCoverageHistory } from "@/lib/repo/coverage-history";
 import { buildCoverageView, type CoverageView } from "@/lib/cov/view";
+import { BacktestNote } from "@/components/BacktestNote";
 import { ClvSection } from "@/components/ClvSection";
 import { CoverageSummary } from "@/components/CoverageSummary";
 import { EmptyState } from "@/components/EmptyState";
@@ -170,6 +171,11 @@ export default async function Home({
 
       <div className="mt-6">
         <ClvSection clv={data.clv} />
+      </div>
+
+      {/* verifica empirica sui dati storici: stessa zona metodologica del CLV */}
+      <div className="mt-5">
+        <BacktestNote />
       </div>
 
       <footer className="mt-6 border-t border-slate-200 pt-4 text-xs leading-relaxed text-slate-500">
