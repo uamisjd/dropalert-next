@@ -151,6 +151,7 @@ export async function runProviderCall<T>(
         label: provider.label,
         outcome: "error",
         errorMessage: message,
+        rateLimited: true,
       });
       await recordGap({
         matchId,
@@ -227,6 +228,12 @@ export async function runProviderCall<T>(
       outcome,
       latencyMs: result.latencyMs,
       errorMessage: result.ok ? undefined : result.error.message,
+      /* 429 e blocchi sono limiti della fonte: datati a parte, non
+         confusi con i dati che non siamo riusciti a leggere noi */
+      rateLimited:
+        !result.ok &&
+        (result.error.kind === "rate_limited" ||
+          result.error.kind === "blocked"),
     });
 
     /* Un buco dichiarato vale più di un numero inventato. */

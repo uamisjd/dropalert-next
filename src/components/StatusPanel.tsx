@@ -135,6 +135,19 @@ export function StatusPanel({
                     </span>
                   </>
                 )}
+                {/* Il rate-limit è un limite della fonte, non un dato che
+                    abbiamo perso: riga propria, ambra come gli altri limiti
+                    di fonte, mai rossa come le perdite del monitor. */}
+                {s.lastRateLimitAt && (
+                  <span className="w-full text-amber-700">
+                    limite della fonte: richieste limitate (429){" "}
+                    {fmtDateTime(s.lastRateLimitAt)} (
+                    {fmtAgo(s.lastRateLimitAt, now)})
+                    {s.rateLimitCount > 1 && `, ${s.rateLimitCount} volte`} — la
+                    fonte ci ha chiesto di rallentare: nessun dato inventato al
+                    suo posto.
+                  </span>
+                )}
                 {s.lastErrorMessage && (
                   <span className="w-full text-slate-500">
                     ultimo errore: {s.lastErrorMessage}

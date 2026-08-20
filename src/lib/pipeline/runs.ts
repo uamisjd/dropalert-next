@@ -92,6 +92,13 @@ export interface SourcePing {
   latencyMs?: number;
   errorMessage?: string;
   isFallback?: boolean;
+  /**
+   * true quando l'esito è dovuto a un rate-limit della fonte (429 o
+   * circuito aperto dal nostro limitatore). Resta un errore a tutti gli
+   * effetti, ma viene datato a parte: è un limite della fonte, non un
+   * dato che abbiamo perso per un difetto nostro.
+   */
+  rateLimited?: boolean;
 }
 
 /** Numero di errori consecutivi oltre il quale la fonte è dichiarata bloccata. */
@@ -124,6 +131,7 @@ export async function recordSourcePing(ping: SourcePing): Promise<SourceStatus> 
     .limit(1);
 
   const isError = ping.outcome === "error";
+  const isRateLimit = ping.rateLimited === true;
   const consecutiveErrors = isError ? (existing?.consecutiveErrors ?? 0) + 1 : 0;
   const status = deriveSourceStatus(ping.outcome, consecutiveErrors);
 
@@ -151,6 +159,12 @@ export async function recordSourcePing(ping: SourcePing): Promise<SourceStatus> 
     lastLatencyMs: ping.latencyMs ?? null,
     consecutiveErrors,
     isFallback: ping.isFallback ?? false,
+    /* la data del rate-limit sopravvive ai giri andati bene: serve a
+       spiegare a posteriori un buco che altrimenti sembrerebbe nostro */
+    lastRateLimitAt: isRateLimit ? now : (existing?.lastRateLimitAt ?? null),
+    lastRateLimitMessage: isRateLimit
+      ? (ping.errorMessage ?? "richieste limitate dalla fonte")
+      : (existing?.lastRateLimitMessage ?? null),
     updatedAt: now,
   };
 
@@ -160,6 +174,7 @@ export async function recordSourcePing(ping: SourcePing): Promise<SourceStatus> 
       successCount: ping.outcome === "ok" ? 1 : 0,
       errorCount: isError ? 1 : 0,
       partialCount: ping.outcome === "partial" ? 1 : 0,
+      rateLimitCount: isRateLimit ? 1 : 0,
     });
     return status;
   }
@@ -179,6 +194,9 @@ export async function recordSourcePing(ping: SourcePing): Promise<SourceStatus> 
         ping.outcome === "partial"
           ? raw`${sourceHealth.partialCount} + 1`
           : existing.partialCount,
+      rateLimitCount: isRateLimit
+        ? raw`${sourceHealth.rateLimitCount} + 1`
+        : existing.rateLimitCount,
     })
     .where(eq(sourceHealth.sourceKey, ping.sourceKey));
 

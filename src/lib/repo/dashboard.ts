@@ -204,6 +204,10 @@ export interface SourceRow {
   consecutiveErrors: number;
   avgLatencyMs: number | null;
   lastErrorMessage: string | null;
+  /** ultimo rate-limit subito: limite della fonte, non perdita nostra */
+  lastRateLimitAt: string | null;
+  lastRateLimitMessage: string | null;
+  rateLimitCount: number;
 }
 
 export interface DashboardStatus {
@@ -324,6 +328,9 @@ export async function getDashboardStatus(now = new Date()): Promise<DashboardSta
     consecutiveErrors: s.consecutiveErrors,
     avgLatencyMs: s.avgLatencyMs,
     lastErrorMessage: s.lastErrorMessage,
+    lastRateLimitAt: toIso(s.lastRateLimitAt),
+    lastRateLimitMessage: s.lastRateLimitMessage,
+    rateLimitCount: s.rateLimitCount,
   }));
 
   /* "disabled" non è un guasto: è una scelta di configurazione. */

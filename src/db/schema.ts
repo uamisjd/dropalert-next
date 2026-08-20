@@ -525,6 +525,16 @@ export const sourceHealth = pgTable(
     partialCount: integer("partial_count").notNull().default(0),
     /** errori consecutivi: guida l'apertura del circuito */
     consecutiveErrors: integer("consecutive_errors").notNull().default(0),
+    /**
+     * Ultimo rate-limit (429 o limite locale) subito dalla fonte.
+     * Tenuto separato da `lastErrorAt` perché non è un guasto nostro né
+     * della fonte: è la fonte che ci chiede di rallentare. Senza una data
+     * propria l'episodio spariva appena il giro successivo andava a buon
+     * fine, e il pannello non poteva distinguerlo da una perdita di dati.
+     */
+    lastRateLimitAt: timestamp("last_rate_limit_at", { withTimezone: true }),
+    lastRateLimitMessage: text("last_rate_limit_message"),
+    rateLimitCount: integer("rate_limit_count").notNull().default(0),
     /** true se la fonte sta servendo da fallback di un'altra */
     isFallback: boolean("is_fallback").notNull().default(false),
     updatedAt: timestamp("updated_at", { withTimezone: true })
