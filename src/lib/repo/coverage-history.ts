@@ -10,10 +10,11 @@
  * zero. Confondere le due cose farebbe apparire un crollo dove c'è solo
  * assenza di misura.
  */
-import { desc, eq } from "drizzle-orm";
+import { and, desc, eq, sql as raw } from "drizzle-orm";
 import { db } from "@/db/client";
 import { collectorRuns } from "@/db/schema";
 import { COLLECTOR_KEY } from "@/lib/providers/betexplorer/collect";
+import type { ScheduledRun } from "@/lib/cov/actions";
 import {
   readLoopState,
   schedulerHealth,
@@ -49,6 +50,14 @@ export interface CoverageHistory {
    * operativa su quando arriverà il prossimo punto della serie.
    */
   scheduler: SchedulerStatus | null;
+  /**
+   * Ultimo giro **schedulato** letto dai run salvati (Sprint 9): è la
+   * base della riga sulla raccolta automatica via GitHub Actions. Con
+   * il runner in-process spento è l'unico posto dove la serie continua
+   * ad avanzare, e l'unico da cui si può dire se la raccolta si è fermata.
+   * `null` se non esiste o se la lettura fallisce.
+   */
+  lastScheduledRun: ScheduledRun | null;
 }
 
 export interface SchedulerStatus {
@@ -88,6 +97,48 @@ async function readSchedulerStatus(now: Date): Promise<SchedulerStatus | null> {
       cyclesCompleted: state.cyclesCompleted,
       health: verdict.health,
       silentMinutes: verdict.silentMinutes,
+    };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Legge l'ultimo giro schedulato dai run salvati.
+ *
+ * L'autorità è `meta.trigger = "scheduled"`: i giri manuali non dicono
+ * niente sulla salute della raccolta automatica, perciò vengono saltati
+ * anche quando sono più recenti. Un run che non dichiara nulla vale
+ * `manual`, come ovunque.
+ *
+ * Non propaga errori: questa riga è un'indicazione operativa, la misura
+ * sta altrove. Se l'archivio non risponde, `null` — e la pagina resta
+ * valida senza la riga, mai con una riga inventata.
+ */
+async function readLastScheduledRun(): Promise<ScheduledRun | null> {
+  try {
+    const rows = await db
+      .select({
+        id: collectorRuns.id,
+        startedAt: collectorRuns.startedAt,
+        status: collectorRuns.status,
+      })
+      .from(collectorRuns)
+      .where(
+        and(
+          eq(collectorRuns.collectorKey, COLLECTOR_KEY),
+          raw`${collectorRuns.meta}->>'trigger' = 'scheduled'`,
+        ),
+      )
+      .orderBy(desc(collectorRuns.startedAt))
+      .limit(1);
+
+    const row = rows[0];
+    if (!row) return null;
+    return {
+      runId: row.id,
+      startedAt: row.startedAt.toISOString(),
+      status: row.status,
     };
   } catch {
     return null;
@@ -143,6 +194,7 @@ export async function getCoverageHistory(
 
   const stats = coverageSeriesStats(points);
   const scheduler = await readSchedulerStatus(now);
+  const lastScheduledRun = await readLastScheduledRun();
 
   return {
     latest,
@@ -154,5 +206,6 @@ export async function getCoverageHistory(
     runsInspected: rows.length,
     runsWithoutMeasure,
     scheduler,
+    lastScheduledRun,
   };
 }

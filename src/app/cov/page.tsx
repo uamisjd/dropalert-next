@@ -11,6 +11,10 @@
  */
 import Link from "next/link";
 import { getCoverageHistory } from "@/lib/repo/coverage-history";
+import {
+  readRateLimitNotice,
+  type RateLimitNotice,
+} from "@/lib/repo/source-rate-limit";
 import { buildCoverageView } from "@/lib/cov/view";
 import { CoveragePanel } from "@/components/CoveragePanel";
 import { CollectNowButton } from "@/components/CollectNowButton";
@@ -31,6 +35,16 @@ export default async function CoveragePage() {
   let view = null;
   let failure: string | null = null;
 
+  /* il rate-limit della fonte si legge in un try/catch separato: se
+     `source_health` non è leggibile, la misura di copertura resta valida
+     e la riga semplicemente non compare */
+  let rateLimit: RateLimitNotice | null = null;
+  try {
+    rateLimit = await readRateLimitNotice();
+  } catch {
+    rateLimit = null;
+  }
+
   try {
     const history = await getCoverageHistory(50, now);
     view = buildCoverageView({
@@ -41,6 +55,7 @@ export default async function CoveragePage() {
       depth: history.depth,
       runsWithoutMeasure: history.runsWithoutMeasure,
       scheduler: history.scheduler,
+      actions: { lastScheduledRun: history.lastScheduledRun, now },
     });
   } catch (error) {
     /* il guasto si dichiara, non si nasconde dietro una pagina vuota */
@@ -80,7 +95,7 @@ export default async function CoveragePage() {
           </p>
         </div>
       ) : view !== null ? (
-        <CoveragePanel view={view}>
+        <CoveragePanel view={view} rateLimit={rateLimit}>
           <CollectNowButton />
         </CoveragePanel>
       ) : null}

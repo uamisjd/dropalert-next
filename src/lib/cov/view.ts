@@ -17,6 +17,11 @@ import {
   type ExclusionReason,
   type RunCoverage,
 } from "./instrument";
+import {
+  buildActionsView,
+  type ActionsView,
+  type ScheduledRun,
+} from "./actions";
 
 /** Come va trattato un motivo di esclusione quando si legge un giro. */
 export type ReasonKind =
@@ -119,8 +124,16 @@ export interface CoverageView {
   nextRunMinutes: number | null;
   /** true quando lo stato salvato non è confermato da un processo vivo */
   schedulerUncertain: boolean;
-  /** stato del runner in una riga; `null` se non se ne sa nulla */
+  /** stato del runner in-process in una riga; `null` se non se ne sa nulla */
   schedulerLabel: string | null;
+  /* --- raccolta automatica via GitHub Actions --- */
+  /**
+   * Chi fa avanzare la serie quando il runner in-process è spento, letta
+   * dall'archivio: cron, ora ed esito dell'ultimo giro schedulato, avviso
+   * se il silenzio supera i 90 minuti. `null` solo se l'archivio non ha
+   * saputo dirlo.
+   */
+  actions: ActionsView | null;
 }
 
 /** Frase fissa sulla serie corta. Non è un avviso, è una premessa. */
@@ -152,6 +165,11 @@ export function buildCoverageView(input: {
     health?: "running" | "off" | "uncertain";
     silentMinutes?: number | null;
   } | null;
+  /**
+   * Giri schedulati letti dall'archivio: l'input della riga GitHub
+   * Actions. Assente o `null` = la riga non viene costruita.
+   */
+  actions?: { lastScheduledRun: ScheduledRun | null; now: Date } | null;
 }): CoverageView {
   const { latest, stats } = input;
 
@@ -182,6 +200,11 @@ export function buildCoverageView(input: {
       ? null
       : (scheduler.health ?? (scheduler.running ? "running" : "off"));
   const schedulerLabel = buildSchedulerLabel(scheduler, health);
+
+  const actions =
+    input.actions !== undefined && input.actions !== null
+      ? buildActionsView(input.actions)
+      : null;
 
   return {
     measured: latest !== null,
@@ -215,16 +238,27 @@ export function buildCoverageView(input: {
       health === "running" && scheduler !== null ? scheduler.nextRunMinutes : null,
     schedulerUncertain: health === "uncertain",
     schedulerLabel,
+    actions,
   };
 }
 
 /**
- * La riga che descrive il runner, in italiano e senza promesse false.
+ * La riga che descrive il runner in-process, in italiano e senza promesse
+ * false.
  *
- * Tre stati, tre frasi diverse. Quella che conta è la terza: quando la
- * riga di stato non è più credibile non si scrive né un orario né un
- * rassicurante "non attiva", perché nessuna delle due è verificata. Si
- * dichiara l'incertezza e si dice cosa fare.
+ * Dallo Sprint 9 gli stati sono due, non tre: quando il runner è spento
+ * la riga non dice più «Raccolta automatica non attiva: la serie non
+ * avanza da sola», perché con la raccolta delegata a GitHub Actions
+ * quella frase è falsa — la serie avanza lo stesso. Spento il processo
+ * locale, chi avanza la serie è descritto da `buildActionsView`
+ * (`view.actions`): cron, ultimo giro schedulato letto dall'archivio,
+ * avviso se tace da oltre 90 minuti.
+ *
+ * Restano due frasi, entrambe vere solo finché un processo vivo le
+ * sostiene: il conto alla rovescia del runner acceso, e lo stato incerto
+ * — quando la riga salvata non è più credibile non si scrive né un
+ * orario né un rassicurante «non attiva», perché nessuna delle due è
+ * verificata.
  */
 function buildSchedulerLabel(
   scheduler: {
@@ -236,9 +270,10 @@ function buildSchedulerLabel(
 ): string | null {
   if (scheduler === null || health === null) return null;
 
-  if (health === "off") {
-    return "Raccolta automatica non attiva: la serie non avanza da sola.";
-  }
+  /* runner spento: nessuna riga del processo locale. La raccolta
+     automatica si racconta con i fatti dell'archivio (view.actions),
+     non con lo stato interno di questo processo */
+  if (health === "off") return null;
 
   if (health === "uncertain") {
     const silent =

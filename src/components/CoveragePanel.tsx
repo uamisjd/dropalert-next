@@ -17,7 +17,8 @@ import {
   type CoverageView,
   type ReasonKind,
 } from "@/lib/cov/view";
-import { fmtDateTime } from "./format";
+import type { RateLimitNotice } from "@/lib/repo/source-rate-limit";
+import { fmtAgo, fmtDateTime } from "./format";
 
 const KIND_STYLES: Record<ReasonKind, string> = {
   fuori_perimetro: "text-slate-500",
@@ -58,9 +59,15 @@ function Stat({
 
 export function CoveragePanel({
   view,
+  rateLimit = null,
   children,
 }: {
   view: CoverageView;
+  /**
+   * Ultimo rate-limit subito dalla fonte, letto da `source_health` in un
+   * try/catch separato: assente o illeggibile, il pannello resta valido.
+   */
+  rateLimit?: RateLimitNotice | null;
   /** slot per il pulsante di raccolta, che è un componente client */
   children?: React.ReactNode;
 }) {
@@ -90,6 +97,22 @@ export function CoveragePanel({
         partita con almeno una quota in archivio. Descrive la completezza del
         dato raccolto, non la qualità dei movimenti osservati.
       </p>
+
+      {/* limite della fonte: ambra, non rossa — non è una perdita nostra.
+          Letta da source_health in un try/catch separato dalla pagina:
+          se manca, questa riga semplicemente non c'è */}
+      {rateLimit !== null ? (
+        <p className="mb-3 rounded border border-amber-300 bg-amber-50 px-3 py-2 text-[11px] leading-relaxed text-amber-900">
+          ⚠ Limite della fonte: {rateLimit.label} ha limitato le richieste
+          (429) il {fmtDateTime(rateLimit.lastRateLimitAt)} (
+          {fmtAgo(rateLimit.lastRateLimitAt)})
+          {rateLimit.rateLimitCount > 1
+            ? `, ${rateLimit.rateLimitCount} episodi da quando la fonte è registrata`
+            : ""}
+          . La fonte ha chiesto di rallentare: non è una perdita del monitor e
+          nessun dato viene inventato al suo posto.
+        </p>
+      ) : null}
 
       {!view.measured ? (
         /* assenza di misura: dichiarata, mai convertita in uno zero */
@@ -293,6 +316,29 @@ export function CoveragePanel({
             {view.schedulerUncertain ? "⚠ " : ""}
             {view.schedulerLabel}
           </p>
+        ) : null}
+        {/* raccolta automatica via GitHub Actions: chi fa avanzare la
+            serie quando nessun processo locale è acceso. L'autorità è
+            l'archivio, non la riga di stato di un processo */}
+        {view.actions !== null ? (
+          <>
+            <p className="mt-1 text-[11px] leading-relaxed text-slate-600">
+              {view.actions.label}
+            </p>
+            <p className="mt-1 text-[11px] leading-relaxed text-slate-600">
+              {view.actions.lastRunLine}
+              {view.actions.lastRun !== null
+                ? ` ${fmtDateTime(view.actions.lastRun.startedAt)} (${fmtAgo(
+                    view.actions.lastRun.startedAt,
+                  )}).`
+                : ""}
+            </p>
+            {view.actions.warning !== null ? (
+              <p className="mt-1 text-[11px] font-medium leading-relaxed text-amber-700">
+                ⚠ {view.actions.warning}
+              </p>
+            ) : null}
+          </>
         ) : null}
         {view.runsWithoutMeasure > 0 ? (
           <p className="mt-1 text-[11px] leading-relaxed text-slate-500">

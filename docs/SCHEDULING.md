@@ -180,14 +180,28 @@ home:
 - «Serie insufficiente, niente tendenza.» finché `N < 10`;
 - i giri manuali, quando ce ne sono, sono dichiarati a parte come contati
   nella misura ma fuori dalla soglia;
-- una riga sullo stato del runner, in quattro varianti:
+- una riga sulla raccolta automatica via **GitHub Actions**, letta
+  dall'archivio e non dalla riga di stato di un processo:
+
+  «Raccolta automatica via GitHub Actions: cron «7,52 * * * *», circa un
+  giro ogni 45 minuti.» seguita da «Ultimo giro schedulato (run N): esito
+  riuscito.» con data e ora, e da un avviso ambra — «Nessun giro
+  schedulato da …: oltre i 90 minuti attesi, la raccolta automatica
+  potrebbe essersi fermata.» — quando il silenzio supera due intervalli;
+
+- una riga sul runner in-process, **solo quando c'è un processo vivo che
+  la sostenga**, in due varianti:
 
 | Stato | Testo |
 |---|---|
 | attivo, prossimo giro noto | «Raccolta automatica ogni 45 minuti: prossimo giro fra 12 min.» |
 | attivo, giro imminente | «…prossimo giro a momenti.» |
-| spento o mai avviato | «Raccolta automatica non attiva: la serie non avanza da sola.» |
 | stato incerto | «Stato incerto: l'ultimo stato salvato dice raccolta attiva ogni 45 minuti, ma non è confermato da questo processo. Nessun segno di vita da 3 h. Riavviare per ripartire con certezza.» |
+
+Runner spento non produce più la riga «Raccolta automatica non attiva: la
+serie non avanza da sola» (rimossa nello Sprint 9): con la raccolta
+delegata al cron quella frase era falsa — la serie avanza lo stesso, e a
+dirlo sono i giri schedulati letti dall'archivio.
 
 `nextRunMinutes` viene da `minutesUntil(nextRunAt, now)`: un giro in ritardo
 vale `0`, mai un numero negativo, e senza `nextRunAt` vale `null` — non si
@@ -341,8 +355,9 @@ intervalli, processo morto che non resta «in esecuzione», soglia esatta a
 90 minuti, istanti illeggibili).
 
 Il secondo tentativo e il conteggio per origine sono in
-`npm run test:coverage`; le quattro varianti della riga sullo stato del runner
-in `npm run test:cov-view`.
+`npm run test:coverage`; le varianti della riga sullo stato del runner e
+della riga della raccolta via GitHub Actions — incluso l'avviso oltre i
+90 minuti — in `npm run test:cov-view`.
 
 ---
 
@@ -358,9 +373,12 @@ Tre pezzi gratuiti, ognuno per ciò che sa fare:
 
 **Il runner interno è spento in produzione** (`SCHEDULER_ENABLED=false`). Su
 Vercel il processo non sopravvive fra due richieste: un loop in-process
-dichiarerebbe un "prossimo giro" che nessuno eseguirà. Il pannello mostra
-quindi «Raccolta automatica non attiva» — è la verità sul processo web, mentre
-la serie avanza lo stesso perché a raccogliere è GitHub Actions.
+dichiarerebbe un "prossimo giro" che nessuno eseguirà. Dallo Sprint 9 il
+pannello, con il processo spento, non dice più «Raccolta automatica non
+attiva»: descrive la raccolta per come avviene — GitHub Actions, cron
+`7,52 * * * *`, l'ora e l'esito dell'ultimo giro schedulato letti dai run
+salvati, e un avviso ambra se nessun giro schedulato arriva da oltre 90
+minuti. La verità non è nel processo che serve la pagina, è nell'archivio.
 
 ### Il cron non è `*/45`
 

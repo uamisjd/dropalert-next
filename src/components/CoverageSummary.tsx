@@ -12,6 +12,7 @@ import {
   coverageLabel,
   type CoverageView,
 } from "@/lib/cov/view";
+import { fmtAgo, fmtDateTime } from "./format";
 
 export function CoverageSummary({ view }: { view: CoverageView }) {
   return (
@@ -91,6 +92,31 @@ export function CoverageSummary({ view }: { view: CoverageView }) {
           {view.schedulerUncertain ? "⚠ " : ""}
           {view.schedulerLabel}
         </p>
+      ) : null}
+
+      {/* la raccolta automatica raccontata dall'archivio: GitHub Actions,
+          ultimo giro schedulato, avviso se tace da oltre 90 minuti */}
+      {view.actions !== null ? (
+        <>
+          <p className="mt-1 text-[11px] leading-relaxed text-slate-500">
+            {view.actions.label}{" "}
+            {view.actions.lastRun !== null ? (
+              <>
+                Ultimo giro schedulato:{" "}
+                {fmtDateTime(view.actions.lastRun.startedAt)} (
+                {fmtAgo(view.actions.lastRun.startedAt)}), esito{" "}
+                {view.actions.lastRunStatusLabel}.
+              </>
+            ) : (
+              <>{view.actions.lastRunLine}</>
+            )}
+          </p>
+          {view.actions.warning !== null ? (
+            <p className="mt-1 text-[11px] font-medium leading-relaxed text-amber-700">
+              ⚠ {view.actions.warning}
+            </p>
+          ) : null}
+        </>
       ) : null}
     </section>
   );

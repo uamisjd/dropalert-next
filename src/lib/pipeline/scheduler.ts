@@ -241,7 +241,11 @@ export const STALE_INTERVAL_MULTIPLIER = 2;
  *
  * - `running`   — il processo che ha scritto la riga è vivo e il conto alla
  *                 rovescia è affidabile.
- * - `off`       — il runner è dichiarato spento: la serie non avanza da sola.
+ * - `off`       — il runner è dichiarato spento. Dallo Sprint 9 questo non
+ *                 significa che la serie non avanza: chi la fa avanzare in
+ *                 produzione è GitHub Actions, raccontata altrove
+ *                 (`lib/cov/actions`) con l'ultimo giro schedulato letto
+ *                 dall'archivio.
  * - `uncertain` — la riga dice "acceso" ma non dà segni di vita da troppo
  *                 tempo. Tipico di un processo terminato senza poter
  *                 chiudere il proprio stato.

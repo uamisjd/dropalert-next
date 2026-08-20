@@ -170,13 +170,27 @@ export default async function MatchDetailPage({
 
   return (
     <main className="mx-auto w-full max-w-3xl flex-1 px-4 py-5">
-      <nav className="mb-3">
+      <nav className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <Link
           href="/"
           className="text-xs text-slate-600 underline underline-offset-2 hover:text-slate-900"
         >
           ← Torna all&apos;elenco dei movimenti
         </Link>
+        <span className="flex flex-wrap gap-x-3 gap-y-1 text-xs">
+          <Link
+            href="/ieri"
+            className="text-slate-600 underline underline-offset-2 hover:text-slate-900"
+          >
+            Ieri — segnali ed esiti
+          </Link>
+          <Link
+            href="/domani"
+            className="text-slate-600 underline underline-offset-2 hover:text-slate-900"
+          >
+            Domani — programma
+          </Link>
+        </span>
       </nav>
 
       {/* ---------------- intestazione della partita ---------------- */}

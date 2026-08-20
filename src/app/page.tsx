@@ -7,6 +7,7 @@
  * sezione di performance, che non deve mai fare da vetrina.
  */
 import { Suspense } from "react";
+import Link from "next/link";
 import {
   getDashboardData,
   type DashboardFilters,
@@ -75,6 +76,7 @@ export default async function Home({
       depth: history.depth,
       runsWithoutMeasure: history.runsWithoutMeasure,
       scheduler: history.scheduler,
+      actions: { lastScheduledRun: history.lastScheduledRun, now },
     });
   } catch {
     coverage = null;
@@ -97,6 +99,24 @@ export default async function Home({
             Non fornisce pronostici né consigli di scommessa.
           </span>
         </p>
+        {/* scorciatoie alle due letture cronologiche del monitor */}
+        <nav
+          aria-label="Letture del monitor"
+          className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs"
+        >
+          <Link
+            href="/ieri"
+            className="text-slate-600 underline underline-offset-2 hover:text-slate-900"
+          >
+            Ieri — segnali ed esiti
+          </Link>
+          <Link
+            href="/domani"
+            className="text-slate-600 underline underline-offset-2 hover:text-slate-900"
+          >
+            Domani — programma dall&apos;archivio
+          </Link>
+        </nav>
       </header>
 
       <div className="mb-5">

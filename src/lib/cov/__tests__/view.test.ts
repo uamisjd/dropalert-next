@@ -14,6 +14,13 @@ import {
   SERIES_INSUFFICIENT_TEXT,
 } from "../view";
 import {
+  ACTIONS_CRON,
+  ACTIONS_INTERVAL_MINUTES,
+  ACTIONS_STALLED_AFTER_MINUTES,
+  buildActionsView,
+  type ScheduledRun,
+} from "../actions";
+import {
   coverageSeriesStats,
   describeSeriesDepth,
   emptyReasonCounts,
@@ -337,14 +344,16 @@ function main(): void {
     assert(v.schedulerLabel!.includes("a momenti"), v.schedulerLabel!);
   });
 
-  test("runner spento: si dichiara che la serie non avanza da sola", () => {
+  test("runner spento: nessuna riga del processo locale, chi avanza la serie è GitHub Actions", () => {
     const v = viewOf(coverageOf(), [point(1, 10, 11, 11)], {
       running: false,
       intervalMinutes: 45,
       nextRunMinutes: null,
     });
     assertEqual(v.nextRunMinutes, null);
-    assert(v.schedulerLabel!.includes("non attiva"), v.schedulerLabel!);
+    /* la vecchia frase «Raccolta automatica non attiva: la serie non
+       avanza da sola» era falsa con il cron attivo: non esiste più */
+    assertEqual(v.schedulerLabel, null);
     assertEqual(v.schedulerUncertain, false);
   });
 
@@ -393,6 +402,116 @@ function main(): void {
     });
     assertEqual(v.schedulerUncertain, false);
     assert(v.schedulerLabel!.includes("fra 12 min"), v.schedulerLabel!);
+  });
+
+  /* ---------------- raccolta via GitHub Actions ---------------- */
+
+  console.log("\n-- Raccolta via GitHub Actions --\n");
+
+  const NOW = new Date("2026-08-20T15:00:00Z");
+
+  function scheduledRun(
+    over: Partial<ScheduledRun> = {},
+  ): ScheduledRun {
+    return {
+      runId: 229,
+      startedAt: "2026-08-20T14:07:00Z",
+      status: "success",
+      ...over,
+    };
+  }
+
+  test("senza input Actions la vista non ne parla", () => {
+    const v = viewOf(coverageOf(), [point(1, 10, 11, 11)]);
+    assertEqual(v.actions, null);
+  });
+
+  test("la riga Actions dichiara cron e intervallo dichiarati", () => {
+    const v = buildCoverageView({
+      latest: coverageOf(),
+      latestRunId: 114,
+      latestStartedAt: "2026-08-18T21:30:08.965Z",
+      stats: coverageSeriesStats([point(1, 10, 11, 11)]),
+      depth: describeSeriesDepth(coverageSeriesStats([point(1, 10, 11, 11)])),
+      runsWithoutMeasure: 4,
+      actions: { lastScheduledRun: scheduledRun(), now: NOW },
+    });
+    const acts = v.actions!;
+    assert(acts !== null, "la riga Actions deve esserci");
+    assert(acts.label.includes("GitHub Actions"), acts.label);
+    assert(acts.label.includes(ACTIONS_CRON), acts.label);
+    assert(
+      acts.label.includes(`ogni ${ACTIONS_INTERVAL_MINUTES} minuti`),
+      acts.label,
+    );
+    assert(acts.label.includes("circa"), acts.label);
+  });
+
+  test("l'ultimo giro schedulato dichiara run ed esito riuscito", () => {
+    const a = buildActionsView({ lastScheduledRun: scheduledRun(), now: NOW });
+    assert(a.lastRunLine.includes("run 229"), a.lastRunLine);
+    assert(a.lastRunLine.includes("riuscito"), a.lastRunLine);
+    assertEqual(a.lastRunStatusLabel, "riuscito");
+    assertEqual(a.minutesSinceLastRun, 53);
+    assertEqual(a.stalled, false);
+    assertEqual(a.warning, null);
+  });
+
+  test("un giro fallito si dichiara fallito, senza glossarci sopra", () => {
+    const a = buildActionsView({
+      lastScheduledRun: scheduledRun({ status: "failed" }),
+      now: NOW,
+    });
+    assert(a.lastRunLine.includes("fallito"), a.lastRunLine);
+  });
+
+  test("nessun giro schedulato mai: assenza dichiarata, nessun allarme", () => {
+    const a = buildActionsView({ lastScheduledRun: null, now: NOW });
+    assert(a.lastRunLine.includes("Nessun giro schedulato"), a.lastRunLine);
+    assertEqual(a.lastRun, null);
+    assertEqual(a.minutesSinceLastRun, null);
+    assertEqual(a.stalled, false);
+    assertEqual(a.warning, null);
+  });
+
+  test("fermo da 90 minuti esatti: ancora dentro due intervalli, nessun avviso", () => {
+    const a = buildActionsView({
+      lastScheduledRun: scheduledRun({
+        startedAt: "2026-08-20T13:30:00Z",
+      }),
+      now: NOW,
+    });
+    assertEqual(a.minutesSinceLastRun, ACTIONS_STALLED_AFTER_MINUTES);
+    assertEqual(a.stalled, false);
+    assertEqual(a.warning, null);
+  });
+
+  test("fermo da 91 minuti: avviso ambra con la durata del silenzio", () => {
+    const a = buildActionsView({
+      lastScheduledRun: scheduledRun({
+        startedAt: "2026-08-20T13:29:00Z",
+      }),
+      now: NOW,
+    });
+    assertEqual(a.stalled, true);
+    assertEqual(a.minutesSinceLastRun, 91);
+    const w1 = a.warning!;
+    assert(w1 !== null, "serve l'avviso");
+    /* sopra l'ora la durata si legge in ore e minuti, non in minuti nudi */
+    assert(w1.includes("1 h 31 min"), w1);
+    assert(w1.includes(`${ACTIONS_STALLED_AFTER_MINUTES} minuti`), w1);
+  });
+
+  test("fermo da ore: la durata si legge in ore e minuti", () => {
+    const a = buildActionsView({
+      lastScheduledRun: scheduledRun({
+        startedAt: "2026-08-20T12:28:00Z",
+      }),
+      now: NOW,
+    });
+    const w2 = a.warning!;
+    assert(w2 !== null, "serve l'avviso");
+    assert(w2.includes("2 h 32 min"), w2);
   });
 
   test("la soglia conta i soli giri schedulati", () => {

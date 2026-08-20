@@ -92,6 +92,14 @@ autenticazione.
 
 ## Debiti minori già noti
 
+- **`/domani` non è un calendario**: legge l'archivio del monitor, cioè le
+  partite che la fonte ha esposto nell'elenco dei movimenti. Le competizioni
+  mai esposte non compariranno mai: dichiarato nell'empty state della
+  pagina, non nascosto.
+- **`/ieri` non è una misura di qualità**: gli esiti centrata/mancata sono
+  letture fattuali dei gol finali, mostrate sotto la soglia delle 10 come
+  «non è una tendenza» e accompagnate dall'avviso «non è un rendimento né
+  un consiglio». La sola misura di validità del monitor resta il CLV.
 - **Paginazione della dashboard**: oggi i segnali vengono letti con `limit(200)`
   e filtrati in memoria. Regge il volume attuale, non un volume dieci volte
   maggiore.

@@ -14,6 +14,7 @@
  */
 import { NextResponse } from "next/server";
 import { getCoverageHistory } from "@/lib/repo/coverage-history";
+import { buildActionsView } from "@/lib/cov/actions";
 import {
   EXCLUSION_LABELS,
   MIN_RUNS_FOR_TREND,
@@ -75,6 +76,11 @@ export async function GET(request: Request): Promise<NextResponse> {
       },
       /* stato del runner: quando arriverà il prossimo punto della serie */
       scheduler: history.scheduler,
+      /* raccolta automatica via GitHub Actions, letta dall'archivio */
+      githubActions: buildActionsView({
+        lastScheduledRun: history.lastScheduledRun,
+        now: new Date(),
+      }),
       legend: EXCLUSION_LABELS,
       notes,
       tookMs: Date.now() - startedAt,
