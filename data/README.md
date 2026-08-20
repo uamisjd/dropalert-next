@@ -41,6 +41,6 @@ chiusura), `B365H/B365D/B365A` e `B365CH/B365CD/B365CA` (Bet365, idem).
 - Le stagioni a 306 partite (Bundesliga sempre; Ligue 1 dal 2023/24) e la
   Ligue 1 2019/20 interrotta (279) sono complete così: non sono buchi nostri.
 
-Chi rigenera le tabelle: `npm run backtest:r1` (script
-`scripts/backtest-r1.ts`, fuori dal sito: nessuna importazione dal codice
-di DropAlert).
+Chi rigenera le tabelle: `npm run backtest:r1` e `npm run backtest:r15`
+(scripts `scripts/backtest-r1.ts` e `scripts/backtest-r15.ts`, fuori dal
+sito: nessuna importazione dal codice di DropAlert).
