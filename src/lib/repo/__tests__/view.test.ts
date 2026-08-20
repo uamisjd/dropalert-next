@@ -10,6 +10,7 @@
 import {
   freshnessOf,
   signalLevelOf,
+  wideDropPctOf,
   CLV_INCONCLUSIVE_BELOW,
   FRESHNESS_LABELS,
   SIGNAL_LEVEL_LABELS,
@@ -521,13 +522,31 @@ test("valori non finiti scartati, non convertiti in zero", () => {
 });
 
 /* ------------------------------------------------------------------ */
+  /* ---------------- wideDropPctOf: fascia drop ampio (T4) ---------------- */
 
-console.log(`\n${"─".repeat(60)}`);
-console.log(`Test superati: ${passed} | falliti: ${failed}`);
-if (failures.length > 0) {
-  console.log("\nFallimenti:");
-  for (const f of failures) console.log(`  • ${f}`);
-}
-console.log(`${"─".repeat(60)}\n`);
+  console.log("\n-- wideDropPctOf — fascia «drop ampio» (T4) --\n");
 
-process.exit(failed > 0 ? 1 : 0);
+  test("calo percentuale della quota: 2.00 → 1.70 è 15%", () => {
+    assertClose(wideDropPctOf(2.0, 1.7)!, 15, 0.01);
+  });
+  test("soglia esatta a 15% è drop ampio; a 14,9 non lo è", () => {
+    assertEqual(wideDropPctOf(2.0, 1.7)! >= 15, true);
+    assertEqual(wideDropPctOf(2.0, 1.702)! >= 15, false);
+  });
+  test("quota in rialzo: calo negativo, dichiarato, mai nascosto", () => {
+    assertClose(wideDropPctOf(2.0, 2.2)!, -10, 0.01);
+  });
+  test("prezzi assenti: null, non zero", () => {
+    assertEqual(wideDropPctOf(null, 1.8), null);
+    assertEqual(wideDropPctOf(2.0, null), null);
+  });
+
+  console.log(`\n${"─".repeat(60)}`);
+  console.log(`Test superati: ${passed} | falliti: ${failed}`);
+  if (failures.length > 0) {
+    console.log("\nFallimenti:");
+    for (const f of failures) console.log(`  • ${f}`);
+  }
+  console.log(`${"─".repeat(60)}\n`);
+
+if (failed > 0) process.exit(1);

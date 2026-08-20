@@ -36,6 +36,7 @@ import {
   STALE_SNAPSHOT_MINUTES,
 } from "@/lib/drop/constants";
 import { SCORE_BUCKETS, scoreBucketOf, type ScoreBucketKey } from "@/lib/drop/novig";
+import { WIDE_DROP_THRESHOLD } from "@/lib/drop/constants";
 
 /* ------------------------------------------------------------------ */
 /* Soglie di lettura                                                   */
@@ -84,6 +85,21 @@ export function signalLevelOf(
   if (band === "high") return "forte";
   if (band === "medium") return "reale";
   return "debole";
+}
+
+/**
+ * Calo percentuale della quota rispetto alla prima rilevazione, puro:
+ * 1 − corrente/apertura. `null` senza i prezzi per dichiararlo, mai 0
+ * per sbaglio. Soglia «drop ampio» dichiarata: 15% (R1.5, test 4).
+ */
+export function wideDropPctOf(
+  openingPrice: number | null,
+  currentPrice: number | null,
+): number | null {
+  if (openingPrice === null || currentPrice === null || openingPrice <= 0) {
+    return null;
+  }
+  return round((1 - currentPrice / openingPrice) * 100, 1);
 }
 
 /* ------------------------------------------------------------------ */
@@ -194,6 +210,20 @@ export interface DashboardSignal {
 
   summary: string;
   updatedAt: string;
+
+  /* --- suspicion-v2 --- */
+  /** versione dell'algoritmo che ha prodotto il punteggio (v1 o suspicion-v2) */
+  algorithmVersion: string;
+  /** presente solo quando il moltiplicatore di iper-reazione è applicato */
+  suspicion: {
+    multiplier: number;
+    reasons: Array<{ code: string; label: string; detail: string }>;
+    scoreBefore: number;
+  } | null;
+  /** calo percentuale della quota rispetto all'apertura (fascia T4 se ≥15%) */
+  wideDropPct: number | null;
+  /** true quando il calo della quota è ≥ 15% */
+  wideDrop: boolean;
 }
 
 export interface SourceRow {
@@ -474,7 +504,14 @@ export async function getDashboardSignals(
 
   const items: DashboardSignal[] = rows.map((r) => {
     const s = r.signal;
-    const explanation = (s.explanation ?? {}) as { summary?: string };
+    const explanation = (s.explanation ?? {}) as {
+      summary?: string;
+      suspicion?: {
+        multiplier: number;
+        reasons: Array<{ code: string; label: string; detail: string }>;
+        scoreBefore: number;
+      };
+    };
     const snap = snapByKey.get(`${r.matchId}::${s.market}::${s.selection}`);
     const openGaps = gapsByMatch.get(r.matchId) ?? 0;
 
@@ -493,6 +530,9 @@ export async function getDashboardSignals(
       opening !== null && current !== null && opening > 0
         ? round((current / opening - 1) * 100, 2)
         : null;
+
+    /* il calo in % sulla quota (fascia del test T4), distinto dal segno */
+    const wideDropPct = wideDropPctOf(opening, current);
 
     const lastAt = snap?.lastAt ? new Date(snap.lastAt) : null;
     const fresh = freshnessOf(lastAt, openGaps, now);
@@ -542,6 +582,10 @@ export async function getDashboardSignals(
       openGaps,
       summary: explanation.summary ?? "",
       updatedAt: toIso(s.updatedAt)!,
+      algorithmVersion: s.engineVersion,
+      suspicion: explanation.suspicion ?? null,
+      wideDropPct,
+      wideDrop: wideDropPct !== null && wideDropPct >= WIDE_DROP_THRESHOLD * 100,
     };
   });
 

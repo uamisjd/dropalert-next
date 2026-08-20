@@ -27,8 +27,11 @@ import {
   type SelectionCode,
   type SignalStatus,
 } from "@/db/schema";
-import { analyzeDrop } from "@/lib/drop/engine";
-import { ENGINE_VERSION } from "@/lib/drop/constants";
+import {
+  algorithmVersionOf,
+  analyzeDrop,
+} from "@/lib/drop/engine";
+import type { AlgorithmVersion } from "@/lib/drop/types";
 import { num } from "@/lib/drop/math";
 import {
   getExpectedBookmakerCount,
@@ -284,7 +287,7 @@ export async function upsertSignal(
     explanation: analysis.explanation,
     status,
     updatedAt: now,
-    engineVersion: ENGINE_VERSION,
+    engineVersion: analysis.explanation.engineVersion,
   };
 
   /* --- creazione --- */
@@ -407,15 +410,38 @@ export async function detectForMatch(
     const { market, selection } = parseMarketKey(key);
     const expectedBookmakers = await getExpectedBookmakerCount(market);
 
-    const analysis = analyzeDrop({
-      matchId,
-      market,
-      selection,
-      kickoffAt,
-      now,
-      series,
-      expectedBookmakers,
-    });
+    /* Un segnale già a registro con la versione 1 continua a essere
+       valutato con l'algoritmo v1: i punteggi storici non si riscrivono
+       con regole nuove, altrimenti il confronto v1/v2 di R2 confronterebbe
+       due volte la stessa cosa. I NUOVI rilevamenti partono con la
+       versione attiva (suspicion-v2). */
+    const [row] = await db
+      .select({ engineVersion: dropSignals.engineVersion })
+      .from(dropSignals)
+      .where(
+        and(
+          eq(dropSignals.matchId, matchId),
+          eq(dropSignals.market, market),
+          eq(dropSignals.selection, selection),
+        ),
+      )
+      .limit(1);
+    const algorithm: AlgorithmVersion = row
+      ? algorithmVersionOf(row.engineVersion)
+      : "suspicion-v2";
+
+    const analysis = analyzeDrop(
+      {
+        matchId,
+        market,
+        selection,
+        kickoffAt,
+        now,
+        series,
+        expectedBookmakers,
+      },
+      algorithm,
+    );
 
     outcomes.push(await upsertSignal(analysis, kickoffAt, now));
 

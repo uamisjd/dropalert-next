@@ -348,6 +348,38 @@ export default async function MatchDetailPage({
                       {s.summary}
                     </p>
                   )}
+                  {/* versione dell'algoritmo e, se applicato, il
+                      moltiplicatore con i suoi motivi: chi legge può
+                      sempre risalire a come è stato calcolato il punteggio */}
+                  <p className="mt-1.5 text-[11px] text-slate-500">
+                    Algoritmo:{" "}
+                    <span className="font-mono text-slate-600">
+                      {s.engineVersion}
+                    </span>
+                  </p>
+                  {s.suspicion !== null ? (
+                    <div className="mt-1.5 rounded border border-amber-300 bg-amber-50 px-3 py-2 text-xs leading-relaxed text-amber-900">
+                      <p className="font-semibold">
+                        ⚠ Possibile iper-reazione (storico): moltiplicatore{" "}
+                        {s.suspicion.multiplier} applicato al punteggio
+                        (prima: {s.suspicion.scoreBefore.toFixed(0)}/100,
+                        dopo: {s.confidenceScore !== null ? s.confidenceScore.toFixed(0) : "n/d"}/100).
+                      </p>
+                      <ul className="mt-1 list-disc space-y-0.5 pl-4">
+                        {s.suspicion.reasons.map((r) => (
+                          <li key={r.code}>
+                            <span className="font-medium">{r.label}</span> —{" "}
+                            {r.detail}
+                          </li>
+                        ))}
+                      </ul>
+                      <p className="mt-1 text-[11px] text-amber-800">
+                        Il moltiplicatore è un valore iniziale dichiarato,
+                        da validare in R2. Il segnale resta in elenco: la
+                        fiducia si riduce, la misura no.
+                      </p>
+                    </div>
+                  ) : null}
                 </header>
 
                 <div className="mb-4 grid grid-cols-2 gap-2 sm:grid-cols-4">

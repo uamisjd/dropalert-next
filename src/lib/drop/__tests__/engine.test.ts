@@ -11,6 +11,7 @@ import {
   isValidPrice,
 } from "../math";
 import {
+  algorithmVersionOf,
   analyzeDrop,
   classifyMagnitude,
   computeCoordination,
@@ -712,6 +713,119 @@ test("intervallo di configurazione limitato entro i valori difendibili", () => {
 
   if (original !== undefined) process.env.COLLECT_INTERVAL_MINUTES = original;
 });
+
+  /* ------------------------------------------------------------------ */
+  /* 8. suspicion-v2 — moltiplicatore di iper-reazione                   */
+  /* ------------------------------------------------------------------ */
+
+  console.log("\n[8] suspicion-v2 — iper-reazione storica");
+
+  const serieCasa = [
+    series("a", [[0, 2.0], [60, 1.8], [300, 1.8]]),
+    series("b", [[0, 2.0], [60, 1.81], [300, 1.81]]),
+    series("c", [[0, 2.0], [60, 1.79], [300, 1.79]]),
+    series("p", [[0, 2.0], [60, 1.8], [300, 1.8]], { sharp: true }),
+  ];
+
+  test("v2: drop sulla casa riduce la fiducia col moltiplicatore dichiarato", () => {
+    const v1 = analyzeDrop(input(serieCasa, 300));
+    const v2 = analyzeDrop(input(serieCasa, 300), "suspicion-v2");
+    assert(v2.explanation.suspicion !== undefined, "il blocco sospetto deve esserci");
+    const sus = v2.explanation.suspicion!;
+    assertEqual(sus.multiplier, 0.75);
+    assertEqual(sus.reasons.some((r) => r.code === "drop_casa"), true);
+    assertEqual(v2.explanation.engineVersion, "suspicion-v2");
+    assertClose(v2.confidenceScore, Math.round(v1.confidenceScore * 0.75 * 100) / 100, 0.01);
+    assertEqual(sus.scoreBefore, v1.confidenceScore);
+  });
+
+  test("v2: drop sulla casa non sparisce, resta un segnale", () => {
+    const v1 = analyzeDrop(input(serieCasa, 300));
+    const v2 = analyzeDrop(input(serieCasa, 300), "suspicion-v2");
+    assertEqual(v2.qualifiesAsSignal, v1.qualifiesAsSignal);
+    assert(v2.confidenceScore > 0, "ridotto, non cancellato");
+  });
+
+  test("v2: drop sull'esito sfavorito (apertura > 3.0) riduce la fiducia", () => {
+    const serieSfavorito = [
+      series("a", [[0, 3.6], [60, 3.1], [300, 3.05]]),
+      series("b", [[0, 3.6], [60, 3.12], [300, 3.06]]),
+      series("c", [[0, 3.6], [60, 3.08], [300, 3.04]]),
+      series("p", [[0, 3.6], [60, 3.1], [300, 3.05]], { sharp: true }),
+    ];
+    const inp = { ...input(serieSfavorito, 300), selection: "away" as const };
+    const v1 = analyzeDrop(inp);
+    const v2 = analyzeDrop(inp, "suspicion-v2");
+    const sus = v2.explanation.suspicion!;
+    assertEqual(sus.reasons.some((r) => r.code === "drop_sfavorito"), true);
+    assertEqual(sus.reasons.some((r) => r.code === "drop_casa"), false);
+    assertClose(v2.confidenceScore, Math.round(v1.confidenceScore * 0.75 * 100) / 100, 0.01);
+  });
+
+  test("v2: a 3.0 esatti non scatta la classe sfavorito, oltre sì", () => {
+    const base = [
+      series("a", [[0, 3.0], [60, 2.6], [300, 2.55]]),
+      series("b", [[0, 3.0], [60, 2.62], [300, 2.57]]),
+      series("c", [[0, 3.0], [60, 2.58], [300, 2.54]]),
+      series("p", [[0, 3.0], [60, 2.6], [300, 2.55]], { sharp: true }),
+    ];
+    const alLimite = analyzeDrop(
+      { ...input(base, 300), selection: "away" as const },
+      "suspicion-v2",
+    );
+    assertEqual(alLimite.explanation.suspicion, undefined);
+    const oltrePrezzi = [
+      series("a", [[0, 3.2], [60, 2.75], [300, 2.7]]),
+      series("b", [[0, 3.2], [60, 2.77], [300, 2.72]]),
+      series("c", [[0, 3.2], [60, 2.73], [300, 2.69]]),
+      series("p", [[0, 3.2], [60, 2.75], [300, 2.7]], { sharp: true }),
+    ];
+    const oltre = analyzeDrop(
+      { ...input(oltrePrezzi, 300), selection: "away" as const },
+      "suspicion-v2",
+    );
+    assert(oltre.explanation.suspicion !== undefined, "apertura 3.2 deve scattare");
+    assertEqual(
+      oltre.explanation.suspicion!.reasons.some((r) => r.code === "drop_sfavorito"),
+      true,
+    );
+  });
+
+  test("v2: le due classi insieme si sommano nei motivi, non nel peso", () => {
+    const serieCasaSfavorita = [
+      series("a", [[0, 3.6], [60, 3.1], [300, 3.05]]),
+      series("b", [[0, 3.6], [60, 3.12], [300, 3.06]]),
+      series("c", [[0, 3.6], [60, 3.08], [300, 3.04]]),
+      series("p", [[0, 3.6], [60, 3.1], [300, 3.05]], { sharp: true }),
+    ];
+    const v1 = analyzeDrop(input(serieCasaSfavorita, 300));
+    const v2 = analyzeDrop(input(serieCasaSfavorita, 300), "suspicion-v2");
+    const sus = v2.explanation.suspicion!;
+    assertEqual(sus.reasons.length, 2);
+    assertEqual(sus.multiplier, 0.75, "una sola applicazione, mai 0,5625");
+    assertClose(v2.confidenceScore, Math.round(v1.confidenceScore * 0.75 * 100) / 100, 0.01);
+  });
+
+  test("v1: lo storico non cambia — nessun moltiplicatore, versione v1", () => {
+    const v1 = analyzeDrop(input(serieCasa, 300), "v1");
+    assertEqual(v1.explanation.suspicion, undefined);
+    assertEqual(v1.explanation.engineVersion, "drop-engine/1.0.0");
+    assertEqual(v1.confidenceScore, analyzeDrop(input(serieCasa, 300)).confidenceScore);
+  });
+
+  test("v2: la banda si ricalcola sul punteggio ridotto", () => {
+    const v1 = analyzeDrop(input(serieCasa, 300));
+    const v2 = analyzeDrop(input(serieCasa, 300), "suspicion-v2");
+    assert(v2.confidenceScore <= v1.confidenceScore, "v2 non può superare v1");
+    if (v1.confidenceBand === "high" && v2.confidenceScore < 78) {
+      assert(v2.confidenceBand !== "high", "la banda deve seguire il punteggio ridotto");
+    }
+  });
+
+  test("algorithmVersionOf: le righe v1 restano v1, il resto è suspicion-v2", () => {
+    assertEqual(algorithmVersionOf("drop-engine/1.0.0"), "v1");
+    assertEqual(algorithmVersionOf("suspicion-v2"), "suspicion-v2");
+  });
 
 /* ------------------------------------------------------------------ */
 

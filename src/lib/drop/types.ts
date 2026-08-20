@@ -123,6 +123,16 @@ export interface ScoreComponent {
 }
 
 /** Spiegazione completa persistita in jsonb. */
+/** Versione dell'algoritmo di fiducia applicata all'analisi. */
+export type AlgorithmVersion = "v1" | "suspicion-v2";
+
+/** Una classe di iper-reazione sospettata dal algoritmo suspicion-v2. */
+export interface SuspicionReason {
+  code: "drop_casa" | "drop_sfavorito";
+  label: string;
+  detail: string;
+}
+
 export interface SignalExplanation {
   engineVersion: string;
   summary: string;
@@ -130,6 +140,18 @@ export interface SignalExplanation {
   missingData: string[];
   caveats: string[];
   computedAt: string;
+  /**
+   * Presente solo quando il moltiplicatore di iper-reazione è applicato
+   * (algoritmo suspicion-v2). I motivi vengono dal backtest R1.5
+   * out-of-sample; il moltiplicatore è un valore iniziale da validare
+   * in R2, dichiarato accanto al punteggio che precede l'aggiustamento.
+   */
+  suspicion?: {
+    version: string;
+    multiplier: number;
+    reasons: SuspicionReason[];
+    scoreBefore: number;
+  };
 }
 
 /** Output completo del motore. */

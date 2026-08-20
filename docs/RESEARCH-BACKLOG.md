@@ -39,6 +39,11 @@ senza forma, un drop è solo un numero.
 
 **Stato:** bloccato da prerequisito · **Prerequisito:** `/ieri` con **30+ partite con esito** registrato E storico di CLV maturato.
 
+Dal 21/08/2026 coesistono due coorti: i segnali v1 (storici, mai
+riscritti) e quelli `suspicion-v2` (nuovi rilevamenti, moltiplicatore 0,75
+sulle classi di iper-reazione di R1.5 — vedi
+`docs/SPRINT-SUSPICION-V2.md`). R2 confronterà il CLV delle due coorti.
+
 Solo quando la pagina /ieri avrà almeno trenta partite con esito e lo
 storico sarà sufficiente, si validano dal vivo i pattern confermati in R1.5.
 Nessuna scorciatoia: la validazione live misura ciò che il monitor rileva

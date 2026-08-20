@@ -133,6 +133,13 @@ export interface DetailSignal {
   components: ScoreComponentView[];
   reachability: ReturnType<typeof scoreReachability>;
   timeline: TimelineEntry[];
+  /** presente solo se il moltiplicatore di iper-reazione è applicato */
+  suspicion: {
+    version: string;
+    multiplier: number;
+    reasons: Array<{ code: string; label: string; detail: string }>;
+    scoreBefore: number;
+  } | null;
 }
 
 export interface DetailGap {
@@ -436,6 +443,12 @@ export async function getMatchDetail(
       components?: RawScoreComponent[];
       missingData?: string[];
       caveats?: string[];
+      suspicion?: {
+        version: string;
+        multiplier: number;
+        reasons: Array<{ code: string; label: string; detail: string }>;
+        scoreBefore: number;
+      };
     };
 
     const seriesForSignal = series.find(
@@ -493,6 +506,7 @@ export async function getMatchDetail(
       detectedAt: toIsoReq(s.detectedAt),
       updatedAt: toIsoReq(s.updatedAt),
       engineVersion: s.engineVersion,
+      suspicion: explanation.suspicion ?? null,
       summary: explanation.summary ?? "",
       caveats: explanation.caveats ?? [],
       missingData: explanation.missingData ?? [],

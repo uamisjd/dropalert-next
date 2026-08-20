@@ -6,6 +6,36 @@
 
 export const ENGINE_VERSION = "drop-engine/1.0.0";
 
+/* ------------------------------------------------------------------ */
+/* suspicion-v2 — moltiplicatore di fiducia sulle iper-reazioni storiche */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Versione dell'algoritmo di fiducia attiva sui segnali rilevati da qui
+ * in avanti. I segnali già in archivio restano alla loro versione: la
+ * coesistenza v1/v2 serve al confronto CLV previsto da R2.
+ *
+ * Base dichiarata: docs/BACKTEST-R1.5.md — due classi confermate
+ * out-of-sample (2023/24–2025/26): drop sull'esito casa (−4,9 pp sotto
+ * l'attesa fair) e drop sull'esito sfavorito con quota di partenza > 3,0
+ * (−4,0 pp). Nessun peso per lega: il test 2 non ha retto l'entità.
+ */
+export const ACTIVE_ALGORITHM = "suspicion-v2";
+
+/**
+ * Moltiplicatore applicato al punteggio di fiducia delle due classi di
+ * iper-reazione. È un VALORE INIZIALE DA VALIDARE IN R2, non una costanza
+ * ottimizzata: 0,75 dichiara «stesso segnale, un quarto di fiducia in
+ * meno» senza cancellare nulla dalla lista.
+ */
+export const SUSPICION_MULTIPLIER = 0.75;
+
+/** Quota di partenza dell'esito sceso oltre la quale scatta la classe sfavorito. */
+export const SUSPICION_ODDS_THRESHOLD = 3.0;
+
+/** Calo percentuale della quota oltre il quale il drop si dichiara «ampio» (T4). */
+export const WIDE_DROP_THRESHOLD = 0.15;
+
 /**
  * Soglie di ampiezza espresse in PUNTI PERCENTUALI di probabilità implicita.
  * probabilità implicita = 1 / quota decimale.

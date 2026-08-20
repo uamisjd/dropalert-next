@@ -82,6 +82,28 @@ export function SignalCard({ signal }: { signal: DashboardSignal }) {
             label={signal.freshnessLabel}
             reason={signal.freshnessReason}
           />
+          {/* iper-reazione storica: il segnale resta in lista, la fiducia
+              è ridotta dal moltiplicatore e il motivo viaggia con il badge */}
+          {signal.suspicion !== null ? (
+            <span
+              className="rounded border border-amber-300 bg-amber-50 px-1.5 py-0.5 text-[11px] font-medium text-amber-900"
+              title={signal.suspicion.reasons
+                .map((r) => `${r.label}: ${r.detail}`)
+                .join(" — ")}
+            >
+              ⚠ possibile iper-reazione (storico)
+            </span>
+          ) : null}
+          {/* drop ampio: fascia ≥15%, quella con il CLV per campione più
+              alto nel backtest R1.5 (bound pre-movimento, dichiarato) */}
+          {signal.wideDrop ? (
+            <span
+              className="rounded border border-slate-300 bg-slate-50 px-1.5 py-0.5 text-[11px] font-medium text-slate-700"
+              title={`La quota è scesa del ${signal.wideDropPct}% dall'apertura: fascia oltre il 15%, la più alta per CLV per campione nel backtest R1.5 (bound pre-movimento, non un rendimento).`}
+            >
+              drop ampio ≥15%
+            </span>
+          ) : null}
         </div>
         <h3 className="text-base leading-snug font-semibold text-slate-900">
           {/*

@@ -10,6 +10,7 @@
  */
 import type { ConfidenceBand, MagnitudeClass } from "@/db/schema";
 import {
+  ACTIVE_ALGORITHM,
   CONFIDENCE_BANDS,
   CONFIDENCE_WEIGHTS,
   ENGINE_VERSION,
@@ -21,6 +22,8 @@ import {
   MIN_BOOKS_FOR_FULL_PICTURE,
   MIN_COVERAGE_FOR_BAND,
   REBOUND_RATIO_THRESHOLD,
+  SUSPICION_MULTIPLIER,
+  SUSPICION_ODDS_THRESHOLD,
 } from "./constants";
 import {
   clamp,
@@ -32,6 +35,7 @@ import {
   round,
 } from "./math";
 import type {
+  AlgorithmVersion,
   BookmakerSeries,
   CoordinationResult,
   CoverageResult,
@@ -44,6 +48,7 @@ import type {
   ScoreComponent,
   SharpResult,
   SignalExplanation,
+  SuspicionReason,
 } from "./types";
 
 /* ------------------------------------------------------------------ */
@@ -687,7 +692,59 @@ export function buildSummary(
  * Restituisce sempre un oggetto: se i dati sono insufficienti lo dichiara
  * tramite `qualifiesAsSignal = false` e `rejectionReason`.
  */
-export function analyzeDrop(input: DropAnalysisInput): DropAnalysis {
+/**
+ * Versione del motore da applicare all'analisi.
+ *
+ * `v1` è il comportamento storico, usato anche oggi per AGGIORNARE i
+ * segnali che portano a registro la versione 1: i loro punteggi non
+ * vengono riscritti con regole nuove, altrimenti il confronto v1/v2
+ * previsto da R2 misurerebbe due volte la stessa cosa.
+ * `suspicion-v2` è la versione attiva sui NUOVI rilevamenti.
+ */
+export function algorithmVersionOf(engineVersion: string): AlgorithmVersion {
+  return engineVersion === ENGINE_VERSION ? "v1" : "suspicion-v2";
+}
+
+/** L'etichetta di versione scritta a registro per un'algoritmo. */
+export function engineVersionOf(algorithm: AlgorithmVersion): string {
+  return algorithm === "v1" ? ENGINE_VERSION : ACTIVE_ALGORITHM;
+}
+
+/**
+ * Le due classi di iper-reazione confermate out-of-sample in R1.5.
+ * Entrambe riducono la fiducia, nessuna delle due nasconde il segnale.
+ */
+export function suspicionReasonsOf(
+  selection: DropAnalysisInput["selection"],
+  openingPrice: number | null,
+): SuspicionReason[] {
+  const reasons: SuspicionReason[] = [];
+
+  if (selection === "home") {
+    reasons.push({
+      code: "drop_casa",
+      label: "drop sull'esito casa",
+      detail:
+        "Nel backtest out-of-sample 2023/24–2025/26 i drop sulla casa sottoperformano l'attesa fair di 4,9 pp (R1.5, test 3).",
+    });
+  }
+
+  if (openingPrice !== null && openingPrice > SUSPICION_ODDS_THRESHOLD) {
+    reasons.push({
+      code: "drop_sfavorito",
+      label: "drop sull'esito sfavorito (quota di partenza > 3.0)",
+      detail:
+        "Nel backtest out-of-sample 2023/24–2025/26 i drop su esiti con quota di partenza oltre 3.0 sottoperformano l'attesa fair di 4,0 pp (R1.5, test 1).",
+    });
+  }
+
+  return reasons;
+}
+
+export function analyzeDrop(
+  input: DropAnalysisInput,
+  algorithm: AlgorithmVersion = "v1",
+): DropAnalysis {
   const usable = input.series.filter((s) => sortPoints(s.points).length > 0);
   if (usable.length === 0) {
     return emptyAnalysis(input, "Nessuna quotazione disponibile per questa selezione.");
@@ -720,10 +777,27 @@ export function analyzeDrop(input: DropAnalysisInput): DropAnalysis {
     coverage,
   );
 
+  /* --- suspicion-v2: moltiplicatore sulle classi di iper-reazione --- */
+  /* applicato UNA sola volta per qualsivoglia numero di motivi: 0,75, mai
+     0,75 × 0,75. Le due classi si sommano nei motivi, non nel peso. */
+  const suspicion =
+    algorithm === "suspicion-v2"
+      ? suspicionReasonsOf(input.selection, magnitude.openingPrice)
+      : [];
+  const suspicionApplied = suspicion.length > 0;
+  const finalScore = suspicionApplied
+    ? round(score * SUSPICION_MULTIPLIER, 2)
+    : score;
+
   const caveats: string[] = [
     "Il punteggio misura la solidità dell'osservazione statistica, non la probabilità che l'esito si verifichi.",
     "La misura di riferimento dell'osservatorio è il CLV: il confronto fra la quota rilevata e la quota di chiusura.",
   ];
+  if (suspicionApplied) {
+    caveats.push(
+      "Moltiplicatore di fiducia 0,75 per possibile iper-reazione storica: valore iniziale, da validare in R2.",
+    );
+  }
   if (persistence.isFlash) {
     caveats.push("Movimento flash: rivalutare dopo ulteriori rilevazioni.");
   }
@@ -735,12 +809,22 @@ export function analyzeDrop(input: DropAnalysisInput): DropAnalysis {
   }
 
   const explanation: SignalExplanation = {
-    engineVersion: ENGINE_VERSION,
+    engineVersion: engineVersionOf(algorithm),
     summary: buildSummary(magnitude, coordination, sharp, persistence),
     components,
     missingData: coverage.missing,
     caveats,
     computedAt: input.now.toISOString(),
+    ...(suspicionApplied
+      ? {
+          suspicion: {
+            version: ACTIVE_ALGORITHM,
+            multiplier: SUSPICION_MULTIPLIER,
+            reasons: suspicion,
+            scoreBefore: score,
+          },
+        }
+      : {}),
   };
 
   // un movimento sotto la soglia di rumore non è un segnale
@@ -760,8 +844,9 @@ export function analyzeDrop(input: DropAnalysisInput): DropAnalysis {
     sharp,
     persistence,
     coverage,
-    confidenceScore: score,
-    confidenceBand: toConfidenceBand(score, coverage.score),
+    confidenceScore: finalScore,
+    /* la banda si ricalcola sul punteggio finale: coerente con ciò che si stampa */
+    confidenceBand: toConfidenceBand(finalScore, coverage.score),
     explanation,
     qualifiesAsSignal: qualifies,
     rejectionReason,
