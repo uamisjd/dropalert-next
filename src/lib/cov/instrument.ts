@@ -37,6 +37,7 @@ export const EXCLUSION_REASONS = [
   "no_odds",
   "not_reached",
   "robots",
+  "our_choice",
   "altro",
 ] as const;
 
@@ -48,6 +49,8 @@ export const EXCLUSION_LABELS: Record<ExclusionReason, string> = {
   no_odds: "Riga di calcio senza quote leggibili",
   not_reached: "Leggibile e non raggiunta dal giro di raccolta",
   robots: "Dato non pubblicato entro il robots.txt della fonte",
+  our_choice:
+    "Esclusa da una nostra scelta di configurazione: fuori finestra o oltre il tetto per giro",
   altro: "Dichiarato: non riconducibile ai motivi previsti",
 };
 
@@ -178,10 +181,17 @@ export function reasonForCode(code: ExclusionCode | null): ExclusionReason {
       return "no_odds";
     case EXCLUSION_CODES.UNREADABLE_ROW:
       return "no_odds";
+    /* Fuori finestra e tetto per giro non sono difetti né limiti della
+       fonte: sono due nostre impostazioni (COLLECT_HORIZON_HOURS e
+       COLLECT_MAX_FIXTURES) che funzionano come previsto. Contarle fra le
+       cause ignote gonfiava "altro" e faceva sembrare cieco un giro che
+       invece stava obbedendo alla configurazione. */
     case EXCLUSION_CODES.OUT_OF_WINDOW:
-      return "altro";
+      return "our_choice";
     case EXCLUSION_CODES.RUN_CAP:
-      return "altro";
+      return "our_choice";
+    /* `null` = nessun codice dichiarato. Resta "altro": è l'unico caso in
+       cui davvero non sappiamo, e va continuato a dichiarare come tale. */
     default:
       return "altro";
   }
@@ -189,7 +199,15 @@ export function reasonForCode(code: ExclusionCode | null): ExclusionReason {
 
 /** Conteggio vuoto dei motivi, per non dover ricordare le sei chiavi. */
 export function emptyReasonCounts(): Record<ExclusionReason, number> {
-  return { sport: 0, demo: 0, no_odds: 0, not_reached: 0, robots: 0, altro: 0 };
+  return {
+    sport: 0,
+    demo: 0,
+    no_odds: 0,
+    not_reached: 0,
+    robots: 0,
+    our_choice: 0,
+    altro: 0,
+  };
 }
 
 /**

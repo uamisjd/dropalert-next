@@ -22,6 +22,7 @@ import {
 export type ReasonKind =
   | "fuori_perimetro"
   | "limite_fonte"
+  | "nostra_scelta"
   | "perdita"
   | "non_classificato";
 
@@ -34,6 +35,11 @@ export type ReasonKind =
  * avremmo dovuto prendere e non abbiamo preso. Mescolarli produrrebbe un
  * numero grosso e privo di significato.
  *
+ * `our_choice` sta fra il limite della fonte e la perdita: la riga era
+ * raggiungibile, l'abbiamo lasciata fuori noi (finestra temporale o tetto
+ * per giro). Non è un difetto e non va colorata come tale, ma nemmeno
+ * nascosta: cambiare quei due parametri la recupererebbe.
+ *
  * `altro` resta a parte: è il motivo che il collector non ha saputo
  * attribuire. Dichiararlo fuori perimetro sarebbe una deduzione senza
  * prova, contarlo fra le perdite pure. Sta in una riga sua, e finché è a
@@ -44,6 +50,7 @@ export const REASON_KIND: Record<ExclusionReason, ReasonKind> = {
   sport: "fuori_perimetro",
   demo: "fuori_perimetro",
   robots: "limite_fonte",
+  our_choice: "nostra_scelta",
   no_odds: "perdita",
   not_reached: "perdita",
   altro: "non_classificato",
@@ -54,6 +61,7 @@ export const REASON_SHORT: Record<ExclusionReason, string> = {
   sport: "Altro sport",
   demo: "Dimostrative",
   robots: "Non pubblicato (robots)",
+  our_choice: "Esclusa da nostra scelta",
   no_odds: "Senza quote",
   not_reached: "Non raggiunte",
   altro: "Motivo non attribuito",
@@ -62,6 +70,7 @@ export const REASON_SHORT: Record<ExclusionReason, string> = {
 export const KIND_LABELS: Record<ReasonKind, string> = {
   fuori_perimetro: "Fuori perimetro",
   limite_fonte: "Limite della fonte",
+  nostra_scelta: "Nostra scelta",
   perdita: "Perdita del monitor",
   non_classificato: "Non classificato",
 };

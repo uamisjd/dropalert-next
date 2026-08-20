@@ -22,6 +22,9 @@ import { fmtDateTime } from "./format";
 const KIND_STYLES: Record<ReasonKind, string> = {
   fuori_perimetro: "text-slate-500",
   limite_fonte: "text-amber-700",
+  /* neutro come "fuori perimetro": è una configurazione che ha funzionato,
+     non un problema da segnalare in rosso */
+  nostra_scelta: "text-slate-500",
   perdita: "text-red-700",
   non_classificato: "text-slate-500",
 };

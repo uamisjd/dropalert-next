@@ -207,6 +207,15 @@ function main(): void {
     assertEqual(REASON_KIND.altro, "non_classificato");
   });
 
+  test("finestra e tetto per giro sono una nostra scelta, non un'ignota", () => {
+    assertEqual(REASON_KIND.our_choice, "nostra_scelta");
+    assertEqual(
+      REASON_KIND.our_choice === "perdita",
+      false,
+      "non va colorata come perdita",
+    );
+  });
+
   test("le righe non attribuite non entrano nelle perdite dichiarate", () => {
     const byReason = emptyReasonCounts();
     byReason.altro = 4;

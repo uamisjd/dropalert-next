@@ -620,9 +620,13 @@ function main(): void {
     assertEqual(reasonForCode(EXCLUSION_CODES.PAGE_UNREACHABLE), "not_reached");
   });
 
-  test("fuori finestra e tetto per giro non sono perdite di dato", () => {
-    assertEqual(reasonForCode(EXCLUSION_CODES.OUT_OF_WINDOW), "altro");
-    assertEqual(reasonForCode(EXCLUSION_CODES.RUN_CAP), "altro");
+  test("fuori finestra e tetto per giro sono una nostra scelta, non perdite", () => {
+    assertEqual(reasonForCode(EXCLUSION_CODES.OUT_OF_WINDOW), "our_choice");
+    assertEqual(reasonForCode(EXCLUSION_CODES.RUN_CAP), "our_choice");
+  });
+
+  test("'altro' resta solo per l'esclusione senza codice dichiarato", () => {
+    assertEqual(reasonForCode(null), "altro");
   });
 
   /* ---------------- buildRunCoverage ---------------- */
@@ -700,7 +704,8 @@ function main(): void {
       }),
     );
     assertEqual(c.byReason.not_reached, 0, "non è una perdita");
-    assertEqual(c.byReason.altro, 1, "è un'esclusione corretta e dichiarata");
+    assertEqual(c.byReason.our_choice, 1, "esclusa da una nostra scelta");
+    assertEqual(c.byReason.altro, 0, "non è un motivo ignoto");
   });
 
   test("importata ma senza quote: contata come no_odds", () => {
