@@ -1,0 +1,1 @@
+ALTER TABLE "drop_signals" ADD COLUMN "shape" jsonb;

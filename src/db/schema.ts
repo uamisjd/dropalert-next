@@ -374,6 +374,14 @@ export const dropSignals = pgTable(
       .default("0.000"),
     /** scomposizione leggibile del punteggio + elenco dati mancanti */
     explanation: jsonb("explanation").notNull(),
+    /**
+     * Feature di "forma" del movimento (voce 2 del backlog di ricerca),
+     * calcolate dalla serie di rilevazioni e riscritte SOLO quando arrivano
+     * nuove rilevazioni. NULL = non ancora calcolate. Struttura dichiarata
+     * in `src/lib/shape/features.ts`; il punteggio non le usa: sono dato
+     * riusabile per la ricerca, non un giudizio.
+     */
+    shape: jsonb("shape"),
 
     status: signalStatusEnum("status").notNull().default("forming"),
     detectedAt: timestamp("detected_at", { withTimezone: true })

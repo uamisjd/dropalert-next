@@ -22,7 +22,12 @@ regge out-of-sample si scarta e si dichiara scartato. Report:
 
 ## 2. Shape features — feature di forma per segnale
 
-**Stato:** aperto, priorità alta · **Prerequisito:** nessuno — si può fare subito.
+**Stato:** eseguito il 21/08/2026 · **Prerequisito:** nessuno — soddisfatto.
+
+Struttura dichiarata in `src/lib/shape/features.ts`, salvata in
+`drop_signals.shape` (jsonb, migrazione 0005), backfill idempotente con
+`npm run job:shape` (manuale: non sta nel cron, per scelta). Il punteggio
+di fiducia NON la usa: è dato per R2/R3.
 
 Per ogni segnale in archivio salvare in campi riusabili le feature di forma
 del movimento: istante di inizio, durata, rimbalzi (numero e ampiezza),
