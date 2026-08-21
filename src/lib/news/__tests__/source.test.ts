@@ -17,6 +17,7 @@ import {
   italianQuery,
   italianTranslationLink,
   parseNewsRss,
+  resetNewsFeedCacheForTests,
   titleMentionsTeam,
 } from "../source";
 import {
@@ -87,7 +88,7 @@ function main(): void {
   test("il filtro per squadra: il titolo deve citare la squadra", () => {
     assert(titleMentionsTeam("Il Catanzaro vince il derby", "catanzaro"), "filtro squadra");
     assert(!titleMentionsTeam("Il Catanzaro vince il derby", "cosenza"), "nessuna citazione, nessun match");
-    assert(!titleMentionsTeam("Gol di Rossi", "Rossi"), "nome corto: non si filtra per caso");
+    assert(!titleMentionsTeam("Gol di Rossi", "Rom"), "nome corto (3 lettere): non si filtra per caso");
     const items = [
       { title: "Catanzaro in forma", link: "a", source: null, publishedAt: null },
       { title: "Altro sport", link: "b", source: null, publishedAt: null },
@@ -111,35 +112,51 @@ function main(): void {
     assert(NEWS_MAX_ITEMS === 6, "sei notizie per partita");
   });
 
-  test("fetch: query italiana con risultati non chiama il fallback", async () => {
+  test("fetch: feed italiano con citazioni non chiama il fallback", async () => {
+    resetNewsFeedCacheForTests();
     const calls: string[] = [];
-    const fake = (async (url: RequestInfo | URL): Promise<Response> => {
+    const fake: typeof fetch = async (url: RequestInfo | URL) => {
       calls.push(String(url));
       return new Response(RSS_SAMPLE, { status: 200 });
-    }) as typeof fetch;
+    };
     const r = await fetchMatchNews("Catanzaro", "Cosenza", { fetchImpl: fake });
     assert(r.ok, "deve riuscire");
-    if (r.ok) assertEqual(r.result.language, "it");
-    assertEqual(calls.length, 1, "una sola richiesta");
+    if (r.ok) {
+      assertEqual(r.result.language, "it");
+      assert(r.result.items.length > 0, "citazioni trovate");
+    }
+    assertEqual(calls.length, DEFAULT_FEEDS_IT.length, "solo i feed italiani");
   });
 
-  test("fetch: query italiana vuota fa scattare il fallback", async () => {
-    const empty = `<?xml version="1.0"?><rss version="2.0"><channel><title>vuoto</title></channel></rss>`;
-    let call = 0;
-    const fake: typeof fetch = async () => {
-      call += 1;
-      return new Response(call === 1 ? empty : RSS_SAMPLE, { status: 200 });
+  test("fetch: feed italiano senza citazioni va al fallback e dichiara il vuoto", async () => {
+    resetNewsFeedCacheForTests();
+    const calls: string[] = [];
+    const fake: typeof fetch = async (url: RequestInfo | URL) => {
+      calls.push(String(url));
+      /* il feed italiano non cita le squadre, quello inglese nemmeno */
+      const noMatch =
+        '<?xml version="1.0"?><rss version="2.0"><channel><title>vuoto</title>' +
+        '<item><title>Altro campionato</title><link>https://x/1</link></item></channel></rss>';
+      return new Response(noMatch, { status: 200 });
     };
     const r = await fetchMatchNews("Yaracuyanos", "La Guaira", { fetchImpl: fake });
-    assert(r.ok, "il fallback trova");
-    if (r.ok) assertEqual(r.result.language, "en");
-    assertEqual(call, 2, "due richieste: it poi fallback");
+    assert(r.ok, "la lettura riesce: è vuoto, non guasto");
+    if (r.ok) {
+      assertEqual(r.result.language, "en");
+      assertEqual(r.result.items.length, 0, "zero citazioni: stato valido");
+    }
+    assertEqual(
+      calls.length,
+      DEFAULT_FEEDS_IT.length + DEFAULT_FEEDS_EN.length,
+      "it poi fallback",
+    );
   });
 
-  test("fetch: fonte irraggiungibile si dichiara, non si indovina", async () => {
-    const fake = (async (): Promise<Response> => new Response("no", { status: 503 })) as typeof fetch;
-    const r = await fetchMatchNews("A", "B", { fetchImpl: fake });
-    assert(!r.ok, "503 non è ok");
+  test("fetch: tutti i feed giù si dichiara irraggiungibile, non si indovina", async () => {
+    resetNewsFeedCacheForTests();
+    const fake: typeof fetch = async () => new Response("no", { status: 503 });
+    const r = await fetchMatchNews("Catanzaro", "Cosenza", { fetchImpl: fake });
+    assert(!r.ok, "503 su ogni feed non è ok");
     if (!r.ok) assertEqual(r.reason, "irraggiungibile");
   });
 

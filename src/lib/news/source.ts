@@ -31,6 +31,11 @@ export const DEFAULT_FEEDS_EN = [
   "https://feeds.bbci.co.uk/sport/football/rss.xml",
 ];
 
+/** Solo per i test: azzera la cache dei feed del processo. */
+export function resetNewsFeedCacheForTests(): void {
+  feedCache.clear();
+}
+
 function feedsOf(language: "it" | "en"): string[] {
   const raw =
     language === "it" ? process.env.NEWS_FEEDS_IT : process.env.NEWS_FEEDS_EN;
@@ -156,13 +161,20 @@ export type NewsFetchOutcome =
   | { ok: true; result: NewsQueryResult }
   | { ok: false; reason: "irraggiungibile" };
 
+type FeedRead = { failed: true } | { failed: false; items: NewsFeedItem[] };
+
+/**
+ * Legge un feed. Il fallimento si dichiara come fallimento: un feed giù
+ * non è «nessuna notizia», è «fonte non raggiungibile» — due stati
+ * diversi che la pagina scrive diversamente.
+ */
 async function fetchFeed(
   url: string,
   fetchImpl: typeof fetch,
-): Promise<NewsFeedItem[]> {
+): Promise<FeedRead> {
   const cached = feedCache.get(url);
   if (cached !== undefined && Date.now() - cached.at < FEED_TTL_MS) {
-    return cached.items;
+    return { failed: false, items: cached.items };
   }
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), NEWS_TIMEOUT_MS);
@@ -171,13 +183,13 @@ async function fetchFeed(
       headers: { "user-agent": NEWS_USER_AGENT },
       signal: controller.signal,
     });
-    if (!response.ok) return [];
+    if (!response.ok) return { failed: true };
     const xml = await response.text();
     const items = parseNewsRss(xml.slice(0, 500_000));
     feedCache.set(url, { at: Date.now(), items });
-    return items;
+    return { failed: false, items };
   } catch {
-    return [];
+    return { failed: true };
   } finally {
     clearTimeout(timer);
   }
@@ -202,18 +214,39 @@ export async function fetchMatchNews(
 
   for (const attempt of attempts) {
     const all: NewsFeedItem[] = [];
+    let failures = 0;
     for (const url of attempt.urls) {
-      all.push(...(await fetchFeed(url, doFetch)));
+      const read = await fetchFeed(url, doFetch);
+      if (read.failed) failures += 1;
+      else all.push(...read.items);
     }
+
     const matches = filterByTeams(all, homeTeam, awayTeam).slice(
       0,
       NEWS_MAX_ITEMS,
     );
-    if (matches.length > 0 || attempt.language === "en") {
+
+    if (matches.length > 0) {
       return {
         ok: true,
         result: {
           items: matches,
+          language: attempt.language,
+          query: italianQuery(homeTeam, awayTeam),
+        },
+      };
+    }
+
+    /* nulla: se È l'ultimo tentico e ogni feed è giù, è la fonte che non
+       risponde; se almeno un feed ha risposto, è «nessuna notizia» valida */
+    if (attempt.language === "en") {
+      if (failures === attempt.urls.length) {
+        return { ok: false, reason: "irraggiungibile" };
+      }
+      return {
+        ok: true,
+        result: {
+          items: [],
           language: attempt.language,
           query: italianQuery(homeTeam, awayTeam),
         },
