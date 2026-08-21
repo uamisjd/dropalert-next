@@ -582,6 +582,16 @@ export const matchContext = pgTable(
     rotazioniFatica: text("rotazioni_fatica"),
     /** "sostiene" | "contraddice" | "non c'entra" */
     accordoColDrop: text("accordo_col_drop"),
+    /**
+     * Struttura v2 con ricerca attiva (grounding): campi con fonte per
+     * ciascuno e fonti consultate. NULL = riga dell'era v1, mostrata con
+     * il tag "conoscenza modello".
+     */
+    detail: jsonb("detail"),
+    /** fonti del grounding, massimo tre */
+    sources: jsonb("sources"),
+    /** true se la generazione ha usato la ricerca */
+    grounded: boolean("grounded").notNull().default(false),
     generatedAt: timestamp("generated_at", { withTimezone: true })
       .notNull()
       .defaultNow(),

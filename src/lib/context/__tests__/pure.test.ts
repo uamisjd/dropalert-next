@@ -11,11 +11,15 @@ import {
   CONTEXT_CACHE_HOURS,
   CONTEXT_DAILY_LIMIT,
   CONTEXT_DISCLAIMER,
+  CONTEXT_FIELD_KEYS,
   CONTEXT_RETRY_HOURS,
+  MAX_CONTEXT_SOURCES,
   MODEL_KNOWLEDGE_TAG,
+  capSources,
   dailyUsageKey,
   isContextFresh,
   isDailyBudgetExhausted,
+  parseContextDetail,
   parseContextFields,
 } from "../pure";
 
@@ -114,6 +118,60 @@ function main(): void {
   test("gli spazi si normalizzano, il testo resta quello del modello", () => {
     const f = parseContextFields(payload({ livello_categorie: "  prima   serie  " }))!;
     assertEqual(f.livelloCategorie, "prima serie");
+  });
+
+  console.log("\n-- v2 con ricerca attiva --\n");
+
+  const v2payload = {
+    livello_categorie: { valore: "prima serie contro seconda serie", fonte_url: "https://esempio.it/leghe" },
+    anomalia_campo: { valore: "campo neutro", fonte_url: "" },
+    posta_in_palo: { valore: "semifinale playoff scudetto", fonte_url: "https://esempio.it/coppa" },
+    rotazioni_fatica: { valore: "turno di coppa a tre giorni", fonte_url: "" },
+    h2h_e_forma_recente: { valore: "ultimi tre scontri diretti in casa", fonte_url: "" },
+    accordo_col_drop: "sostiene",
+  };
+
+  test("v2: sei chiavi, h2h compresa, accordo chiuso", () => {
+    assertEqual(CONTEXT_FIELD_KEYS.length, 6, "sei campi");
+    const d = parseContextDetail(v2payload, true)!;
+    assert(d !== null, "payload valido");
+    assertEqual(d.fields.length, 6);
+    assert(d.fields.some((f) => f.key === "h2h_e_forma_recente"), "h2h presente");
+  });
+
+  test("v2: il tag nasce qui — fonte accettata solo se grounded", () => {
+    const grounded = parseContextDetail(v2payload, true)!;
+    const conFonte = grounded.fields.find((f) => f.key === "livello_categorie")!;
+    assertEqual(conFonte.fonteUrl, "https://esempio.it/leghe");
+    const noGrounding = parseContextDetail(v2payload, false)!;
+    const senzaFonte = noGrounding.fields.find((f) => f.key === "livello_categorie")!;
+    assertEqual(senzaFonte.fonteUrl, null, "senza ricerca ogni fonte si butta via");
+  });
+
+  test("v2: url non http si rifiuta, mai link di facciata", () => {
+    const brutto = { ...v2payload, anomalia_campo: { valore: "campo neutro", fonte_url: "javascript:alert(1)" } };
+    const d = parseContextDetail(brutto, true)!;
+    assertEqual(d.fields.find((f) => f.key === "anomalia_campo")!.fonteUrl, null);
+  });
+
+  test("v2: un campo mancante respinge tutto, h2h compresa", () => {
+    const senzaH2h: Record<string, unknown> = { ...v2payload };
+    delete senzaH2h.h2h_e_forma_recente;
+    assertEqual(parseContextDetail(senzaH2h, true), null);
+  });
+
+  test("v2: le fonti consultate sono al massimo tre e deduplicate", () => {
+    const capped = capSources([
+      { uri: "https://a.it/x", title: "A" },
+      { uri: "https://a.it/x", title: "A di nuovo" },
+      { uri: "https://b.it/y", title: null },
+      { uri: "https://c.it/z" },
+      { uri: "https://d.it/w" },
+      { uri: "non-un-url" },
+    ]);
+    assertEqual(capped.length, 3);
+    assertEqual(MAX_CONTEXT_SOURCES, 3);
+    assert(capped.every((c) => c.uri.startsWith("https://")), "solo https accettati");
   });
 
   console.log("\n-- Finestre --\n");

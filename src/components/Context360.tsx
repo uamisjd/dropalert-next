@@ -1,15 +1,17 @@
 /**
- * Blocco "Contesto 360°" per il dettaglio partita.
+ * Blocco "Contesto 360°" per il dettaglio partita, con ricerca attiva.
  *
- * Regole non negoziabili, ereditate dallo sprint:
+ * Regole non negoziabili, ereditate e confermate dallo sprint grounding:
  *  1. la dicitura fissa in testa non si toglie mai;
- *  2. ogni campo porta il tag "conoscenza modello, da verificare" —
- *     l'unica eccezione sono le notizie RSS, che citano la fonte;
+ *  2. ogni campo porta UNO di due tag: «da fonte recuperata» col link,
+ *     se la ricerca ha citato una sorgente, altrimenti «conoscenza
+ *     modello, da verificare». I tag nascono dal parsing, non dalla UI;
  *  3. se il contesto manca si dice che manca e perché: niente inventato;
  *  4. il tetto giornaliero è dichiarato qui, visibile a chi legge;
  *  5. niente di questo blocco entra nel punteggio.
  */
 import type { ContextRowView } from "@/lib/repo/context";
+import type { ContextFieldDetail } from "@/lib/context/pure";
 import {
   CONTEXT_DISCLAIMER,
   MODEL_KNOWLEDGE_TAG,
@@ -22,19 +24,51 @@ const ACCORDO_STYLES: Record<string, string> = {
   "non c'entra": "border-slate-300 bg-slate-100 text-slate-700",
 };
 
-function Field({
-  label,
-  value,
-}: {
-  label: string;
-  value: string;
-}) {
+const FIELD_LABELS: Record<string, string> = {
+  livello_categorie: "Livello delle categorie",
+  anomalia_campo: "Anomalia del campo",
+  posta_in_palo: "Posta in palo",
+  rotazioni_fatica: "Rotazioni e fatica",
+  h2h_e_forma_recente: "Scontri diretti e forma recente",
+  accordo_col_drop: "Accordo col movimento osservato",
+};
+
+function FieldCard({ field }: { field: ContextFieldDetail }) {
+  const isAccordo = field.key === "accordo_col_drop";
   return (
     <div className="rounded border border-slate-200 bg-white px-3 py-2">
-      <div className="text-[11px] leading-tight text-slate-500">{label}</div>
-      <div className="mt-0.5 text-sm text-slate-800">{value}</div>
+      <div className="text-[11px] leading-tight text-slate-500">
+        {FIELD_LABELS[field.key] ?? field.key}
+      </div>
+      <div className="mt-0.5 text-sm text-slate-800">
+        {isAccordo ? (
+          <span
+            className={`rounded border px-2 py-0.5 text-xs font-semibold ${
+              ACCORDO_STYLES[field.valore] ?? ACCORDO_STYLES["non c'entra"]
+            }`}
+          >
+            {field.valore}
+          </span>
+        ) : (
+          field.valore
+        )}
+      </div>
       <div className="mt-1 text-[10px] uppercase tracking-wide text-slate-400">
-        {MODEL_KNOWLEDGE_TAG}
+        {field.fonteUrl !== null ? (
+          <>
+            da fonte recuperata —{" "}
+            <a
+              href={field.fonteUrl}
+              target="_blank"
+              rel="noopener noreferrer nofollow"
+              className="normal-case text-slate-600 underline underline-offset-2 hover:text-slate-900"
+            >
+              {field.fonteTitolo ?? field.fonteUrl}
+            </a>
+          </>
+        ) : (
+          MODEL_KNOWLEDGE_TAG
+        )}
       </div>
     </div>
   );
@@ -50,6 +84,8 @@ export function Context360({
   now: Date;
 }) {
   const ok = context !== null && context.status === "ok" && context.fields !== null;
+  const detailFields = context?.detail?.fields ?? null;
+  const sources = context?.sources ?? null;
 
   return (
     <section
@@ -87,17 +123,49 @@ export function Context360({
             </>
           ) : null}
         </p>
+      ) : detailFields !== null ? (
+        <>
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+            {detailFields.map((f) => (
+              <FieldCard key={f.key} field={f} />
+            ))}
+          </div>
+          {!context.grounded ? (
+            <p className="mt-2 text-[11px] leading-relaxed text-slate-500">
+              Ricerca attiva non disponibile con la chiave corrente: tutti i
+              campi sono conoscenza del modello, da verificare.
+            </p>
+          ) : null}
+        </>
       ) : (
+        /* righe dell'era v1: stessi campi, tutti conoscenza modello */
         <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-          <Field label="Livello delle categorie" value={context.fields!.livelloCategorie} />
-          <Field label="Anomalia del campo" value={context.fields!.anomaliaCampo} />
-          <Field label="Posta in palo" value={context.fields!.postaInPalo} />
-          <Field label="Rotazioni e fatica" value={context.fields!.rotazioniFatica} />
+          {(
+            [
+              ["Livello delle categorie", context.fields!.livelloCategorie],
+              ["Anomalia del campo", context.fields!.anomaliaCampo],
+              ["Posta in palo", context.fields!.postaInPalo],
+              ["Rotazioni e fatica", context.fields!.rotazioniFatica],
+            ] as Array<[string, string]>
+          ).map(([label, value]) => (
+            <div
+              key={label}
+              className="rounded border border-slate-200 bg-white px-3 py-2"
+            >
+              <div className="text-[11px] leading-tight text-slate-500">
+                {label}
+              </div>
+              <div className="mt-0.5 text-sm text-slate-800">{value}</div>
+              <div className="mt-1 text-[10px] uppercase tracking-wide text-slate-400">
+                {MODEL_KNOWLEDGE_TAG}
+              </div>
+            </div>
+          ))}
           <div className="rounded border border-slate-200 bg-white px-3 py-2 sm:col-span-2">
             <div className="text-[11px] leading-tight text-slate-500">
               Accordo col movimento osservato
             </div>
-            <div className="mt-1 flex flex-wrap items-center gap-2">
+            <div className="mt-1">
               <span
                 className={`rounded border px-2 py-0.5 text-xs font-semibold ${
                   ACCORDO_STYLES[context.fields!.accordoColDrop] ??
@@ -106,18 +174,36 @@ export function Context360({
               >
                 {context.fields!.accordoColDrop}
               </span>
-              <span className="text-[10px] uppercase tracking-wide text-slate-400">
-                {MODEL_KNOWLEDGE_TAG}
-              </span>
             </div>
             <p className="mt-1 text-[11px] leading-relaxed text-slate-500">
-              Giudizio del modello sul se questo contesto sostenga,
-              contraddica o non c&apos;entri col movimento di quota
-              osservato. Non modifica il punteggio e non lo giustifica.
+              Non modifica il punteggio e non lo giustifica.
             </p>
           </div>
         </div>
       )}
+
+      {/* Fonti consultate: i link del grounding, massimo tre */}
+      {ok && sources !== null && sources.length > 0 ? (
+        <div className="mt-3">
+          <h3 className="mb-1 text-xs font-semibold text-slate-700">
+            Fonti consultate
+          </h3>
+          <ul className="space-y-1">
+            {sources.map((s) => (
+              <li key={s.uri} className="text-xs leading-relaxed">
+                <a
+                  href={s.uri}
+                  target="_blank"
+                  rel="noopener noreferrer nofollow"
+                  className="text-slate-700 underline underline-offset-2 hover:text-slate-900"
+                >
+                  {s.title ?? s.uri}
+                </a>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
 
       {/* notizie RSS: l'unica parte con una fonte recuperata */}
       {news.length > 0 ? (
@@ -149,10 +235,8 @@ export function Context360({
       <p className="mt-3 border-t border-slate-100 pt-2 text-[11px] leading-relaxed text-slate-500">
         Cache di 24 ore per partita · tetto giornaliero:{" "}
         {context?.usage.used ?? 0}/{context?.usage.limit ?? "—"} chiamate
-        {context?.usage.exhausted
-          ? " — in pausa fino a domani"
-          : ""}{" "}
-        · generato il{" "}
+        {context?.usage.exhausted ? " — in pausa fino a domani" : ""} ·
+        ricerca attiva: {context?.grounded ? "sì" : "no"} · generato il{" "}
         {context?.generatedAt !== null && context?.generatedAt !== undefined
           ? new Date(context.generatedAt).toLocaleString("it-IT", {
               timeZone: "Europe/Rome",

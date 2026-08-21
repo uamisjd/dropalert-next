@@ -1,24 +1,32 @@
 /**
- * Chiamata al modello linguistico per il Contesto 360°.
+ * Chiamata al modello linguistico per il Contesto 360°, con ricerca attiva.
  *
- * Provider: Google Gemini (free tier), chiave nella variabile d'ambiente
- * `LLM_API_KEY`. Modello dichiarato qui sotto: cambia il modello, cambia
- * la "conoscenza modello" che dichiariamo accanto ai campi.
+ * Provider: Google Gemini, chiave `LLM_API_KEY`. Modello flash-lite, scelto
+ * per latenza: il contesto deve arrivare in un paio di secondi o dichiarare
+ * che non arriva.
+ *
+ * RICERCA ATTIVA (grounding): la chiamata chiede lo strumento Google Search
+ * e ogni campo può citare la fonte che lo sostiene. Limite dichiarato e
+ * verificato il 21/08/2026: il grounding NON è nel free tier — con una
+ * chiave gratuita la richiesta con strumenti risponde 429 «exceeded your
+ * current quota». Perciò: primo tentativo CON ricerca; se la chiave non la
+ * consente, si ripete UNA volta senza strumenti e tutto il contesto viaggia
+ * taggato «conoscenza modello, da verificare». Con una chiave a billing
+ * attivo il grounding si accende da solo, senza toccare il codice.
  *
  * Nessun tentativo oltre il timeout: scaduto il termine, il contesto è
- * "non disponibile" e lo si dichiara — mai inventato, mai riprovato in
- * loop durante la stessa richiesta.
+ * «non disponibile» e lo si dichiara — mai inventato.
  */
 import {
   CONTEXT_TIMEOUT_MS,
+  capSources,
+  parseContextDetail,
   parseContextFields,
+  type ContextDetail,
   type ContextFields,
+  type RetrievedSource,
 } from "./pure";
 
-/**
- * Modello dichiarato: flash-lite, scelto per latenza e non per qualità
- * massima — il contesto deve arrivare in un paio di secondi o non arrivare.
- */
 export const CONTEXT_MODEL = "gemini-3.5-flash-lite";
 
 const ENDPOINT = `https://generativelanguage.googleapis.com/v1beta/models/${CONTEXT_MODEL}:generateContent`;
@@ -33,51 +41,65 @@ export interface ContextRequestInput {
   dropSummary: string;
 }
 
-export type ContextGeneration =
-  | { ok: true; fields: ContextFields; model: string }
-  | { ok: false; reason: "chiave_assente" | "timeout" | "risposta_invalida" | "errore" };
+export interface ContextGeneration {
+  ok: boolean;
+  /** campi v1, sempre compilati quando ok (retrocompatibilità di registro) */
+  fields: ContextFields;
+  /** struttura v2 con fonti per campo e fonti consultate */
+  detail: ContextDetail;
+  model: string;
+  reason?: "chiave_assente" | "timeout" | "risposta_invalida" | "errore";
+}
 
-/** Prompt in italiano, con i cinque campi obbligatori e la classificazione chiusa. */
 function buildPrompt(input: ContextRequestInput): string {
   return [
     "Sei un assistente di un osservatorio statistico sui movimenti delle quote del calcio.",
     "Prepari CONTESTO informativo, mai pronostici, mai consigli di scommessa.",
+    "Usa la ricerca per trovare dati reali e verifica ciò che sai.",
     "Dati della partita:",
     `- competizione: ${input.league ?? "non nota"}${input.country ? ` (${input.country})` : ""}`,
     `- partita: ${input.homeTeam} contro ${input.awayTeam}`,
     `- calcio d'inizio: ${input.kickoffAt}`,
     `- movimento osservato sul mercato 1X2: ${input.dropSummary}`,
     "",
-    "Rispondi SOLO con un oggetto JSON con esattamente queste chiavi:",
-    "- livello_categorie: livello delle categorie in gara (es. \"prima serie contro seconda serie\"), se noto, altrimenti \"non noto\"",
-    "- anomalia_campo: campo neutro, stadio invertito o condiviso, se noto, altrimenti \"non noto\"",
-    "- posta_in_palo: importanza della competizione per le squadre (passaggio del turno, salvezza, fine stagione), se nota",
-    "- rotazioni_fatica: rotazioni o fatica attese legate al calendario, se note",
-    "- accordo_col_drop: esattamente uno fra \"sostiene\", \"contraddice\", \"non c'entra\" —",
-    "  dice se il contesto sostiene, contraddice o non c'entra col movimento di quota osservato sopra.",
-    "Ogni valore in italiano, massimo 25 parole, senza inventare fatti: se il modello non lo sa, scrive \"non noto\".",
+    "Rispondi SOLO con un oggetto JSON con esattamente queste chiavi.",
+    "I primi cinque campi sono oggetti {\"valore\": string, \"fonte_url\": string}:",
+    "- livello_categorie: livello delle categorie in gara (es. \"prima serie contro seconda serie\")",
+    "- anomalia_campo: campo neutro, stadio invertito o condiviso",
+    "- posta_in_palo: la fase PRECISA della competizione e la posta (es. \"semifinale playoff scudetto\", \"salvezza a tre giornate dalla fine\", \"passaggio del turno in coppa\")",
+    "- rotazioni_fatica: rotazioni o fatica attese legate al calendario",
+    "- h2h_e_forma_recente: scontri diretti e ultimi risultati delle due squadre, con date se noti",
+    'Il sesto campo è una stringa: accordo_col_drop, esattamente uno fra "sostiene", "contraddice", "non c\'entra",',
+    "  sul se questo contesto sostiene, contraddice o non c'entra col movimento di quota osservato sopra.",
+    "Regole: ogni valore in italiano, massimo 30 parole. Se hai usato una fonte della ricerca,",
+    "metti il suo URL in fonte_url (stringa vuota se nessuna fonte). Se il dato non è noto:",
+    'valore "non noto" e fonte_url vuota. Non inventare URL.',
   ].join("\n");
 }
 
-/**
- * Genera il contesto. Restituisce sempre un esito esplicito: nessuna
- * eccezione attraversa il confine, chi chiama dichiara lo stato.
- */
-export async function generateMatchContext(
-  input: ContextRequestInput,
-  options: { fetchImpl?: typeof fetch; apiKey?: string } = {},
-): Promise<ContextGeneration> {
-  const apiKey = options.apiKey ?? process.env.LLM_API_KEY;
-  if (apiKey === undefined || apiKey.trim() === "") {
-    return { ok: false, reason: "chiave_assente" };
-  }
+interface GeminiResponse {
+  candidates?: Array<{
+    content?: { parts?: Array<{ text?: string; thought?: boolean }> };
+    groundingMetadata?: {
+      groundingChunks?: Array<{ web?: { uri?: string; title?: string } }>;
+    };
+  }>;
+}
 
+/**
+ * Una singola chiamata al modello, con o senza ricerca.
+ * Restituisce gli esiti grezzi: chi chiama decide le politiche.
+ */
+async function callOnce(
+  input: ContextRequestInput,
+  apiKey: string,
+  withSearch: boolean,
+  fetchImpl: typeof fetch,
+): Promise<{ ok: true; body: GeminiResponse } | { ok: false; status: number }> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), CONTEXT_TIMEOUT_MS);
-
   try {
-    const doFetch = options.fetchImpl ?? fetch;
-    const response = await doFetch(ENDPOINT, {
+    const response = await fetchImpl(ENDPOINT, {
       method: "POST",
       headers: {
         "content-type": "application/json",
@@ -85,56 +107,29 @@ export async function generateMatchContext(
       },
       body: JSON.stringify({
         contents: [{ parts: [{ text: buildPrompt(input) }] }],
+        ...(withSearch ? { tools: [{ google_search: {} }] } : {}),
         generationConfig: {
           temperature: 0.2,
-          maxOutputTokens: 400,
+          maxOutputTokens: 900,
           responseMimeType: "application/json",
         },
       }),
       signal: controller.signal,
     });
-
-    if (!response.ok) {
-      return { ok: false, reason: "errore" };
-    }
-
-    const data: unknown = await response.json();
-    const candidates =
-      typeof data === "object" && data !== null
-        ? (data as {
-            candidates?: Array<{
-              content?: { parts?: Array<{ text?: string; thought?: boolean }> };
-            }>;
-          }).candidates
-        : undefined;
-
-    /* il modello a volte antepone pezzi di ragionamento: si uniscono i
-       soli frammenti che non sono pensieri, e si cerca l'oggetto JSON */
-    const text =
-      (candidates?.[0]?.content?.parts ?? [])
-        .filter((p) => p.thought !== true && typeof p.text === "string")
-        .map((p) => p.text)
-        .join("\n") ?? "";
-    if (text.trim() === "") return { ok: false, reason: "risposta_invalida" };
-
-    const payload: unknown = extractJson(text);
-    const fields = parseContextFields(payload);
-    if (fields === null) return { ok: false, reason: "risposta_invalida" };
-
-    return { ok: true, fields, model: CONTEXT_MODEL };
-  } catch (err) {
-    /* l'abort del timer è l'unico caso che si chiama timeout: tutto il
-       resto è un errore, dichiarato per ciò che è */
-    if (err instanceof Error && err.name === "AbortError") {
-      return { ok: false, reason: "timeout" };
-    }
-    return { ok: false, reason: "errore" };
+    if (!response.ok) return { ok: false, status: response.status };
+    return { ok: true, body: (await response.json()) as GeminiResponse };
   } finally {
     clearTimeout(timer);
   }
 }
 
-/** Il primo oggetto JSON valido nel testo, o null. Mai interpretazioni. */
+function extractText(body: GeminiResponse): string {
+  return (body.candidates?.[0]?.content?.parts ?? [])
+    .filter((p) => p.thought !== true && typeof p.text === "string")
+    .map((p) => p.text)
+    .join("\n");
+}
+
 function extractJson(text: string): unknown {
   try {
     return JSON.parse(text);
@@ -147,4 +142,99 @@ function extractJson(text: string): unknown {
       return null;
     }
   }
+}
+
+/**
+ * Genera il contesto. Prima CON ricerca; se la chiave non la copre (429 di
+ * quota, il caso del free tier dichiarato) ripete UNA volta senza. Nessuna
+ * eccezione attraversa il confine.
+ */
+export async function generateMatchContext(
+  input: ContextRequestInput,
+  options: { fetchImpl?: typeof fetch; apiKey?: string } = {},
+): Promise<ContextGeneration> {
+  const apiKey = options.apiKey ?? process.env.LLM_API_KEY;
+  if (apiKey === undefined || apiKey.trim() === "") {
+    return { ok: false, reason: "chiave_assente", fields: nullFields(), detail: emptyDetail(), model: CONTEXT_MODEL };
+  }
+  const doFetch = options.fetchImpl ?? fetch;
+
+  for (const withSearch of [true, false]) {
+    let outcome: Awaited<ReturnType<typeof callOnce>>;
+    try {
+      outcome = await callOnce(input, apiKey, withSearch, doFetch);
+    } catch (err) {
+      if (err instanceof Error && err.name === "AbortError") {
+        return { ok: false, reason: "timeout", fields: nullFields(), detail: emptyDetail(), model: CONTEXT_MODEL };
+      }
+      return { ok: false, reason: "errore", fields: nullFields(), detail: emptyDetail(), model: CONTEXT_MODEL };
+    }
+
+    if (!outcome.ok) {
+      /* 429 con la ricerca accesa = chiave senza grounding (free tier):
+         si dichiara e si ripete senza. Gli altri errori non si riprovano
+         con la ricerca spenta: 403/404 dicono altro */
+      if (withSearch && outcome.status === 429) continue;
+      return { ok: false, reason: "errore", fields: nullFields(), detail: emptyDetail(), model: CONTEXT_MODEL };
+    }
+
+    const grounded =
+      withSearch &&
+      (outcome.body.candidates?.[0]?.groundingMetadata?.groundingChunks?.length ?? 0) > 0;
+
+    const text = extractText(outcome.body);
+    if (text.trim() === "") continue;
+
+    const payload = extractJson(text);
+    if (payload === null) continue;
+
+    const detail = parseContextDetail(payload, grounded);
+    if (detail === null) continue;
+
+    const sources: RetrievedSource[] = grounded
+      ? capSources(
+          (outcome.body.candidates?.[0]?.groundingMetadata?.groundingChunks ?? [])
+            .map((c) => ({ uri: c.web?.uri, title: c.web?.title })),
+        )
+      : [];
+    detail.sources = sources;
+
+    /* i campi v1 restano compilati per le colonne di registro e le card */
+    const legacy = parseContextFields({
+      livello_categorie: fieldValue(detail, "livello_categorie"),
+      anomalia_campo: fieldValue(detail, "anomalia_campo"),
+      posta_in_palo: fieldValue(detail, "posta_in_palo"),
+      rotazioni_fatica: fieldValue(detail, "rotazioni_fatica"),
+      accordo_col_drop: fieldValue(detail, "accordo_col_drop"),
+    });
+    if (legacy === null) continue;
+
+    return { ok: true, fields: legacy, detail, model: CONTEXT_MODEL };
+  }
+
+  return {
+    ok: false,
+    reason: "risposta_invalida",
+    fields: nullFields(),
+    detail: emptyDetail(),
+    model: CONTEXT_MODEL,
+  };
+}
+
+function fieldValue(detail: ContextDetail, key: string): string {
+  return detail.fields.find((f) => f.key === key)?.valore ?? "";
+}
+
+function nullFields(): ContextFields {
+  return {
+    livelloCategorie: "",
+    anomaliaCampo: "",
+    postaInPalo: "",
+    rotazioniFatica: "",
+    accordoColDrop: "non c'entra",
+  };
+}
+
+function emptyDetail(): ContextDetail {
+  return { grounded: false, fields: [], sources: [] };
 }

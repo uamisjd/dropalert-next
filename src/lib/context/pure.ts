@@ -23,13 +23,142 @@ export const MODEL_KNOWLEDGE_TAG = "conoscenza modello, da verificare";
 export const ACCORDO_VALUES = ["sostiene", "contraddice", "non c'entra"] as const;
 export type AccordoValue = (typeof ACCORDO_VALUES)[number];
 
-/** I cinque campi obbligatori del contesto. */
+/** I cinque campi obbligatori del contesto (v1, colonne di registro). */
 export interface ContextFields {
   livelloCategorie: string;
   anomaliaCampo: string;
   postaInPalo: string;
   rotazioniFatica: string;
   accordoColDrop: AccordoValue;
+}
+
+/* ------------------------------------------------------------------ */
+/* v2 — contesto con ricerca attiva (grounding)                        */
+/* ------------------------------------------------------------------ */
+
+/** Le sei chiavi del payload v2. */
+export const CONTEXT_FIELD_KEYS = [
+  "livello_categorie",
+  "anomalia_campo",
+  "posta_in_palo",
+  "rotazioni_fatica",
+  "h2h_e_forma_recente",
+  "accordo_col_drop",
+] as const;
+export type ContextFieldKey = (typeof CONTEXT_FIELD_KEYS)[number];
+
+/** Una fonte recuperata dalla ricerca: link e titolo, quando c'è. */
+export interface RetrievedSource {
+  uri: string;
+  title: string | null;
+}
+
+/** Un campo v2: il valore e la FONTE che lo sostiene, se recuperata. */
+export interface ContextFieldDetail {
+  key: ContextFieldKey;
+  valore: string;
+  /** null = nessuna fonte: il campo viaggia come conoscenza modello */
+  fonteUrl: string | null;
+  fonteTitolo: string | null;
+}
+
+export interface ContextDetail {
+  grounded: boolean;
+  fields: ContextFieldDetail[];
+  /** fonti consultate, al massimo tre */
+  sources: RetrievedSource[];
+}
+
+/** Massimo fonti mostrate nel blocco. */
+export const MAX_CONTEXT_SOURCES = 3;
+
+function cleanUrl(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const t = value.trim();
+  if (!/^https?:\/\//i.test(t)) return null;
+  return t.slice(0, 500);
+}
+
+/**
+ * Valida il payload v2 con ricerca attiva.
+ *
+ * Regola dei tag, applicata QUI e non nella UI: una fonte si accetta solo
+ * se la chiamata era davvero grounded e l'URL è un http(s) serio. Senza
+ * ricerca, ogni fonte_url si butta via: il campo torna "conoscenza
+ * modello, da verificare". Mai un link di facciata.
+ *
+ * Rigetta tutto se un campo manca, è vuoto, supera i 300 caratteri o
+ * l'accordo non è uno dei tre valori ammessi.
+ */
+export function parseContextDetail(
+  payload: unknown,
+  grounded: boolean,
+): ContextDetail | null {
+  if (typeof payload !== "object" || payload === null) return null;
+  const p = payload as Record<string, unknown>;
+
+  const fields: ContextFieldDetail[] = [];
+  for (const key of CONTEXT_FIELD_KEYS) {
+    if (key === "accordo_col_drop") continue;
+    const raw = p[key];
+    const valore =
+      typeof raw === "object" && raw !== null
+        ? cleanTextLoose((raw as Record<string, unknown>).valore)
+        : cleanTextLoose(raw);
+    if (valore === null) return null;
+
+    const fonteUrl = grounded
+      ? cleanUrl(
+          typeof raw === "object" && raw !== null
+            ? (raw as Record<string, unknown>).fonte_url
+            : null,
+        )
+      : null;
+    const fonteTitolo =
+      typeof raw === "object" && raw !== null &&
+      typeof (raw as Record<string, unknown>).fonte_titolo === "string"
+        ? ((raw as Record<string, unknown>).fonte_titolo as string).slice(0, 120)
+        : null;
+
+    fields.push({ key, valore, fonteUrl, fonteTitolo });
+  }
+
+  const accordoRaw = cleanTextLoose(p.accordo_col_drop);
+  if (accordoRaw === null) return null;
+  const accordo = ACCORDO_VALUES.find(
+    (v) => v.toLowerCase() === accordoRaw.toLowerCase(),
+  );
+  if (accordo === undefined) return null;
+  fields.push({ key: "accordo_col_drop", valore: accordo, fonteUrl: null, fonteTitolo: null });
+
+  return { grounded, fields, sources: [] };
+}
+
+/** Come cleanText ma esposto per il v2. */
+function cleanTextLoose(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim().replace(/\s+/g, " ");
+  if (trimmed.length === 0 || trimmed.length > 300) return null;
+  return trimmed;
+}
+
+/** Le fonti del grounding, al massimo tre, deduplicate per URI. */
+export function capSources(
+  chunks: Array<{ uri?: unknown; title?: unknown }>,
+): RetrievedSource[] {
+  const seen = new Set<string>();
+  const out: RetrievedSource[] = [];
+  for (const c of chunks) {
+    const uri = cleanUrl(c.uri);
+    if (uri === null || seen.has(uri)) continue;
+    seen.add(uri);
+    out.push({
+      uri,
+      title: typeof c.title === "string" ? c.title.slice(0, 120) : null,
+    });
+    if (out.length >= MAX_CONTEXT_SOURCES) break;
+  }
+  return out;
 }
 
 /** Durata della cache di un contesto riuscito. */

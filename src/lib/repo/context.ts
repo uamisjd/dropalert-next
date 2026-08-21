@@ -29,7 +29,9 @@ import {
   dailyUsageKey,
   isContextFresh,
   isDailyBudgetExhausted,
+  type ContextDetail,
   type ContextFields,
+  type RetrievedSource,
 } from "@/lib/context/pure";
 import { generateMatchContext } from "@/lib/context/llm";
 import { SELECTION_LABELS_IT } from "@/lib/drop/constants";
@@ -49,6 +51,11 @@ export interface ContextRowView {
   status: string;
   model: string | null;
   fields: ContextFields | null;
+  /** struttura v2: campi con fonte per ciascuno; null = riga v1 */
+  detail: ContextDetail | null;
+  /** fonti del grounding (max 3), null se assenti */
+  sources: RetrievedSource[] | null;
+  grounded: boolean;
   generatedAt: string | null;
   expiresAt: string | null;
   /** perché il contesto manca, in italiano, quando manca */
@@ -106,11 +113,23 @@ function toView(
         }
       : null;
 
+  const detail: ContextDetail | null =
+    row !== null && row.detail !== null
+      ? (row.detail as ContextDetail)
+      : null;
+  const sources: RetrievedSource[] | null =
+    row !== null && row.sources !== null
+      ? (row.sources as RetrievedSource[])
+      : null;
+
   return {
     matchId: row?.matchId ?? 0,
     status: row?.status ?? "assente",
     model: row?.model ?? null,
     fields,
+    detail,
+    sources,
+    grounded: row?.grounded ?? false,
     generatedAt: row?.generatedAt.toISOString() ?? null,
     expiresAt: row?.expiresAt.toISOString() ?? null,
     unavailableReason,
@@ -252,6 +271,9 @@ export async function getContextForMatch(
     postaInPalo: result.ok ? result.fields.postaInPalo : null,
     rotazioniFatica: result.ok ? result.fields.rotazioniFatica : null,
     accordoColDrop: result.ok ? result.fields.accordoColDrop : null,
+    detail: result.ok ? result.detail : null,
+    sources: result.ok ? result.detail.sources : null,
+    grounded: result.ok ? result.detail.grounded : false,
     generatedAt: now,
     expiresAt,
   };
@@ -266,7 +288,7 @@ export async function getContextForMatch(
   return toView(
     row ?? null,
     refreshedUsage,
-    result.ok ? null : reasonToItalian(result.reason),
+    result.ok ? null : reasonToItalian(result.reason ?? "errore"),
   );
 }
 
