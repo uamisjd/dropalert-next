@@ -1,25 +1,29 @@
 /**
  * Fonte notizie pubblica per partita (Sprint notizie).
  *
- * SCELTA DELLA FONTE, DICHIARATA: la richiesta di partenza era Google News
- * RSS, ma il robots.txt di news.google.com vieta `/rss/` a ogni user-agent
- * generico (`Disallow: /` senza Allow su /rss, verificato il 21/08/2026) e
- * il feed stesso si dichiara per uso personale in feed reader. Questo
- * progetto non interroga percorsi vietati: la stessa regola applicata alla
- * fonte delle quote vale per le notizie.
- *
- * Fonte adottata: GDELT DOC API — endpoint pubblico e gratuito, pensato
- * per l'uso programmatico, con output RSS. Nessuna chiave. Prima query
- * con `sourcelang:italian`, fallback senza filtro di lingua (l'inglese e
- * le lingue terze arrivano da lì).
+ * SCELTA DELLA FONTE, DICHIARATA, in tre atti:
+ *  1. Google News RSS, la richiesta di partenza: il suo robots.txt vieta
+ *     `/rss/` a ogni user-agent generico (`Disallow: /` senza Allow su
+ *     /rss, verificato il 21/08/2026) e il feed si dichiara per uso
+ *     personale in feed reader. Percorso vietato: non si interroga, come
+ *     per la fonte delle quote.
+ *  2. GDELT DOC API, prima alternativa robots-compatible: scartata sul
+ *     campo — latenza di ~10s e 429 sistematici dagli IP condivisi del
+ *     deploy, che l'avrebbero resa quasi sempre «non raggiungibile».
+ *  3. Bing News RSS, fonte adottata: feed pubblico documentato
+ *     (`format=RSS`), robots.txt senza alcun divieto su `/news/`
+ *     (verificato il 21/08/2026), risposta in frazioni di secondo.
+ *     Prima query sul mercato italiano (`mkt=it-IT`), fallback senza
+ *     mercato (l'inglese e le lingue terze arrivano da lì).
  *
  * Cortesia dichiarata: max 1 richiesta ogni 5 secondi, max 20 richieste
  * per finestra di 15 minuti (vedi `limiter.ts`), User-Agent identificabile.
  */
 
-export const NEWS_SOURCE_LABEL = "GDELT DOC API (feed RSS pubblico)";
+export const NEWS_SOURCE_LABEL =
+  "Bing News RSS (feed pubblico; robots.txt senza divieti su /news/)";
 
-const BASE = "https://api.gdeltproject.org/api/v2/doc/doc";
+const BASE = "https://www.bing.com/news/search";
 
 export const NEWS_USER_AGENT =
   "DropAlert/1.0 (osservatorio statistico; uso non commerciale; cache 6h)";
@@ -28,7 +32,7 @@ export const NEWS_USER_AGENT =
 export const NEWS_CACHE_HOURS = 6;
 
 /** Timeout della singola richiesta alla fonte. */
-export const NEWS_TIMEOUT_MS = 10_000;
+export const NEWS_TIMEOUT_MS = 8_000;
 
 /** Massimo numero di notizie conservate per partita. */
 export const NEWS_MAX_ITEMS = 6;
@@ -48,18 +52,24 @@ export interface NewsQueryResult {
   query: string;
 }
 
-/** Query italiana: entrambe le squadre, fonti in italiano. */
+/** Query italiana: entrambe le squadre, mercato italiano. */
 export function italianQuery(homeTeam: string, awayTeam: string): string {
-  return `("${homeTeam}" OR "${awayTeam}") sourcelang:italian`;
+  return `"${homeTeam}" "${awayTeam}"`;
 }
 
-/** Query di fallback: senza filtro di lingua. */
+/** Query di fallback: squadra sola, senza mercato (più largha). */
 export function fallbackQuery(homeTeam: string, awayTeam: string): string {
-  return `("${homeTeam}" OR "${awayTeam}")`;
+  return `"${homeTeam}" OR "${awayTeam}"`;
 }
 
-function buildUrl(query: string): string {
-  return `${BASE}?query=${encodeURIComponent(query)}&mode=artlist&maxrecords=${NEWS_MAX_ITEMS}&sort=hybrid&format=rss`;
+function buildUrl(query: string, market: string | null): string {
+  const params = new URLSearchParams({
+    q: query,
+    format: "RSS",
+    count: String(NEWS_MAX_ITEMS),
+  });
+  if (market !== null) params.set("mkt", market);
+  return `${BASE}?${params.toString()}`;
 }
 
 /** RSS essenziale: item con titolo, link, fonte e data. */
@@ -73,8 +83,12 @@ export function parseNewsRss(xml: string): NewsFeedItem[] {
       block.match(/<link[^>]*>([\s\S]*?)<\/link>/)?.[1]?.trim() ?? "";
     /* titolo o link assenti o vuoti: la riga non esiste, non si completa */
     if (title === "" || link === "") continue;
+    /* Bing dichiara la testata in <News:Source>; il tag <source> resta
+       letto per compatibilità con feed standard */
     const source =
-      block.match(/<source[^>]*>([\s\S]*?)<\/source>/)?.[1]?.trim() ?? null;
+      block.match(/<News:Source[^>]*>([\s\S]*?)<\/News:Source>/)?.[1]?.trim() ??
+      block.match(/<source[^>]*>([\s\S]*?)<\/source>/)?.[1]?.trim() ??
+      null;
     const dateRaw =
       block.match(/<pubDate[^>]*>([\s\S]*?)<\/pubDate>/)?.[1]?.trim() ?? null;
     const parsedDate = dateRaw !== null ? new Date(dateRaw) : null;
@@ -122,16 +136,28 @@ export async function fetchMatchNews(
 ): Promise<NewsFetchOutcome> {
   const doFetch = options.fetchImpl ?? fetch;
 
-  const attempts: Array<{ language: "it" | "en"; query: string }> = [
-    { language: "it", query: italianQuery(homeTeam, awayTeam) },
-    { language: "en", query: fallbackQuery(homeTeam, awayTeam) },
+  const attempts: Array<{
+    language: "it" | "en";
+    query: string;
+    market: string | null;
+  }> = [
+    {
+      language: "it",
+      query: italianQuery(homeTeam, awayTeam),
+      market: "it-IT",
+    },
+    {
+      language: "en",
+      query: fallbackQuery(homeTeam, awayTeam),
+      market: null,
+    },
   ];
 
   for (const attempt of attempts) {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), NEWS_TIMEOUT_MS);
     try {
-      const response = await doFetch(buildUrl(attempt.query), {
+      const response = await doFetch(buildUrl(attempt.query, attempt.market), {
         headers: { "user-agent": NEWS_USER_AGENT },
         signal: controller.signal,
       });

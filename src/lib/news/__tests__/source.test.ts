@@ -54,6 +54,7 @@ const RSS_SAMPLE = `<?xml version="1.0"?>
 <item>
   <title>Cosenza: rotazioni attese</title>
   <link>https://esempio.org/cosenza-rotazioni</link>
+  <News:Source>Testata Estera</News:Source>
   <pubDate>invalid-date</pubDate>
 </item>
 <item>
@@ -71,11 +72,12 @@ function main(): void {
     assertEqual(items[0].source, "Gazzetta di Prova");
     assert(items[0].publishedAt !== null, "data valida letta");
     assertEqual(items[1].publishedAt, null, "data illeggibile → null, non inventata");
+    assertEqual(items[1].source, "Testata Estera", "la testata di Bing si legge");
   });
 
-  test("le query dichiarano la lingua: italiano prima, fallback senza filtro", () => {
-    assert(italianQuery("A", "B").includes("sourcelang:italian"), "la query italiana filtra la lingua");
-    assert(!fallbackQuery("A", "B").includes("sourcelang"), "il fallback non filtra la lingua");
+  test("le query dichiarano la lingua: entrambe le squadre prima, OR nel fallback", () => {
+    assert(italianQuery("A", "B") === "\"A\" \"B\"", "entrambe le squadre");
+    assert(fallbackQuery("A", "B").includes(" OR "), "il fallback allarga");
   });
 
   test("link di traduzione: url codificato, lingua destinazione italiana", () => {
