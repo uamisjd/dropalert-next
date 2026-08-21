@@ -65,7 +65,11 @@ async function writeFetchState(
   language: string | null,
   now: Date,
 ): Promise<void> {
-  const expiresAt = new Date(now.getTime() + NEWS_CACHE_HOURS * 3_600_000);
+  /* un fallimento si riprova prima: un'ora, non sei. Un vuoto è un
+     risultato e invecchia come tale */
+  const hours =
+    state === "irraggiungibile" ? 1 : NEWS_CACHE_HOURS;
+  const expiresAt = new Date(now.getTime() + hours * 3_600_000);
   const values = {
     matchId,
     state,
