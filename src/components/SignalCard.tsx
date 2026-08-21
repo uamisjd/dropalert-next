@@ -106,6 +106,21 @@ export function SignalCard({ signal }: { signal: DashboardSignal }) {
               Contesto: {signal.contextCompact}
             </span>
           ) : null}
+          {signal.newsCount !== null && signal.newsCount > 0 ? (
+            <span
+              className="rounded border border-slate-200 bg-white px-1.5 py-0.5 text-[11px] font-medium text-slate-600"
+              title="Notizie pubbliche in cache per questa partita (fonte dichiarata nel dettaglio). Non influenzano il punteggio."
+            >
+              Contesto: {signal.newsCount} notizie
+            </span>
+          ) : signal.newsEmpty ? (
+            <span
+              className="rounded border border-slate-200 bg-white px-1.5 py-0.5 text-[11px] text-slate-500"
+              title="La fonte notizie è stata interrogata e non ha trovato nulla di pubblico per questa partita: stato valido, non un guasto."
+            >
+              Senza notizie pubbliche
+            </span>
+          ) : null}
           {signal.wideDrop ? (
             <span
               className="rounded border border-slate-300 bg-slate-50 px-1.5 py-0.5 text-[11px] font-medium text-slate-700"

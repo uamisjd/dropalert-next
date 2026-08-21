@@ -50,6 +50,13 @@
       "when": 1787274204380,
       "tag": "0006_sprint_context_360",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1787276693365,
+      "tag": "0007_sprint_news_items",
+      "breakpoints": true
     }
   ]
 }

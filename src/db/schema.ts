@@ -591,6 +591,60 @@ export const matchContext = pgTable(
   (t) => [index("match_context_expires_idx").on(t.expiresAt)],
 );
 
+/**
+ * Notizie pubbliche per partita (Sprint notizie). Fonte dichiarata in
+ * `src/lib/news/source.ts`: NON Google News RSS — il suo robots.txt vieta
+ * /rss/ a ogni user-agent generico — bensì GDELT DOC API, feed RSS
+ * pubblico nato per l'uso programmatico.
+ *
+ * `news_items` e la cache per partita (6h, dedupe per link);
+ * `news_fetch` e lo STATO dell'ultima lettura: quante notizie, in che
+ * lingua cercata, e perche mancano quando mancano.
+ */
+export const newsItems = pgTable(
+  "news_items",
+  {
+    id: serial("id").primaryKey(),
+    matchId: integer("match_id")
+      .notNull()
+      .references(() => matches.id, { onDelete: "cascade" }),
+    title: text("title").notNull(),
+    /** testata, quando il feed la dichiara */
+    source: text("source"),
+    publishedAt: timestamp("published_at", { withTimezone: true }),
+    link: text("link").notNull(),
+    /** lingua della QUERY usata ("it" | "en"), non dell'articolo */
+    language: text("language").notNull(),
+    /** query effettuata, per tracciabilita */
+    query: text("query").notNull(),
+    fetchedAt: timestamp("fetched_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("news_items_match_link_uq").on(t.matchId, t.link),
+    index("news_items_match_idx").on(t.matchId),
+  ],
+);
+
+/**
+ * Stato dell'ultima lettura notizie di una partita.
+ * `ok` = N notizie; `vuoto` = fonte raggiunta, nessuna notizia (stato
+ * VALIDO, non un errore); `irraggiungibile` = fonte non raggiungibile;
+ * `rinviato` = cortesia verso la fonte: lettura rimandata, cache vecchia.
+ */
+export const newsFetch = pgTable("news_fetch", {
+  matchId: integer("match_id")
+    .primaryKey()
+    .references(() => matches.id, { onDelete: "cascade" }),
+  state: text("state").notNull(),
+  itemsCount: integer("items_count").notNull().default(0),
+  language: text("language"),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  /** scadenza della cache: 6 ore */
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+});
+
 /** Chiave/valore per stato dei job (cursori, ultimo run, ecc.). */
 export const systemState = pgTable(
   "system_state",
@@ -621,6 +675,8 @@ export type CollectorRun = typeof collectorRuns.$inferSelect;
 export type DataGap = typeof dataGaps.$inferSelect;
 export type SourceHealth = typeof sourceHealth.$inferSelect;
 export type MatchContext = typeof matchContext.$inferSelect;
+export type NewsItem = typeof newsItems.$inferSelect;
+export type NewsFetch = typeof newsFetch.$inferSelect;
 export type NewDropSignal = typeof dropSignals.$inferInsert;
 export type NewOddsSnapshot = typeof oddsSnapshots.$inferInsert;
 export type NewDataGap = typeof dataGaps.$inferInsert;

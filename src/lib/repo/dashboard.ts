@@ -38,6 +38,7 @@ import {
 import { SCORE_BUCKETS, scoreBucketOf, type ScoreBucketKey } from "@/lib/drop/novig";
 import { WIDE_DROP_THRESHOLD } from "@/lib/drop/constants";
 import { getContextSummaries } from "@/lib/repo/context";
+import { getNewsCounts } from "@/lib/repo/news";
 
 /* ------------------------------------------------------------------ */
 /* Soglie di lettura                                                   */
@@ -229,6 +230,12 @@ export interface DashboardSignal {
   /* --- Contesto 360° (solo cache, mai generato dalla lista) --- */
   /** forma compatta "livello · campo · posta", null se non in cache */
   contextCompact: string | null;
+
+  /* --- Notizie (solo cache, mai generate dalla lista) --- */
+  /** quante notizie in cache, null se mai letta */
+  newsCount: number | null;
+  /** true quando la fonte ha detto: nessuna notizia pubblica trovata */
+  newsEmpty: boolean;
 }
 
 export interface SourceRow {
@@ -504,6 +511,7 @@ export async function getDashboardSignals(
   const teamName = new Map(teamRows.map((t) => [t.id, t.name]));
   const gapsByMatch = new Map(gapRows.map((g) => [g.matchId, g.n]));
   const contextByMatch = await getContextSummaries(matchIds);
+  const newsByMatch = await getNewsCounts(matchIds);
   const snapByKey = new Map(
     snapAgg.map((s) => [`${s.matchId}::${s.market}::${s.selection}`, s]),
   );
@@ -601,6 +609,8 @@ export async function getDashboardSignals(
           .join(" · ")
           .slice(0, 120) || null;
       })(),
+      newsCount: newsByMatch.get(r.matchId)?.count ?? null,
+      newsEmpty: newsByMatch.get(r.matchId)?.state === "vuoto",
     };
   });
 
