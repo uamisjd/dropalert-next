@@ -1,29 +1,52 @@
 /**
  * Fonte notizie pubblica per partita (Sprint notizie).
  *
- * SCELTA DELLA FONTE, DICHIARATA, in tre atti:
- *  1. Google News RSS, la richiesta di partenza: il suo robots.txt vieta
- *     `/rss/` a ogni user-agent generico (`Disallow: /` senza Allow su
- *     /rss, verificato il 21/08/2026) e il feed si dichiara per uso
- *     personale in feed reader. Percorso vietato: non si interroga, come
- *     per la fonte delle quote.
- *  2. GDELT DOC API, prima alternativa robots-compatible: scartata sul
- *     campo — latenza di ~10s e 429 sistematici dagli IP condivisi del
- *     deploy, che l'avrebbero resa quasi sempre «non raggiungibile».
- *  3. Bing News RSS, fonte adottata: feed pubblico documentato
- *     (`format=RSS`), robots.txt senza alcun divieto su `/news/`
- *     (verificato il 21/08/2026), risposta in frazioni di secondo.
- *     Prima query sul mercato italiano (`mkt=it-IT`), fallback senza
- *     mercato (l'inglese e le lingue terze arrivano da lì).
+ * SCELTA DELLA FONTE, DICHIARATA, in quattro atti (verificati il
+ * 21/08/2026):
+ *  1. Google News RSS, la richiesta di partenza: robots.txt vieta `/rss/`
+ *     a ogni user-agent generico. Percorso vietato: non si interroga.
+ *  2. GDELT DOC API: robots-compatible ma ~10s di latenza e 429
+ *     sistematici dagli IP condivisi del deploy. Scartata sul campo.
+ *  3. Bing News RSS: robots consentito e velocissimo, ma dal datacenter
+ *     del deploy risponde con pagina di blocco. Scartata sul campo.
+ *  4. FEED DIRETTI DELLE TESTATE, fonte adottata: feed RSS pubblici di
+ *     Gazzetta (calcio) e BBC (football), filtrati per nome di squadra.
+ *     Nessun motore di ricerca, nessun percorso vietato (robots
+ *     verificati), nessuna chiave. Limite dichiarato: i tornei minori
+ *     stranieri difficilmente compaiono — allora lo stato dice «nessuna
+ *     notizia pubblica trovata», che è un risultato valido.
  *
- * Cortesia dichiarata: max 1 richiesta ogni 5 secondi, max 20 richieste
- * per finestra di 15 minuti (vedi `limiter.ts`), User-Agent identificabile.
+ * Cortesia dichiarata: i feed si condividono fra tutte le partite con
+ * cache di 15 minuti in-process; il limiter (1 richiesta/5s, 20 per
+ * quarto d'ora) valuta le letture vere; User-Agent identificabile.
  */
 
 export const NEWS_SOURCE_LABEL =
-  "Bing News RSS (feed pubblico; robots.txt senza divieti su /news/)";
+  "feed RSS pubblici di Gazzetta (calcio) e BBC (football), filtrati per squadra";
 
-const BASE = "https://www.bing.com/news/search";
+/** Feed italiano di default, overridabile da NEWS_FEEDS_IT (virgole). */
+export const DEFAULT_FEEDS_IT = ["https://www.gazzetta.it/rss/calcio.xml"];
+/** Feed internazionale di fallback, overridabile da NEWS_FEEDS_EN. */
+export const DEFAULT_FEEDS_EN = [
+  "https://feeds.bbci.co.uk/sport/football/rss.xml",
+];
+
+function feedsOf(language: "it" | "en"): string[] {
+  const raw =
+    language === "it" ? process.env.NEWS_FEEDS_IT : process.env.NEWS_FEEDS_EN;
+  if (raw !== undefined && raw.trim() !== "") {
+    return raw
+      .split(",")
+      .map((x) => x.trim())
+      .filter((x) => x.length > 0)
+      .slice(0, 3);
+  }
+  return language === "it" ? DEFAULT_FEEDS_IT : DEFAULT_FEEDS_EN;
+}
+
+/** Cache in-process dei feed: tutte le partite condividono la stessa lettura. */
+const FEED_TTL_MS = 15 * 60_000;
+const feedCache = new Map<string, { at: number; items: NewsFeedItem[] }>();
 
 export const NEWS_USER_AGENT =
   "DropAlert/1.0 (osservatorio statistico; uso non commerciale; cache 6h)";
@@ -31,7 +54,7 @@ export const NEWS_USER_AGENT =
 /** Durata della cache per partita. */
 export const NEWS_CACHE_HOURS = 6;
 
-/** Timeout della singola richiesta alla fonte. */
+/** Timeout della singola richiesta di feed. */
 export const NEWS_TIMEOUT_MS = 8_000;
 
 /** Massimo numero di notizie conservate per partita. */
@@ -52,24 +75,33 @@ export interface NewsQueryResult {
   query: string;
 }
 
-/** Query italiana: entrambe le squadre, mercato italiano. */
+/** Filtro italiano: il titolo cita una delle due squadre. */
 export function italianQuery(homeTeam: string, awayTeam: string): string {
-  return `"${homeTeam}" "${awayTeam}"`;
+  return `${homeTeam} ${awayTeam}`;
 }
 
-/** Query di fallback: squadra sola, senza mercato (più largha). */
+/** Filtro di fallback: gli stessi termini, sui feed internazionali. */
 export function fallbackQuery(homeTeam: string, awayTeam: string): string {
-  return `"${homeTeam}" OR "${awayTeam}"`;
+  return `${homeTeam} ${awayTeam}`;
 }
 
-function buildUrl(query: string, market: string | null): string {
-  const params = new URLSearchParams({
-    q: query,
-    format: "RSS",
-    count: String(NEWS_MAX_ITEMS),
-  });
-  if (market !== null) params.set("mkt", market);
-  return `${BASE}?${params.toString()}`;
+/** true se il titolo cita la squadra (nome lungo almeno 4 caratteri). */
+export function titleMentionsTeam(title: string, team: string): boolean {
+  const t = team.trim().toLowerCase();
+  return t.length >= 4 && title.toLowerCase().includes(t);
+}
+
+/** Gli item di un feed che citano una delle due squadre. */
+export function filterByTeams(
+  items: NewsFeedItem[],
+  homeTeam: string,
+  awayTeam: string,
+): NewsFeedItem[] {
+  return items.filter(
+    (i) =>
+      titleMentionsTeam(i.title, homeTeam) ||
+      titleMentionsTeam(i.title, awayTeam),
+  );
 }
 
 /** RSS essenziale: item con titolo, link, fonte e data. */
@@ -124,10 +156,37 @@ export type NewsFetchOutcome =
   | { ok: true; result: NewsQueryResult }
   | { ok: false; reason: "irraggiungibile" };
 
+async function fetchFeed(
+  url: string,
+  fetchImpl: typeof fetch,
+): Promise<NewsFeedItem[]> {
+  const cached = feedCache.get(url);
+  if (cached !== undefined && Date.now() - cached.at < FEED_TTL_MS) {
+    return cached.items;
+  }
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), NEWS_TIMEOUT_MS);
+  try {
+    const response = await fetchImpl(url, {
+      headers: { "user-agent": NEWS_USER_AGENT },
+      signal: controller.signal,
+    });
+    if (!response.ok) return [];
+    const xml = await response.text();
+    const items = parseNewsRss(xml.slice(0, 500_000));
+    feedCache.set(url, { at: Date.now(), items });
+    return items;
+  } catch {
+    return [];
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 /**
- * Cerca le notizie di una partita: italiano prima, fallback senza filtro
- * di lingua solo se la prima query non trova nulla. UNA o DUE richieste
- * in totale — il limiter decide la cortesia, chi chiama decide il resto.
+ * Notizie di una partita: prima i feed italiani filtrati per squadra,
+ * fallback sui feed internazionali se nulla. I feed già in cache non
+ * costano richieste: il limiter di cortesia valuta solo quelle vere.
  */
 export async function fetchMatchNews(
   homeTeam: string,
@@ -136,46 +195,31 @@ export async function fetchMatchNews(
 ): Promise<NewsFetchOutcome> {
   const doFetch = options.fetchImpl ?? fetch;
 
-  const attempts: Array<{
-    language: "it" | "en";
-    query: string;
-    market: string | null;
-  }> = [
-    {
-      language: "it",
-      query: italianQuery(homeTeam, awayTeam),
-      market: "it-IT",
-    },
-    {
-      language: "en",
-      query: fallbackQuery(homeTeam, awayTeam),
-      market: null,
-    },
+  const attempts: Array<{ language: "it" | "en"; urls: string[] }> = [
+    { language: "it", urls: feedsOf("it") },
+    { language: "en", urls: feedsOf("en") },
   ];
 
   for (const attempt of attempts) {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), NEWS_TIMEOUT_MS);
-    try {
-      const response = await doFetch(buildUrl(attempt.query, attempt.market), {
-        headers: { "user-agent": NEWS_USER_AGENT },
-        signal: controller.signal,
-      });
-      if (!response.ok) continue;
-      const xml = await response.text();
-      const items = parseNewsRss(xml.slice(0, 500_000));
-      if (items.length > 0 || attempt.language === "en") {
-        return {
-          ok: true,
-          result: { items, language: attempt.language, query: attempt.query },
-        };
-      }
-      /* query italiana vuota: si prova il fallback, dichiarato */
-    } catch {
-      /* timeout o rete: si prova il fallback, poi si dichiara */
-    } finally {
-      clearTimeout(timer);
+    const all: NewsFeedItem[] = [];
+    for (const url of attempt.urls) {
+      all.push(...(await fetchFeed(url, doFetch)));
     }
+    const matches = filterByTeams(all, homeTeam, awayTeam).slice(
+      0,
+      NEWS_MAX_ITEMS,
+    );
+    if (matches.length > 0 || attempt.language === "en") {
+      return {
+        ok: true,
+        result: {
+          items: matches,
+          language: attempt.language,
+          query: italianQuery(homeTeam, awayTeam),
+        },
+      };
+    }
+    /* feed italiano senza citazioni: si prova il fallback, dichiarato */
   }
 
   return { ok: false, reason: "irraggiungibile" };

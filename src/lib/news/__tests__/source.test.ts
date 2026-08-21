@@ -9,11 +9,15 @@
  */
 import {
   NEWS_MAX_ITEMS,
+  DEFAULT_FEEDS_EN,
+  DEFAULT_FEEDS_IT,
   fallbackQuery,
   fetchMatchNews,
+  filterByTeams,
   italianQuery,
   italianTranslationLink,
   parseNewsRss,
+  titleMentionsTeam,
 } from "../source";
 import {
   acquireNewsSlot,
@@ -75,9 +79,26 @@ function main(): void {
     assertEqual(items[1].source, "Testata Estera", "la testata di Bing si legge");
   });
 
-  test("le query dichiarano la lingua: entrambe le squadre prima, OR nel fallback", () => {
-    assert(italianQuery("A", "B") === "\"A\" \"B\"", "entrambe le squadre");
-    assert(fallbackQuery("A", "B").includes(" OR "), "il fallback allarga");
+  test("i filtri citano entrambe le squadre, it ed en sono gli stessi termini", () => {
+    assert(italianQuery("A", "B") === "A B", "termini semplici, niente sintassi di motore");
+    assertEqual(fallbackQuery("A", "B"), italianQuery("A", "B"));
+  });
+
+  test("il filtro per squadra: il titolo deve citare la squadra", () => {
+    assert(titleMentionsTeam("Il Catanzaro vince il derby", "catanzaro"), "filtro squadra");
+    assert(!titleMentionsTeam("Il Catanzaro vince il derby", "cosenza"), "nessuna citazione, nessun match");
+    assert(!titleMentionsTeam("Gol di Rossi", "Rossi"), "nome corto: non si filtra per caso");
+    const items = [
+      { title: "Catanzaro in forma", link: "a", source: null, publishedAt: null },
+      { title: "Altro sport", link: "b", source: null, publishedAt: null },
+      { title: "Cosenza: rotazioni", link: "c", source: null, publishedAt: null },
+    ];
+    assertEqual(filterByTeams(items, "Catanzaro", "Cosenza").length, 2);
+  });
+
+  test("feed di default: Gazzetta in italiano, BBC nel fallback", () => {
+    assert(DEFAULT_FEEDS_IT.join(",").includes("gazzetta"), "feed di default");
+    assert(DEFAULT_FEEDS_EN.join(",").includes("bbci"), "feed di default");
   });
 
   test("link di traduzione: url codificato, lingua destinazione italiana", () => {
