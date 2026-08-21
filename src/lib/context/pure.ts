@@ -63,7 +63,10 @@ export interface ContextFieldDetail {
 }
 
 export interface ContextDetail {
+  /** true se il grounding Google ha contribuito (chiave a billing) */
   grounded: boolean;
+  /** true se la generazione ha usato documenti recuperati in casa */
+  retrieved: boolean;
   fields: ContextFieldDetail[];
   /** fonti consultate, al massimo tre */
   sources: RetrievedSource[];
@@ -83,9 +86,11 @@ function cleanUrl(value: unknown): string | null {
  * Valida il payload v2 con ricerca attiva.
  *
  * Regola dei tag, applicata QUI e non nella UI: una fonte si accetta solo
- * se la chiamata era davvero grounded e l'URL è un http(s) serio. Senza
- * ricerca, ogni fonte_url si butta via: il campo torna "conoscenza
- * modello, da verificare". Mai un link di facciata.
+ * se l'URL è un http(s) serio E è davvero fra le fonti messe sul tavolo —
+ * gli URL del grounding Google o i documenti recuperati in casa (Wikipedia
+ * e feed). Qualunque altro link si butta via: il campo torna "conoscenza
+ * modello, da verificare". Mai un link di facciata, mai un URL sentito
+ * dire dal modello.
  *
  * Rigetta tutto se un campo manca, è vuoto, supera i 300 caratteri o
  * l'accordo non è uno dei tre valori ammessi.
@@ -93,6 +98,7 @@ function cleanUrl(value: unknown): string | null {
 export function parseContextDetail(
   payload: unknown,
   grounded: boolean,
+  allowedUrls: string[] = [],
 ): ContextDetail | null {
   if (typeof payload !== "object" || payload === null) return null;
   const p = payload as Record<string, unknown>;
@@ -107,13 +113,15 @@ export function parseContextDetail(
         : cleanTextLoose(raw);
     if (valore === null) return null;
 
-    const fonteUrl = grounded
-      ? cleanUrl(
-          typeof raw === "object" && raw !== null
-            ? (raw as Record<string, unknown>).fonte_url
-            : null,
-        )
-      : null;
+    const candidata =
+      typeof raw === "object" && raw !== null
+        ? (raw as Record<string, unknown>).fonte_url
+        : null;
+    const pulita = cleanUrl(candidata);
+    const fonteUrl =
+      pulita !== null && (grounded || allowedUrls.includes(pulita))
+        ? pulita
+        : null;
     const fonteTitolo =
       typeof raw === "object" && raw !== null &&
       typeof (raw as Record<string, unknown>).fonte_titolo === "string"
@@ -131,7 +139,7 @@ export function parseContextDetail(
   if (accordo === undefined) return null;
   fields.push({ key: "accordo_col_drop", valore: accordo, fonteUrl: null, fonteTitolo: null });
 
-  return { grounded, fields, sources: [] };
+  return { grounded, retrieved: allowedUrls.length > 0, fields, sources: [] };
 }
 
 /** Come cleanText ma esposto per il v2. */

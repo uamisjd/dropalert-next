@@ -131,7 +131,7 @@ export function parseNewsRss(xml: string): NewsFeedItem[] {
     const parsedDate = dateRaw !== null ? new Date(dateRaw) : null;
 
     items.push({
-      title: decodeEntities(title),
+      title: decodeEntities(title.replace(/^<!\[CDATA\[/, "").replace(/\]\]>$/, "")),
       link: decodeEntities(link),
       source: source !== null ? decodeEntities(source) : null,
       publishedAt:
@@ -155,6 +155,26 @@ function decodeEntities(s: string): string {
 /** Link di cortesia: la stessa notizia aperta in traduzione italiana. */
 export function italianTranslationLink(url: string): string {
   return `https://translate.google.com/translate?sl=auto&tl=it&u=${encodeURIComponent(url)}`;
+}
+
+/**
+ * Titoli di feed che citano una delle due squadre, per il retrieval del
+ * Contesto 360°. Legge la cache dei feed (e la riempie se vuota): è la
+ * stessa lettura del blocco Notizie, senza database e senza limiter —
+ * la cortesia verso i feed è già nella cache condivisa e nel limiter
+ * del percorso principale.
+ */
+export async function teamFeedItems(
+  homeTeam: string,
+  awayTeam: string,
+): Promise<NewsFeedItem[]> {
+  const urls = [...feedsOf("it"), ...feedsOf("en")];
+  const all: NewsFeedItem[] = [];
+  for (const url of urls) {
+    const read = await fetchFeed(url, fetch);
+    if (!read.failed) all.push(...read.items);
+  }
+  return filterByTeams(all, homeTeam, awayTeam).slice(0, NEWS_MAX_ITEMS);
 }
 
 export type NewsFetchOutcome =

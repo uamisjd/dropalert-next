@@ -24,7 +24,6 @@ import {
   parseContextFields,
   type ContextDetail,
   type ContextFields,
-  type RetrievedSource,
 } from "./pure";
 
 export const CONTEXT_MODEL = "gemini-3.5-flash-lite";
@@ -39,6 +38,8 @@ export interface ContextRequestInput {
   kickoffAt: string;
   /** descrizione breve del movimento osservato, per la domanda d'accordo */
   dropSummary: string;
+  /** documenti recuperati in casa (Wikipedia, feed): la ricerca che la chiave gratuita può permettersi */
+  retrievedDocs?: Array<{ titolo: string; stralcio: string; url: string }>;
 }
 
 export interface ContextGeneration {
@@ -62,6 +63,15 @@ function buildPrompt(input: ContextRequestInput): string {
     `- calcio d'inizio: ${input.kickoffAt}`,
     `- movimento osservato sul mercato 1X2: ${input.dropSummary}`,
     "",
+    ...(input.retrievedDocs !== undefined && input.retrievedDocs.length > 0
+      ? [
+          "FONTI RECUPERATE (le uniche che puoi citare in fonte_url):",
+          ...input.retrievedDocs.map(
+            (d, i) => `${i + 1}. ${d.titolo} — ${d.stralcio} — URL: ${d.url}`,
+          ),
+          "",
+        ]
+      : []),
     "Rispondi SOLO con un oggetto JSON con esattamente queste chiavi.",
     "I primi cinque campi sono oggetti {\"valore\": string, \"fonte_url\": string}:",
     "- livello_categorie: livello delle categorie in gara (es. \"prima serie contro seconda serie\")",
@@ -71,9 +81,10 @@ function buildPrompt(input: ContextRequestInput): string {
     "- h2h_e_forma_recente: scontri diretti e ultimi risultati delle due squadre, con date se noti",
     'Il sesto campo è una stringa: accordo_col_drop, esattamente uno fra "sostiene", "contraddice", "non c\'entra",',
     "  sul se questo contesto sostiene, contraddice o non c'entra col movimento di quota osservato sopra.",
-    "Regole: ogni valore in italiano, massimo 30 parole. Se hai usato una fonte della ricerca,",
-    "metti il suo URL in fonte_url (stringa vuota se nessuna fonte). Se il dato non è noto:",
-    'valore "non noto" e fonte_url vuota. Non inventare URL.',
+    "Regole: ogni valore in italiano, massimo 30 parole. fonte_url può contenere SOLO uno",
+    "degli URL delle fonti recuperate elencate sopra (o della ricerca, se attiva): mettilo",
+    "quando un campo deriva da quella fonte, stringa vuota altrimenti. Se il dato non è",
+    'noto: valore "non noto" e fonte_url vuota. Non inventare URL.',
   ].join("\n");
 }
 
@@ -188,15 +199,29 @@ export async function generateMatchContext(
     const payload = extractJson(text);
     if (payload === null) continue;
 
-    const detail = parseContextDetail(payload, grounded);
+    const allowedUrls = (input.retrievedDocs ?? []).map((d) => d.url);
+    const detail = parseContextDetail(payload, grounded, allowedUrls);
     if (detail === null) continue;
 
-    const sources: RetrievedSource[] = grounded
+    /* Fonti consultate: prima quelle del grounding Google (se la chiave
+       lo consente), poi i documenti recuperati in casa. Mai oltre tre. */
+    const googleSources = grounded
       ? capSources(
           (outcome.body.candidates?.[0]?.groundingMetadata?.groundingChunks ?? [])
             .map((c) => ({ uri: c.web?.uri, title: c.web?.title })),
         )
       : [];
+    const retrievedSources = capSources(
+      (input.retrievedDocs ?? []).map((d) => ({ uri: d.url, title: d.titolo })),
+    );
+    const seen = new Set<string>();
+    const sources = [...googleSources, ...retrievedSources]
+      .filter((x) => {
+        if (seen.has(x.uri)) return false;
+        seen.add(x.uri);
+        return true;
+      })
+      .slice(0, 3);
     detail.sources = sources;
 
     /* i campi v1 restano compilati per le colonne di registro e le card */
@@ -236,5 +261,5 @@ function nullFields(): ContextFields {
 }
 
 function emptyDetail(): ContextDetail {
-  return { grounded: false, fields: [], sources: [] };
+  return { grounded: false, retrieved: false, fields: [], sources: [] };
 }

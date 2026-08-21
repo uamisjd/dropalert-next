@@ -148,6 +148,24 @@ function main(): void {
     assertEqual(senzaFonte.fonteUrl, null, "senza ricerca ogni fonte si butta via");
   });
 
+  test("v2: la fonte conta solo se fra i documenti recuperati, mai un URL sentito dire", () => {
+    const grounded = parseContextDetail(v2payload, false, [
+      "https://esempio.it/leghe",
+    ])!;
+    assertEqual(
+      grounded.fields.find((f) => f.key === "livello_categorie")!.fonteUrl,
+      "https://esempio.it/leghe",
+    );
+    const fuori = parseContextDetail(v2payload, false, [
+      "https://altra-fonte.it/x",
+    ])!;
+    assertEqual(
+      fuori.fields.find((f) => f.key === "livello_categorie")!.fonteUrl,
+      null,
+      "URL non recuperato: resta conoscenza modello",
+    );
+  });
+
   test("v2: url non http si rifiuta, mai link di facciata", () => {
     const brutto = { ...v2payload, anomalia_campo: { valore: "campo neutro", fonte_url: "javascript:alert(1)" } };
     const d = parseContextDetail(brutto, true)!;

@@ -34,6 +34,7 @@ import {
   type RetrievedSource,
 } from "@/lib/context/pure";
 import { generateMatchContext } from "@/lib/context/llm";
+import { retrieveSources } from "@/lib/context/retrieval";
 import { SELECTION_LABELS_IT } from "@/lib/drop/constants";
 import { num } from "@/lib/drop/math";
 
@@ -209,7 +210,14 @@ export async function getContextForMatch(
     .where(eq(matchContext.matchId, matchId))
     .limit(1);
 
-  if (cached !== undefined && isContextFresh(cached.expiresAt, now)) {
+  /* la cache conta solo per le righe della generazione con ricerca
+     attiva (v2, con detail): le righe vecchie si rigenerano al primo
+     render dopo il deploy, non si mostrano più i «non noto» di ieri */
+  if (
+    cached !== undefined &&
+    cached.detail !== null &&
+    isContextFresh(cached.expiresAt, now)
+  ) {
     return toView(cached, usage, null);
   }
 
@@ -245,6 +253,13 @@ export async function getContextForMatch(
 
   const dropSummary = await dropSummaryFor(matchId);
 
+  /* ricerca attiva in casa: documenti reali su cui generare (Wikipedia e
+     feed); il grounding Google resta chiesto nella chiamata e si accende
+     da solo con una chiave che lo copre */
+  const retrievedDocs = await retrieveSources(homeTeam, awayTeam).catch(
+    () => [],
+  );
+
   const result = await generateMatchContext({
     homeTeam,
     awayTeam,
@@ -253,6 +268,7 @@ export async function getContextForMatch(
     kickoffAt: info.kickoffAt.toISOString(),
     dropSummary:
       dropSummary ?? "movimento non descritto: nessun segnale in essere",
+    retrievedDocs,
   });
 
   await bumpUsage(now);

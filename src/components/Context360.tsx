@@ -130,10 +130,10 @@ export function Context360({
               <FieldCard key={f.key} field={f} />
             ))}
           </div>
-          {!context.grounded ? (
+          {sources === null || sources.length === 0 ? (
             <p className="mt-2 text-[11px] leading-relaxed text-slate-500">
-              Ricerca attiva non disponibile con la chiave corrente: tutti i
-              campi sono conoscenza del modello, da verificare.
+              Nessuna fonte recuperata per questa partita: tutti i campi
+              sono conoscenza del modello, da verificare.
             </p>
           ) : null}
         </>
@@ -236,7 +236,12 @@ export function Context360({
         Cache di 24 ore per partita · tetto giornaliero:{" "}
         {context?.usage.used ?? 0}/{context?.usage.limit ?? "—"} chiamate
         {context?.usage.exhausted ? " — in pausa fino a domani" : ""} ·
-        ricerca attiva: {context?.grounded ? "sì" : "no"} · generato il{" "}
+        ricerca attiva:{" "}
+        {context !== null &&
+        (context.grounded || (context.sources?.length ?? 0) > 0)
+          ? "sì"
+          : "no"}
+        {context?.grounded ? " (grounding Google)" : ""} · generato il{" "}
         {context?.generatedAt !== null && context?.generatedAt !== undefined
           ? new Date(context.generatedAt).toLocaleString("it-IT", {
               timeZone: "Europe/Rome",
