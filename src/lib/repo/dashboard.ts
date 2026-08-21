@@ -37,6 +37,7 @@ import {
 } from "@/lib/drop/constants";
 import { SCORE_BUCKETS, scoreBucketOf, type ScoreBucketKey } from "@/lib/drop/novig";
 import { WIDE_DROP_THRESHOLD } from "@/lib/drop/constants";
+import { getContextSummaries } from "@/lib/repo/context";
 
 /* ------------------------------------------------------------------ */
 /* Soglie di lettura                                                   */
@@ -224,6 +225,10 @@ export interface DashboardSignal {
   wideDropPct: number | null;
   /** true quando il calo della quota è ≥ 15% */
   wideDrop: boolean;
+
+  /* --- Contesto 360° (solo cache, mai generato dalla lista) --- */
+  /** forma compatta "livello · campo · posta", null se non in cache */
+  contextCompact: string | null;
 }
 
 export interface SourceRow {
@@ -498,6 +503,7 @@ export async function getDashboardSignals(
 
   const teamName = new Map(teamRows.map((t) => [t.id, t.name]));
   const gapsByMatch = new Map(gapRows.map((g) => [g.matchId, g.n]));
+  const contextByMatch = await getContextSummaries(matchIds);
   const snapByKey = new Map(
     snapAgg.map((s) => [`${s.matchId}::${s.market}::${s.selection}`, s]),
   );
@@ -586,6 +592,15 @@ export async function getDashboardSignals(
       suspicion: explanation.suspicion ?? null,
       wideDropPct,
       wideDrop: wideDropPct !== null && wideDropPct >= WIDE_DROP_THRESHOLD * 100,
+      contextCompact: (() => {
+        const c = contextByMatch.get(r.matchId);
+        if (c === undefined) return null;
+        return [c.livelloCategorie, c.anomaliaCampo, c.postaInPalo]
+          .map((x) => x.trim())
+          .filter((x) => x.length > 0 && x.toLowerCase() !== "non noto")
+          .join(" · ")
+          .slice(0, 120) || null;
+      })(),
     };
   });
 

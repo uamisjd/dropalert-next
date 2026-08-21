@@ -96,6 +96,16 @@ export function SignalCard({ signal }: { signal: DashboardSignal }) {
           ) : null}
           {/* drop ampio: fascia ≥15%, quella con il CLV per campione più
               alto nel backtest R1.5 (bound pre-movimento, dichiarato) */}
+          {/* Contesto 360° compatto: solo ciò che è in cache, con la
+              dicitura onesta nel tooltip */}
+          {signal.contextCompact !== null ? (
+            <span
+              className="rounded border border-slate-200 bg-white px-1.5 py-0.5 text-[11px] font-medium text-slate-600"
+              title={`Contesto generato automaticamente: non è un pronostico né una garanzia. ${signal.contextCompact} — conoscenza modello, da verificare.`}
+            >
+              Contesto: {signal.contextCompact}
+            </span>
+          ) : null}
           {signal.wideDrop ? (
             <span
               className="rounded border border-slate-300 bg-slate-50 px-1.5 py-0.5 text-[11px] font-medium text-slate-700"

@@ -285,6 +285,16 @@ Il sistema funziona senza di essa e senza alcuna chiave API.
 | `BETEXPLORER_LISTING_TTL_MS` | `30000` | validità della cache dell'elenco |
 | `ODDS_API_ENABLED` | `false` | accende the-odds-api (serve la chiave) |
 
+### Variabili d'ambiente del Contesto 360°
+
+| Variabile | Default | Effetto |
+|---|---|---|
+| `LLM_API_KEY` | *(assente)* | chiave Gemini (free tier): senza, il contesto dichiara «non disponibile — chiave non configurata» |
+| `RSS_FEEDS` | *(assente)* | feed RSS pubblici (URL separati da virgola, max 3) per le notizie accanto al contesto |
+
+Il Contesto 360° non entra nel punteggio: cache 24h per partita, tetto
+giornaliero di 50 chiamate con hard-stop dichiarato nel pannello.
+
 ### Variabili d'ambiente dello scheduler
 
 | Variabile | Default | Effetto |

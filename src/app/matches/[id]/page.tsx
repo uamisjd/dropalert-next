@@ -12,6 +12,9 @@ import { getMatchDetail, type MarketSeries } from "@/lib/repo/match-detail";
 import { FreshnessBadge, MagnitudeBadge, MetaPill, SignalLevelBadge } from "@/components/Badges";
 import { OddsChart } from "@/components/OddsChart";
 import { ScoreBreakdown } from "@/components/ScoreBreakdown";
+import { Context360 } from "@/components/Context360";
+import { getContextForMatch } from "@/lib/repo/context";
+import { fetchTeamNews } from "@/lib/context/rss";
 import { SignalTimeline } from "@/components/SignalTimeline";
 import {
   ND,
@@ -165,6 +168,14 @@ export default async function MatchDetailPage({
   const detail = await getMatchDetail(matchId, now);
   if (!detail) notFound();
 
+  /* Contesto 360°: cache 24h, una sola chiamata al modello per visita a
+     cache scaduta, mai un campo inventato. Le notizie RSS, quando ci
+     sono, citano la fonte. */
+  const [context, news] = await Promise.all([
+    getContextForMatch(matchId, now).catch(() => null),
+    fetchTeamNews(detail.match.homeTeam, detail.match.awayTeam).catch(() => []),
+  ]);
+
   const { match } = detail;
   const hasResult = match.homeGoals !== null && match.awayGoals !== null;
 
@@ -240,6 +251,11 @@ export default async function MatchDetailPage({
           </p>
         )}
       </header>
+
+      {/* ---------------- contesto 360 ---------------- */}
+      <section aria-labelledby="contesto-360-wrap" className="mb-5">
+        <Context360 context={context} news={news} now={now} />
+      </section>
 
       {/* ---------------- banner stato dati ---------------- */}
       <section aria-labelledby="stato-dati-partita" className="mb-5">

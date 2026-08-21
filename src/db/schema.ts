@@ -559,6 +559,38 @@ export const sourceHealth = pgTable(
   (t) => [uniqueIndex("source_health_key_uq").on(t.sourceKey)],
 );
 
+/**
+ * Contesto 360° di una partita, generato via LLM e congelato in cache
+ * (Sprint contesto). NON entra nel punteggio: è lettura dichiarata
+ * "conoscenza modello, da verificare", valuta solo la facciata narrativa
+ * del movimento osservato. `status = 'unavailable'` dichiara il fallimento
+ * senza inventare nulla; la cache scade e si riprova.
+ */
+export const matchContext = pgTable(
+  "match_context",
+  {
+    matchId: integer("match_id")
+      .primaryKey()
+      .references(() => matches.id, { onDelete: "cascade" }),
+    /** `ok` = campi presenti; `unavailable` = tentativo fallito, nessun campo */
+    status: text("status").notNull(),
+    /** modello usato, per tracciabilità della "conoscenza modello" */
+    model: text("model"),
+    livelloCategorie: text("livello_categorie"),
+    anomaliaCampo: text("anomalia_campo"),
+    postaInPalo: text("posta_in_palo"),
+    rotazioniFatica: text("rotazioni_fatica"),
+    /** "sostiene" | "contraddice" | "non c'entra" */
+    accordoColDrop: text("accordo_col_drop"),
+    generatedAt: timestamp("generated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    /** scadenza della cache: 24h se ok, 1h se unavailable */
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  },
+  (t) => [index("match_context_expires_idx").on(t.expiresAt)],
+);
+
 /** Chiave/valore per stato dei job (cursori, ultimo run, ecc.). */
 export const systemState = pgTable(
   "system_state",
@@ -588,6 +620,7 @@ export type ClvRecord = typeof clvRecords.$inferSelect;
 export type CollectorRun = typeof collectorRuns.$inferSelect;
 export type DataGap = typeof dataGaps.$inferSelect;
 export type SourceHealth = typeof sourceHealth.$inferSelect;
+export type MatchContext = typeof matchContext.$inferSelect;
 export type NewDropSignal = typeof dropSignals.$inferInsert;
 export type NewOddsSnapshot = typeof oddsSnapshots.$inferInsert;
 export type NewDataGap = typeof dataGaps.$inferInsert;
