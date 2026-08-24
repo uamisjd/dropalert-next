@@ -250,6 +250,9 @@ export interface SourceRow {
   lastRateLimitAt: string | null;
   lastRateLimitMessage: string | null;
   rateLimitCount: number;
+  /** cooldown adattivo sui 429: istante di sblocco, null se libero */
+  cooldownUntil: string | null;
+  cooldownLevel: number;
 }
 
 export interface DashboardStatus {
@@ -373,11 +376,19 @@ export async function getDashboardStatus(now = new Date()): Promise<DashboardSta
     lastRateLimitAt: toIso(s.lastRateLimitAt),
     lastRateLimitMessage: s.lastRateLimitMessage,
     rateLimitCount: s.rateLimitCount,
+    cooldownUntil: toIso(s.cooldownUntil),
+    cooldownLevel: s.cooldownLevel,
   }));
 
-  /* "disabled" non è un guasto: è una scelta di configurazione. */
-  const blocked = sourceRows.filter(
-    (s) => s.status === "blocked" || s.status === "degraded",
+  /* "disabled" non è un guasto: è una scelta di configurazione.
+     Il rosso «FONTE BLOCCATA» si usa SOLO quando l'ultimo giro ha perso
+     dati reali per colpa della fonte: circuito aperto (errori consecutivi)
+     o giro fallito. Una fonte degradata, in cooldown per 429 o un giro
+     parziale PER NOSTRA SCELTA (tetti, TTL, quote stabili saltate) è
+     «DATI PARZIALI», ambra: dichiarato, non urlato. */
+  const hardBlocked = sourceRows.filter((s) => s.status === "blocked");
+  const degraded = sourceRows.filter(
+    (s) => s.status === "degraded" || (s.cooldownUntil !== null && new Date(s.cooldownUntil) > now),
   );
   const okCount = sourceRows.filter((s) => s.status === "ok").length;
   const openGaps = gaps.reduce((a, g) => a + g.n, 0);
@@ -393,9 +404,18 @@ export async function getDashboardStatus(now = new Date()): Promise<DashboardSta
       sourceRows.length === 0
         ? "NESSUNA FONTE INTERROGATA — il monitor non ha ancora raccolto dati reali."
         : "NESSUNA RILEVAZIONE OGGI — l'ultima raccolta riuscita è precedente a oggi.";
-  } else if (blocked.length > 0) {
+  } else if (hardBlocked.length > 0 || lastRun?.status === "failed") {
     overall = "blocked";
-    overallLabel = `FONTE BLOCCATA — ${blocked.map((s) => s.label).join(", ")}. I dati mostrati sono incompleti.`;
+    overallLabel = `FONTE BLOCCATA — ${hardBlocked.map((s) => s.label).join(", ") || "ultimo giro fallito"}. I dati mostrati sono incompleti.`;
+  } else if (degraded.length > 0) {
+    overall = "partial";
+    const cooling = degraded.filter(
+      (s) => s.cooldownUntil !== null && new Date(s.cooldownUntil) > now,
+    );
+    overallLabel =
+      cooling.length > 0
+        ? `DATI PARZIALI — fonte in cooldown per 429 (riparte entro ${Math.max(1, Math.ceil((new Date(cooling[0].cooldownUntil!).getTime() - now.getTime()) / 60000))} min). Giro di rete sospeso per cortesia verso la fonte.`
+        : "DATI PARZIALI — fonte degradata: legge lentamente o in parte. I buchi sono dichiarati, non stimati.";
   } else if (openGaps > 0) {
     overall = "partial";
     overallLabel =
@@ -408,7 +428,7 @@ export async function getDashboardStatus(now = new Date()): Promise<DashboardSta
   return {
     sources: sourceRows,
     sourcesOk: okCount,
-    sourcesBlocked: blocked.length,
+    sourcesBlocked: hardBlocked.length,
     openGaps,
     gapsByReason: gaps.map((g) => ({ reason: g.reason, count: g.n })),
     lastRun: lastRun

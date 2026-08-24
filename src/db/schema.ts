@@ -552,6 +552,15 @@ export const sourceHealth = pgTable(
     rateLimitCount: integer("rate_limit_count").notNull().default(0),
     /** true se la fonte sta servendo da fallback di un'altra */
     isFallback: boolean("is_fallback").notNull().default(false),
+    /**
+     * Cooldown adattivo sui 429 (Sprint backoff): dopo un giro con
+     * episodi di rate-limit, il giro successivo di rete aspetta un
+     * ritardo crescente. `cooldown_until` è l'istante di sblocco,
+     * `cooldown_level` la scala raggiunta (si azzera solo con un giro
+     * completo senza 429).
+     */
+    cooldownUntil: timestamp("cooldown_until", { withTimezone: true }),
+    cooldownLevel: integer("cooldown_level").notNull().default(0),
     updatedAt: timestamp("updated_at", { withTimezone: true })
       .notNull()
       .defaultNow(),

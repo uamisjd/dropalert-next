@@ -135,6 +135,14 @@ export function StatusPanel({
                     </span>
                   </>
                 )}
+                {/* Cooldown adattivo sui 429: la fonte è in pausa VERA,
+                    dichiarata con i minuti che mancano. Ambra: è cortesia,
+                    non perdita. */}
+                {s.cooldownUntil && new Date(s.cooldownUntil) > now && (
+                  <span className="w-full text-amber-700">
+                    fonte in cooldown {Math.max(1, Math.ceil((new Date(s.cooldownUntil).getTime() - now.getTime()) / 60000))} min per 429 (livello {s.cooldownLevel}) — il prossimo giro di rete aspetta.
+                  </span>
+                )}
                 {/* Il rate-limit è un limite della fonte, non un dato che
                     abbiamo perso: riga propria, ambra come gli altri limiti
                     di fonte, mai rossa come le perdite del monitor. */}

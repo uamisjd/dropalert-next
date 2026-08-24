@@ -17,6 +17,13 @@
  * resta mancante resta dichiarato mancante.
  */
 import { withRun } from "@/lib/pipeline/runs";
+import { desc, eq } from "drizzle-orm";
+import { db } from "@/db/client";
+import {
+  oddsSnapshots,
+  sourceHealth,
+  systemState,
+} from "@/db/schema";
 import { runProviderCall } from "../runner";
 import { getProvider } from "../registry";
 import { initProviders } from "../index";
@@ -31,7 +38,14 @@ import {
   MAX_RESULT_LEAGUES,
 } from "./ingest";
 import { recordGap } from "@/lib/pipeline/detect";
+import {
+  cooldownUntilForLevel,
+  nextLevelAfter429,
+  remainingCooldownMinutes,
+} from "../backoff";
+import { isStableQuote, RESULTS_LEAGUE_TTL_MIN } from "../pressure";
 import { matchKeyFor } from "./parse";
+import { num } from "@/lib/drop/math";
 import { parseExclusion, EXCLUSION_CODES } from "../exclusion-codes";
 import {
   buildRunCoverage,
@@ -70,6 +84,11 @@ export interface CollectOptions {
    * schedulato non viene contato nella profondità della serie.
    */
   trigger?: RunTrigger;
+  /**
+   * true per ignorare il cooldown sui 429: soloRichiesta esplicita
+   * dell'operatore (il --force di job:collect). Il cron non lo usa mai.
+   */
+  force?: boolean;
   /**
    * false per saltare il secondo tentativo (test e diagnostica).
    * In esercizio resta acceso: è l'unico trattamento previsto per le
@@ -142,6 +161,61 @@ export async function collectBetexplorer(
     const problems: string[] = [];
     let payloadBytes = 0;
     let latencyMs = 0;
+    let cooldownSkipped = false;
+    const startedAt = new Date();
+
+    /* --- 0. cooldown adattivo sui 429 -------------------------------- */
+    /* Dopo un giro con rate-limit, la fonte merita una pausa vera: il
+       giro di rete NON parte finché il cooldown è attivo. Le fasi locali
+       (analisi, chiusura) proseguono fuori da qui. Il `force` manuale è
+       l'unica porta d'uscita, e lo dichiara. */
+    const [healthRow] = await db
+      .select({
+        cooldownUntil: sourceHealth.cooldownUntil,
+        cooldownLevel: sourceHealth.cooldownLevel,
+      })
+      .from(sourceHealth)
+      .where(eq(sourceHealth.sourceKey, BETEXPLORER_KEY))
+      .limit(1);
+
+    const cooldownLeft = remainingCooldownMinutes(
+      healthRow?.cooldownUntil ?? null,
+      new Date(),
+    );
+    if (cooldownLeft > 0 && options.force !== true) {
+      cooldownSkipped = true;
+      const report: CollectReport = {
+        status: "partial",
+        fixturesSeen: 0,
+        matchesUpserted: 0,
+        matchesCreated: 0,
+        snapshotsWritten: 0,
+        snapshotsSkipped: 0,
+        resultsUpdated: 0,
+        resultsPending: 0,
+        problems: [
+          `Fonte in cooldown per 429: ancora ${cooldownLeft} min. Giro di rete saltato (le fasi locali procedono); la scala 45→90→180 min si azzera solo con un giro senza 429.`,
+        ],
+        latencyMs: 0,
+        payloadBytes: 0,
+        trigger,
+        retry: { attempted: 0, recovered: 0, stillMissing: 0, refs: [] },
+      };
+      return {
+        result: report,
+        stats: {
+          status: "partial" as const,
+          matchesSeen: 0,
+          snapshotsWritten: 0,
+          signalsTouched: 0,
+          errors: [],
+          meta: {
+            trigger,
+            cooldown: { skipped: true, minutesLeft: cooldownLeft },
+          } as Record<string, unknown>,
+        },
+      };
+    }
 
     /* --- 1. partite ------------------------------------------------ */
     const now = new Date();
@@ -297,13 +371,76 @@ export async function collectBetexplorer(
       await importFixture(fixture);
     }
 
+    /**
+     * Una partita è STABILE quando ogni sua serie ha le ultime tre
+     * rilevazioni identiche alla quota che l'elenco pubblica adesso.
+     * Si legge la cache dell'elenco (nessuna richiesta nuova): se il
+     * prezzo si è mosso, la partita non è stabile e si scrive.
+     */
+    const matchQuoteIsStable = async (
+      fixture: FixtureDTO,
+      matchId: number,
+    ): Promise<boolean> => {
+      const odds = await provider
+        .fetchOdds({
+          key: fixture.key,
+          providerMatchId: fixture.providerMatchId,
+          sourceUrl: fixture.sourceUrl,
+          kickoffAt: fixture.kickoffAt,
+        })
+        .then((r) => (r.ok ? r.data : []))
+        .catch(() => []);
+      if (odds.length === 0) return false;
+
+      const rows = await db
+        .select({
+          market: oddsSnapshots.market,
+          selection: oddsSnapshots.selection,
+          price: oddsSnapshots.price,
+        })
+        .from(oddsSnapshots)
+        .where(eq(oddsSnapshots.matchId, matchId))
+        .orderBy(desc(oddsSnapshots.collectedAt))
+        .limit(30);
+
+      const byKey = new Map<string, number[]>();
+      for (const r of rows) {
+        const k = `${r.market}::${r.selection}`;
+        const list = byKey.get(k) ?? [];
+        if (list.length < 3) list.push(num(r.price) ?? 0);
+        byKey.set(k, list);
+      }
+
+      /* ogni quota in arrivo dev'essere identica alle ultime tre */
+      return odds.every((q) => {
+        const k = `${q.market}::${q.selection}`;
+        const last = byKey.get(k);
+        return last !== undefined && isStableQuote(last, q.price);
+      });
+    };
+
     /* --- 3. quote --------------------------------------------------- */
     /* L'elenco drop è una sola pagina che contiene le quote di tutte le
        partite: l'adapter la tiene in cache per pochi secondi, quindi
-       questo ciclo produce UNA sola richiesta di rete complessiva. */
+       questo ciclo produce UNA sola richiesta di rete complessiva.
+       Le quote STABILI da 3 giri non si riscrivono: la riga sarebbe una
+       copia della precedente, e la pressione (di righe e di attenzione)
+       non compra informazione. N=3 dichiarato in lib/providers/pressure. */
+    let stableSkipped = 0;
+    const stableIds = new Set<string>();
     for (const fixture of fixtures) {
       const matchId = matchIds.get(fixture.key);
       if (matchId === undefined) continue;
+      if (await matchQuoteIsStable(fixture, matchId)) {
+        stableSkipped += 1;
+        if (fixture.providerMatchId !== null) {
+          stableIds.add(fixture.providerMatchId);
+          importedIds.add(fixture.providerMatchId);
+          /* le ha, le quote: sono ferme da tre giri, non assenti */
+          withOddsIds.add(fixture.providerMatchId);
+        }
+        continue;
+      }
       await collectOdds(fixture, matchId);
     }
 
@@ -421,15 +558,39 @@ export async function collectBetexplorer(
     if (withResults) {
       const pending = await findPendingResultMatches(now);
 
+      /* la pagina risultati di un campionato non si rilegge più di una
+         volta ogni RESULTS_LEAGUE_TTL_MIN minuti: il cron passa ogni 45,
+         i risultati non cambiano a quella cadenza. Chi resta fuori per
+         il TTL lo si dichiara, e rientra al giro utile */
+      const [seenRow] = await db
+        .select({ value: systemState.value })
+        .from(systemState)
+        .where(eq(systemState.key, "betexplorer:results_seen"))
+        .limit(1);
+      const seen = (seenRow?.value ?? {}) as Record<string, string>;
+      const freshEnough = (league: string): boolean => {
+        const at = seen[league];
+        if (at === undefined) return true;
+        return now.getTime() - new Date(at).getTime() > RESULTS_LEAGUE_TTL_MIN * 60_000;
+      };
+
       /* prima le competizioni in attesa (sono in ritardo), poi quelle
          del giro corrente; tetto dichiarato, oltre si riprova al giro dopo */
       const leaguesToCheck = [
         ...new Set([...pending.map((p) => p.leaguePath), ...leaguePaths]),
-      ];
+      ].filter(freshEnough);
+      const deferredByTtl = [
+        ...new Set([...pending.map((p) => p.leaguePath), ...leaguePaths]),
+      ].filter((l) => !freshEnough(l));
       const capped = leaguesToCheck.slice(MAX_RESULT_LEAGUES);
       if (capped.length > 0) {
         problems.push(
           `Tetto di ${MAX_RESULT_LEAGUES} campionati risultati per giro: ${capped.length} competizioni non controllate in questo giro, si riprova al prossimo.`,
+        );
+      }
+      if (deferredByTtl.length > 0) {
+        problems.push(
+          `Pagine risultati lette nelle ultime ${RESULTS_LEAGUE_TTL_MIN} ore e non rilette (nostra scelta di pressione): ${deferredByTtl.length} campionati. Nessun dato perso: rientrano al prossimo giro utile.`,
         );
       }
       const checkedLeagues = new Set(leaguesToCheck.slice(0, MAX_RESULT_LEAGUES));
@@ -454,6 +615,21 @@ export async function collectBetexplorer(
           if (resultsCall.result.partial) problems.push(...resultsCall.result.missing);
           const applied = await applyResults(resultsCall.result.data);
           resultsUpdated = applied.updated;
+
+          /* memoria del TTL: queste pagine sono state lette adesso */
+          const stamp = new Date().toISOString();
+          for (const league of checkedLeagues) seen[league] = stamp;
+          await db
+            .insert(systemState)
+            .values({
+              key: "betexplorer:results_seen",
+              value: seen as unknown as object,
+              updatedAt: now,
+            })
+            .onConflictDoUpdate({
+              target: systemState.key,
+              set: { value: seen as unknown as object, updatedAt: now },
+            });
 
           /* chi è ancora in attesa dopo il tentativo di questo giro:
              o la pagina del suo campionato è stata letta e non lo
@@ -509,6 +685,44 @@ export async function collectBetexplorer(
       coverage = buildRunCoverage(coverageInput);
     }
 
+    /* --- 6. cooldown adattivo: l'episodio 429 decide la scala -------- */
+    /* l'episodio si misura su source_health.lastRateLimitAt, datato a
+       parte dal runner proprio per questo: se è nuovo di questo giro, la
+       scala sale; se il giro è arrivato in fondo senza 429, si azzera */
+    const [healthAfter] = await db
+      .select({
+        lastRateLimitAt: sourceHealth.lastRateLimitAt,
+        cooldownLevel: sourceHealth.cooldownLevel,
+      })
+      .from(sourceHealth)
+      .where(eq(sourceHealth.sourceKey, BETEXPLORER_KEY))
+      .limit(1);
+
+    const had429 =
+      healthAfter?.lastRateLimitAt !== null &&
+      healthAfter !== undefined &&
+      healthAfter.lastRateLimitAt !== null &&
+      healthAfter.lastRateLimitAt.getTime() >= startedAt.getTime();
+
+    let cooldownNote: string | null = null;
+    if (had429) {
+      const level = nextLevelAfter429(healthAfter?.cooldownLevel ?? 0);
+      const until = cooldownUntilForLevel(level, now);
+      await db
+        .update(sourceHealth)
+        .set({ cooldownLevel: level, cooldownUntil: until, updatedAt: now })
+        .where(eq(sourceHealth.sourceKey, BETEXPLORER_KEY));
+      cooldownNote = `429 nel giro: cooldown al livello ${level}, la fonte riparte fra ${Math.round((until!.getTime() - now.getTime()) / 60_000)} min.`;
+      problems.push(cooldownNote);
+    } else if ((healthAfter?.cooldownLevel ?? 0) > 0) {
+      /* giro completo senza 429: la scala si azzera, dichiarato */
+      await db
+        .update(sourceHealth)
+        .set({ cooldownLevel: 0, cooldownUntil: null, updatedAt: now })
+        .where(eq(sourceHealth.sourceKey, BETEXPLORER_KEY));
+      cooldownNote = "Giro senza 429: cooldown azzerato.";
+    }
+
     const status: CollectReport["status"] =
       problems.length > 0 ? "partial" : "success";
 
@@ -546,6 +760,8 @@ export async function collectBetexplorer(
           snapshotsSkipped,
           resultsUpdated,
           resultsPending,
+          stableSkipped,
+          cooldown: { skipped: cooldownSkipped, note: cooldownNote },
           leagues: [...leaguePaths],
           perBookmakerOdds: false,
           /* esito del secondo e ultimo tentativo, anche quando è vuoto */
