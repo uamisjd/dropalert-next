@@ -20,6 +20,7 @@
  * essere solo vero, mai di facciata.
  */
 import { teamFeedItems } from "@/lib/news/source";
+import { searchForMatch, TAVILY_DAILY_LIMIT, type TavilyResult } from "./tavily";
 
 export interface RetrievedDoc {
   titolo: string;
@@ -77,18 +78,69 @@ async function fetchWiki(
   return null;
 }
 
+export interface RetrievalReport {
+  docs: RetrievedDoc[];
+  /** query Tavily consumate (per il contatore di budget a registro) */
+  tavilyQueriesUsed: number;
+  /** true se Tavily ha contribuito: alimenta la riga «ricerca attiva» */
+  tavilyContributed: boolean;
+  /** motivo in italiano quando la ricerca web non c'è stata */
+  searchUnavailableReason: string | null;
+}
+
+/** I risultati Tavily diventano documenti per il modello. */
+function toDocs(results: TavilyResult[]): RetrievedDoc[] {
+  return results.map((r) => ({
+    titolo: r.title,
+    stralcio: r.content.slice(0, 400),
+    url: r.url,
+  }));
+}
+
 /**
- * I documenti per una partita: le due pagine Wikipedia (it, poi en se la
- * prima non c'è) e i titoli di feed che citano le squadre. Al massimo sei,
- * i più pertinenti per primi. Chi non c'è non c'è: nessuna fonte inventata.
+ * I documenti per una partita, in ordine di pertinenza: prima la ricerca
+ * web Tavily (H2H, classifica, fase — ciò che Wikipedia non ha), poi le
+ * due pagine Wikipedia (integrazione), poi i titoli di feed. Al massimo
+ * otto, deduplicati. Chi non c'è non c'è: nessuna fonte inventata.
  */
 export async function retrieveSources(
   homeTeam: string,
   awayTeam: string,
-  options: { fetchImpl?: typeof fetch } = {},
-): Promise<RetrievedDoc[]> {
+  options: { fetchImpl?: typeof fetch; league?: string | null; tavilyBudgetLeft?: number } = {},
+): Promise<RetrievalReport> {
   const doFetch = options.fetchImpl ?? fetch;
+  const budgetLeft =
+    options.tavilyBudgetLeft === undefined ? 0 : options.tavilyBudgetLeft;
 
+  const report: RetrievalReport = {
+    docs: [],
+    tavilyQueriesUsed: 0,
+    tavilyContributed: false,
+    searchUnavailableReason: null,
+  };
+
+  /* 1. ricerca web Tavily, se il budget lo consente */
+  const tavily = await searchForMatch(
+    homeTeam,
+    awayTeam,
+    options.league ?? null,
+    { budgetLeft, fetchImpl: doFetch },
+  ).catch(() => ({ ok: false as const, reason: "errore" as const, queriesUsed: 0 }));
+
+  if (tavily.ok && tavily.results.length > 0) {
+    report.tavilyContributed = true;
+    report.docs.push(...toDocs(tavily.results));
+  } else if (!tavily.ok) {
+    report.searchUnavailableReason =
+      tavily.reason === "chiave_assente"
+        ? "ricerca non disponibile: chiave Tavily non configurata"
+        : tavily.reason === "budget"
+          ? "ricerca non disponibile: tetto giornaliero raggiunto"
+          : "ricerca non disponibile: errore della fonte";
+  }
+  if ("queriesUsed" in tavily) report.tavilyQueriesUsed = tavily.queriesUsed;
+
+  /* 2. Wikipedia resta come integrazione */
   const [homeIt, awayIt, feed] = await Promise.all([
     fetchWiki("it", homeTeam, doFetch).catch(() => null),
     fetchWiki("it", awayTeam, doFetch).catch(() => null),
@@ -101,23 +153,26 @@ export async function retrieveSources(
   const home = homeIt ?? (await fallbackLang(homeTeam));
   const away = awayIt ?? (await fallbackLang(awayTeam));
 
-  const docs: RetrievedDoc[] = [];
   for (const d of [home, away]) {
-    if (d !== null) docs.push(d);
+    if (d !== null) report.docs.push(d);
   }
   for (const item of feed.slice(0, 4)) {
-    docs.push({
+    report.docs.push({
       titolo: item.title.slice(0, 120),
       stralcio: (item.source ?? "testata").slice(0, 80),
       url: item.link,
     });
   }
 
-  /* dedup per URL, tetto sei */
+  /* dedup per URL, tetto otto */
   const seen = new Set<string>();
-  return docs.filter((d) => {
+  report.docs = report.docs.filter((d) => {
     if (seen.has(d.url)) return false;
     seen.add(d.url);
     return true;
-  }).slice(0, 6);
+  }).slice(0, 8);
+
+  return report;
 }
+
+void TAVILY_DAILY_LIMIT;

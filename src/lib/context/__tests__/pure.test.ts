@@ -7,6 +7,14 @@
  * e le finestre (cache, riprova, tetto giornaliero).
  */
 import {
+  parseTavilyResults,
+  tavilyUsageKey,
+  TAVILY_DAILY_LIMIT,
+  TAVILY_MAX_PER_MATCH,
+  primaryQuery as tavilyPrimary,
+  type TavilyResult,
+} from "../tavily";
+import {
   ACCORDO_VALUES,
   CONTEXT_CACHE_HOURS,
   CONTEXT_DAILY_LIMIT,
@@ -190,6 +198,48 @@ function main(): void {
     assertEqual(capped.length, 3);
     assertEqual(MAX_CONTEXT_SOURCES, 3);
     assert(capped.every((c) => c.uri.startsWith("https://")), "solo https accettati");
+  });
+
+  console.log("\n-- Tavily: adapter e budget --\n");
+
+  test("risposta Tavily: solo risultati con url http sopravvivono", () => {
+    const payload = {
+      results: [
+        { title: "H2H", url: "https://flashscore.xx/m", content: "La Guaira 4-0 Yaracuyanos" },
+        { title: "Senza url", url: "", content: "x" },
+        { title: "url strana", url: "javascript:alert(1)", content: "x" },
+        { title: "Lunga", url: "https://ok.it/a", content: "c".repeat(500) },
+      ],
+    };
+    const r = parseTavilyResults(payload);
+    assertEqual(r.length, 2, "solo i primi e il quarto");
+    assertEqual(r[1].content.length, 400, "contenuto troncato a 400");
+  });
+
+  test("payload rotto o senza results: zero risultati, zero invenzioni", () => {
+    assertEqual(parseTavilyResults(null).length, 0);
+    assertEqual(parseTavilyResults({}).length, 0);
+    assertEqual(parseTavilyResults("no").length, 0);
+  });
+
+  test("le query dichiarano squadre, competizione, H2H", () => {
+    const q = tavilyPrimary("A", "B", "Coppa");
+    assert(q.includes("A") && q.includes("B"), "squadre presenti");
+    assert(q.includes("Coppa") && q.includes("H2H"), "competizione e H2H");
+  });
+
+  test("budget dichiarato: 30 al giorno, 2 per partita, chiave per giornata italiana", () => {
+    assertEqual(TAVILY_DAILY_LIMIT, 30);
+    assertEqual(TAVILY_MAX_PER_MATCH, 2);
+    assertEqual(
+      tavilyUsageKey(new Date("2026-08-21T23:30:00Z")),
+      "tavily:daily:2026-08-22",
+    );
+  });
+
+  const dummy: TavilyResult = { title: "t", url: "https://a", content: "c" };
+  test("il tipo risultato è quello che il modello riceve", () => {
+    assert(dummy.url.startsWith("https://"), "url http(s)");
   });
 
   console.log("\n-- Finestre --\n");

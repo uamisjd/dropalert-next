@@ -70,10 +70,19 @@ export interface ContextDetail {
   fields: ContextFieldDetail[];
   /** fonti consultate, al massimo tre */
   sources: RetrievedSource[];
+  /** chi ha alimentato la ricerca: "Tavily" | "Wikipedia" | "Google" | null */
+  searchProvider: string | null;
 }
 
 /** Massimo fonti mostrate nel blocco. */
 export const MAX_CONTEXT_SOURCES = 3;
+
+/**
+ * Versione della pipeline di retrieval. Bump = invalida la cache al deploy:
+ * le righe con versione diversa si rigenerano al primo render. Serve a non
+ * mostrare contesti nati con fonti vecchie (es. pre-Tavily).
+ */
+export const CONTEXT_RETRIEVAL_VERSION = 2;
 
 function cleanUrl(value: unknown): string | null {
   if (typeof value !== "string") return null;
@@ -139,7 +148,13 @@ export function parseContextDetail(
   if (accordo === undefined) return null;
   fields.push({ key: "accordo_col_drop", valore: accordo, fonteUrl: null, fonteTitolo: null });
 
-  return { grounded, retrieved: allowedUrls.length > 0, fields, sources: [] };
+  return {
+    grounded,
+    retrieved: allowedUrls.length > 0,
+    fields,
+    sources: [],
+    searchProvider: null,
+  };
 }
 
 /** Come cleanText ma esposto per il v2. */

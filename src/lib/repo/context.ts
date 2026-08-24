@@ -35,6 +35,11 @@ import {
 } from "@/lib/context/pure";
 import { generateMatchContext } from "@/lib/context/llm";
 import { retrieveSources } from "@/lib/context/retrieval";
+import {
+  TAVILY_DAILY_LIMIT,
+  tavilyUsageKey,
+} from "@/lib/context/tavily";
+import { CONTEXT_RETRIEVAL_VERSION } from "@/lib/context/pure";
 import { SELECTION_LABELS_IT } from "@/lib/drop/constants";
 import { num } from "@/lib/drop/math";
 
@@ -56,6 +61,10 @@ export interface ContextRowView {
   detail: ContextDetail | null;
   /** fonti del grounding (max 3), null se assenti */
   sources: RetrievedSource[] | null;
+  /** chi ha alimentato la ricerca: "Tavily" | "Wikipedia" | "Google" | null */
+  searchProvider: string | null;
+  /** motivo in italiano quando la ricerca web non c'è stata */
+  searchUnavailableReason: string | null;
   grounded: boolean;
   generatedAt: string | null;
   expiresAt: string | null;
@@ -81,6 +90,31 @@ async function readUsage(now: Date): Promise<ContextUsage> {
   return { used, limit: CONTEXT_DAILY_LIMIT, exhausted: isDailyBudgetExhausted(used) };
 }
 
+/** Quota Tavily usata oggi (giornata italiana). */
+async function readTavilyUsage(now: Date): Promise<number> {
+  const [row] = await db
+    .select({ value: systemState.value })
+    .from(systemState)
+    .where(eq(systemState.key, tavilyUsageKey(now)))
+    .limit(1);
+  const used =
+    row !== undefined && typeof (row.value as { used?: unknown }).used === "number"
+      ? (row.value as { used: number }).used
+      : 0;
+  return used;
+}
+
+async function addTavilyUsage(now: Date, add: number): Promise<void> {
+  if (add <= 0) return;
+  const key = tavilyUsageKey(now);
+  const current = await readTavilyUsage(now);
+  const value = { used: Math.min(current + add, TAVILY_DAILY_LIMIT) };
+  await db
+    .insert(systemState)
+    .values({ key, value, updatedAt: now })
+    .onConflictDoUpdate({ target: systemState.key, set: { value, updatedAt: now } });
+}
+
 async function bumpUsage(now: Date): Promise<void> {
   const key = dailyUsageKey(now);
   const current = await readUsage(now);
@@ -102,6 +136,7 @@ function toView(
   row: typeof matchContext.$inferSelect | null,
   usage: ContextUsage,
   unavailableReason: string | null,
+  searchUnavailableReason: string | null = null,
 ): ContextRowView {
   const fields: ContextFields | null =
     row !== null && row.status === "ok"
@@ -135,6 +170,8 @@ function toView(
     expiresAt: row?.expiresAt.toISOString() ?? null,
     unavailableReason,
     usage,
+    searchProvider: detail?.searchProvider ?? null,
+    searchUnavailableReason,
   };
 }
 
@@ -210,12 +247,18 @@ export async function getContextForMatch(
     .where(eq(matchContext.matchId, matchId))
     .limit(1);
 
-  /* la cache conta solo per le righe della generazione con ricerca
-     attiva (v2, con detail): le righe vecchie si rigenerano al primo
-     render dopo il deploy, non si mostrano più i «non noto» di ieri */
+  /* la cache conta solo per le righe generate con la pipeline di
+     retrieval CORRENTE (versione dentro detail): ogni bump di versione
+     invalida tutto e il primo render rigenera — è così che il deploy con
+     Tavily ha mandato in rigenerazione i contesti dell'era pre-Tavily */
+  const cachedVersion =
+    cached?.detail !== null && cached?.detail !== undefined
+      ? (cached.detail as { retrievalVersion?: unknown }).retrievalVersion
+      : undefined;
   if (
     cached !== undefined &&
     cached.detail !== null &&
+    cachedVersion === CONTEXT_RETRIEVAL_VERSION &&
     isContextFresh(cached.expiresAt, now)
   ) {
     return toView(cached, usage, null);
@@ -253,12 +296,24 @@ export async function getContextForMatch(
 
   const dropSummary = await dropSummaryFor(matchId);
 
-  /* ricerca attiva in casa: documenti reali su cui generare (Wikipedia e
-     feed); il grounding Google resta chiesto nella chiamata e si accende
-     da solo con una chiave che lo copre */
-  const retrievedDocs = await retrieveSources(homeTeam, awayTeam).catch(
-    () => [],
+  /* ricerca attiva: Tavily (budget contato a registro) + Wikipedia come
+     integrazione; il grounding Google resta chiesto nella chiamata e si
+     accende da solo con una chiave che lo copre */
+  const tavilyUsed = await readTavilyUsage(now);
+  const tavilyBudgetLeft = Math.max(0, TAVILY_DAILY_LIMIT - tavilyUsed);
+  const retrieval = await retrieveSources(homeTeam, awayTeam, {
+    league: info.leagueName,
+    tavilyBudgetLeft,
+  }).catch(
+    (): Awaited<ReturnType<typeof retrieveSources>> => ({
+      docs: [],
+      tavilyQueriesUsed: 0,
+      tavilyContributed: false,
+      searchUnavailableReason: "ricerca non disponibile: errore della fonte",
+    }),
   );
+  await addTavilyUsage(now, retrieval.tavilyQueriesUsed);
+  const retrievedDocs = retrieval.docs;
 
   const result = await generateMatchContext({
     homeTeam,
@@ -287,7 +342,19 @@ export async function getContextForMatch(
     postaInPalo: result.ok ? result.fields.postaInPalo : null,
     rotazioniFatica: result.ok ? result.fields.rotazioniFatica : null,
     accordoColDrop: result.ok ? result.fields.accordoColDrop : null,
-    detail: result.ok ? result.detail : null,
+    detail: result.ok
+      ? {
+          ...result.detail,
+          retrievalVersion: CONTEXT_RETRIEVAL_VERSION,
+          searchProvider: retrieval.tavilyContributed
+            ? "Tavily"
+            : result.detail.grounded
+              ? "Google"
+              : result.detail.retrieved
+                ? "Wikipedia"
+                : null,
+        }
+      : null,
     sources: result.ok ? result.detail.sources : null,
     grounded: result.ok ? result.detail.grounded : false,
     generatedAt: now,
@@ -305,6 +372,7 @@ export async function getContextForMatch(
     row ?? null,
     refreshedUsage,
     result.ok ? null : reasonToItalian(result.reason ?? "errore"),
+    retrieval.searchUnavailableReason,
   );
 }
 

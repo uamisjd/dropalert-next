@@ -261,5 +261,11 @@ function nullFields(): ContextFields {
 }
 
 function emptyDetail(): ContextDetail {
-  return { grounded: false, retrieved: false, fields: [], sources: [] };
+  return {
+    grounded: false,
+    retrieved: false,
+    fields: [],
+    sources: [],
+    searchProvider: null,
+  };
 }

@@ -132,8 +132,10 @@ export function Context360({
           </div>
           {sources === null || sources.length === 0 ? (
             <p className="mt-2 text-[11px] leading-relaxed text-slate-500">
-              Nessuna fonte recuperata per questa partita: tutti i campi
-              sono conoscenza del modello, da verificare.
+              {context?.searchUnavailableReason !== null &&
+              context?.searchUnavailableReason !== undefined
+                ? `${context.searchUnavailableReason}: nessun campo viene inventato al suo posto.`
+                : "Nessuna fonte recuperata per questa partita: tutti i campi sono conoscenza del modello, da verificare."}
             </p>
           ) : null}
         </>
@@ -241,7 +243,13 @@ export function Context360({
         (context.grounded || (context.sources?.length ?? 0) > 0)
           ? "sì"
           : "no"}
-        {context?.grounded ? " (grounding Google)" : ""} · generato il{" "}
+        {context?.searchProvider !== null && context?.searchProvider !== undefined
+          ? ` (${context.searchProvider})`
+          : ""}
+        {context?.grounded && context?.searchProvider !== "Tavily"
+          ? " (grounding Google)"
+          : ""}{" "}
+        · generato il{" "}
         {context?.generatedAt !== null && context?.generatedAt !== undefined
           ? new Date(context.generatedAt).toLocaleString("it-IT", {
               timeZone: "Europe/Rome",
