@@ -23,8 +23,17 @@ import { CoverageSummary } from "@/components/CoverageSummary";
 import { EmptyState } from "@/components/EmptyState";
 import { SignalCard } from "@/components/SignalCard";
 import { SignalFilters } from "@/components/SignalFilters";
+import { TimeChips } from "@/components/TimeChips";
+import { RecentStrip } from "@/components/RecentStrip";
 import { StatusPanel } from "@/components/StatusPanel";
 import { fmtDateTime } from "@/components/format";
+import {
+  TIME_CHIPS,
+  groupByDay,
+  matchesTimeChip,
+  parseTimeChip,
+  recentMovements,
+} from "@/lib/view/timeline";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -64,6 +73,22 @@ export default async function Home({
   const filters = parseFilters(sp);
   const now = new Date();
   const data = await getDashboardData(filters, now);
+
+  /* Sprint UX-1 — lettura temporale della lista.
+     Il filtro per tempo è applicato qui, sopra alla lista già filtrata dai
+     criteri di segnale: la chip decide solo cosa è ancora rilevante adesso. */
+  const chip = parseTimeChip(Array.isArray(sp.when) ? sp.when[0] : sp.when);
+  const timeCounts = Object.fromEntries(
+    TIME_CHIPS.map((c) => [
+      c.value,
+      data.signals.filter((s) => matchesTimeChip(s.kickoffAt, c.value, now)).length,
+    ]),
+  );
+  const visible = data.signals.filter((s) =>
+    matchesTimeChip(s.kickoffAt, chip, now),
+  );
+  const groups = groupByDay(visible, now);
+  const recent = recentMovements(data.signals, now).slice(0, 8);
 
   /* la copertura è un'informazione accessoria alla dashboard: se non è
      leggibile si omette il riquadro, senza far cadere la pagina e senza
@@ -123,6 +148,10 @@ export default async function Home({
       </header>
 
       <div className="mb-5">
+        <RecentStrip signals={recent} now={now} />
+      </div>
+
+      <div className="mb-5">
         <StatusPanel status={data.status} now={now} />
       </div>
 
@@ -143,6 +172,16 @@ export default async function Home({
         <div className="mb-3">
           <Suspense
             fallback={
+              <div className="text-xs text-slate-500">Caricamento filtri…</div>
+            }
+          >
+            <TimeChips counts={timeCounts} />
+          </Suspense>
+        </div>
+
+        <div className="mb-3">
+          <Suspense
+            fallback={
               <div className="rounded-lg border border-slate-200 bg-white p-3 text-xs text-slate-500">
                 Caricamento filtri…
               </div>
@@ -150,22 +189,36 @@ export default async function Home({
           >
             <SignalFilters
               leagues={data.leagues}
-              shown={data.signals.length}
+              shown={visible.length}
               total={data.totalSignals}
             />
           </Suspense>
         </div>
 
-        {data.signals.length === 0 ? (
+        {visible.length === 0 ? (
           <EmptyState
             status={data.status}
-            filtered={hasFilters && data.totalSignals > 0}
+            filtered={
+              (hasFilters || data.signals.length > 0) && data.totalSignals > 0
+            }
             now={now}
           />
         ) : (
-          <div className="space-y-3">
-            {data.signals.map((s) => (
-              <SignalCard key={s.id} signal={s} />
+          <div className="space-y-5">
+            {groups.map((g) => (
+              <div key={g.key}>
+                <h3 className="mb-2 text-xs font-semibold tracking-wide text-slate-500 uppercase">
+                  {g.label}{" "}
+                  <span className="font-normal text-slate-400">
+                    ({g.items.length})
+                  </span>
+                </h3>
+                <div className="space-y-3">
+                  {g.items.map((s) => (
+                    <SignalCard key={s.id} signal={s} now={now} />
+                  ))}
+                </div>
+              </div>
             ))}
           </div>
         )}

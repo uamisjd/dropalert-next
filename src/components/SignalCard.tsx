@@ -15,6 +15,7 @@ import {
   SignalLevelBadge,
 } from "./Badges";
 import { ND, fmtDay, fmtMinutes, fmtPct, fmtPp, fmtPrice, fmtTime } from "./format";
+import { fmtCountdown, isPlayed } from "@/lib/view/timeline";
 
 function PriceStep({
   label,
@@ -65,7 +66,16 @@ function SharpLine({ signal }: { signal: DashboardSignal }) {
   );
 }
 
-export function SignalCard({ signal }: { signal: DashboardSignal }) {
+export function SignalCard({
+  signal,
+  now,
+}: {
+  signal: DashboardSignal;
+  /* istante di riferimento per il badge tempo; assente = nessun badge,
+     mai un countdown inventato lato client */
+  now?: Date;
+}) {
+  const played = now ? isPlayed(signal.kickoffAt, now) : false;
   const hasPeak =
     signal.peakPrice !== null &&
     signal.openingPrice !== null &&
@@ -77,6 +87,20 @@ export function SignalCard({ signal }: { signal: DashboardSignal }) {
       <header className="mb-3">
         <div className="mb-1.5 flex flex-wrap items-center gap-1.5">
           <SignalLevelBadge level={signal.level} label={signal.levelLabel} />
+          {/* badge tempo: sempre visibile accanto al livello, così l'ordine
+              per forza del segnale non nasconde quando si gioca */}
+          {now ? (
+            <span
+              title={`Fischio d'inizio: ${fmtDay(signal.kickoffAt)} ore ${fmtTime(signal.kickoffAt)} (ora italiana).`}
+              className={`rounded-full border px-2 py-0.5 text-[11px] font-medium tabular-nums ${
+                played
+                  ? "border-slate-200 bg-slate-50 text-slate-500"
+                  : "border-slate-300 bg-white text-slate-700"
+              }`}
+            >
+              {fmtCountdown(signal.kickoffAt, now)}
+            </span>
+          ) : null}
           <FreshnessBadge
             level={signal.freshness}
             label={signal.freshnessLabel}
