@@ -12,6 +12,7 @@ import {
   groupByDay,
   isExpiredFromMain,
   matchesTimeChip,
+  chipCounts,
   parseTimeChip,
   recentMovements,
   romeDayDiff,
@@ -38,6 +39,7 @@ const iso = (h: number) => new Date(now.getTime() + h * 3600000).toISOString();
 eq("chip ignota torna al default", parseTimeChip("boh"), DEFAULT_TIME_CHIP);
 eq("chip assente torna al default", parseTimeChip(undefined), DEFAULT_TIME_CHIP);
 eq("chip valida conservata", parseTimeChip("giocate"), "giocate");
+eq("chip UX-1 dismessa torna al default", parseTimeChip("oggi-e-in-arrivo"), DEFAULT_TIME_CHIP);
 
 /* --- giorno civile italiano --- */
 eq("mezzanotte italiana è già domani", romeDayDiff(now, "2026-08-25T22:30:00Z"), 1);
@@ -51,15 +53,38 @@ eq("2h dopo il kickoff resta in lista", isExpiredFromMain(iso(-2), now), false);
 eq("4h dopo il kickoff esce", isExpiredFromMain(iso(-4), now), true);
 eq("tolleranza dichiarata a 180 minuti", PLAYED_GRACE_MINUTES, 180);
 
-/* --- filtro delle chip --- */
-eq("default: futuro incluso", matchesTimeChip(iso(2), "oggi-e-in-arrivo", now), true);
-eq("default: giocata da 1h inclusa", matchesTimeChip(iso(-1), "oggi-e-in-arrivo", now), true);
-eq("default: giocata da 5h esclusa", matchesTimeChip(iso(-5), "oggi-e-in-arrivo", now), false);
-eq("in arrivo esclude le giocate", matchesTimeChip(iso(-1), "in-arrivo", now), false);
-eq("giocate include solo il passato", matchesTimeChip(iso(-1), "giocate", now), true);
+/* --- filtro delle chip (partizione UX-2: da giocare | giocate) --- */
+eq("default: futuro incluso", matchesTimeChip(iso(2), "da-giocare", now), true);
+eq("default: giocata da 1h inclusa", matchesTimeChip(iso(-1), "da-giocare", now), true);
+eq("default: giocata da 5h esclusa", matchesTimeChip(iso(-5), "da-giocare", now), false);
+eq("giocate = archiviate oltre +3h", matchesTimeChip(iso(-5), "giocate", now), true);
 eq("giocate esclude il futuro", matchesTimeChip(iso(1), "giocate", now), false);
-eq("oggi esclude domani", matchesTimeChip("2026-08-26T12:00:00Z", "oggi", now), false);
+eq("giocate esclude la tolleranza", matchesTimeChip(iso(-1), "giocate", now), false);
 eq("tutte non filtra nulla", matchesTimeChip(iso(-99), "tutte", now), true);
+
+/* --- aritmetica dei conteggi: è la regola da rispettare --- */
+const pool = [
+  { kickoffAt: iso(1) },
+  { kickoffAt: iso(3) },
+  { kickoffAt: iso(-1) },
+  { kickoffAt: iso(-5) },
+  { kickoffAt: iso(-30) },
+  { kickoffAt: "2026-08-26T12:00:00Z" },
+  { kickoffAt: "2026-08-29T12:00:00Z" },
+];
+const counts = chipCounts(pool, now);
+eq("tutte = da giocare + giocate", counts.tutte, counts["da-giocare"] + counts.giocate);
+eq("tutte = dimensione dell'insieme", counts.tutte, pool.length);
+eq("giocate contate", counts.giocate, 2);
+eq("da giocare contate", counts["da-giocare"], 5);
+eq("oggi + in arrivo = da giocare", counts.oggi + counts.inArrivo, counts["da-giocare"]);
+eq("oggi contate", counts.oggi, 3);
+eq("in arrivo contate", counts.inArrivo, 2);
+check(
+  "il conteggio della chip predefinita è il numero di card visibili",
+  pool.filter((p) => matchesTimeChip(p.kickoffAt, "da-giocare", now)).length ===
+    counts["da-giocare"],
+);
 
 /* --- countdown --- */
 eq("countdown ore e minuti", fmtCountdown(iso(2.5), now), "tra 2h 30m");

@@ -732,7 +732,7 @@ export function suspicionReasonsOf(
   if (openingPrice !== null && openingPrice > SUSPICION_ODDS_THRESHOLD) {
     reasons.push({
       code: "drop_sfavorito",
-      label: "drop sull'esito sfavorito (quota di partenza > 3.0)",
+      label: "drop sull'esito SFAVORITO (quota di partenza > 3.0)",
       detail:
         "Nel backtest out-of-sample 2023/24–2025/26 i drop su esiti con quota di partenza oltre 3.0 sottoperformano l'attesa fair di 4,0 pp (R1.5, test 1).",
     });

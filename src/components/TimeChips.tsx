@@ -1,17 +1,22 @@
 "use client";
 
 /**
- * Chip di filtro temporale della lista partite (Sprint UX-1).
+ * Chip di filtro temporale della lista (Sprint UX-1, semplificate in UX-2).
  *
- * Come gli altri filtri, lo stato vive nella query string: la pagina resta un
- * server component e il link è condivisibile. Il default — "Oggi e in arrivo"
- * — non viene scritto nell'URL, così l'indirizzo pulito è già quello giusto.
+ * Tre chip mutuamente esclusive con conteggio esplicito e tooltip di
+ * definizione, più una riga di aritmetica sotto: chi legge deve poter fare
+ * la somma a mente e ritrovare il totale.
  */
 import { useRouter, useSearchParams } from "next/navigation";
 import { useTransition } from "react";
-import { DEFAULT_TIME_CHIP, TIME_CHIPS, parseTimeChip } from "@/lib/view/timeline";
+import {
+  DEFAULT_TIME_CHIP,
+  TIME_CHIPS,
+  parseTimeChip,
+  type ChipCounts,
+} from "@/lib/view/timeline";
 
-export function TimeChips({ counts }: { counts?: Record<string, number> }) {
+export function TimeChips({ counts }: { counts: ChipCounts }) {
   const router = useRouter();
   const params = useSearchParams();
   const [isPending, startTransition] = useTransition();
@@ -28,35 +33,41 @@ export function TimeChips({ counts }: { counts?: Record<string, number> }) {
   }
 
   return (
-    <div
-      role="group"
-      aria-label="Filtro temporale"
-      className={`flex flex-wrap gap-1.5 ${isPending ? "opacity-70" : ""}`}
-    >
-      {TIME_CHIPS.map((c) => {
-        const on = active === c.value;
-        const n = counts?.[c.value];
-        return (
-          <button
-            key={c.value}
-            type="button"
-            aria-pressed={on}
-            onClick={() => select(c.value)}
-            className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
-              on
-                ? "border-slate-800 bg-slate-800 text-white"
-                : "border-slate-300 bg-white text-slate-700 hover:border-slate-500"
-            }`}
-          >
-            {c.label}
-            {typeof n === "number" ? (
-              <span className={on ? "ml-1 text-slate-300" : "ml-1 text-slate-400"}>
+    <div className={isPending ? "opacity-70" : ""}>
+      <div role="group" aria-label="Filtro temporale" className="flex flex-wrap gap-1.5">
+        {TIME_CHIPS.map((c) => {
+          const on = active === c.value;
+          const n = counts[c.value];
+          return (
+            <button
+              key={c.value}
+              type="button"
+              aria-pressed={on}
+              title={c.hint}
+              onClick={() => select(c.value)}
+              className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
+                on
+                  ? "border-slate-800 bg-slate-800 text-white"
+                  : "border-slate-300 bg-white text-slate-700 hover:border-slate-500"
+              }`}
+            >
+              {c.label}
+              <span
+                className={`ml-1 tabular-nums ${on ? "text-slate-300" : "text-slate-400"}`}
+              >
                 {n}
               </span>
-            ) : null}
-          </button>
-        );
-      })}
+            </button>
+          );
+        })}
+      </div>
+      {/* aritmetica dichiarata: verificabile a colpo d'occhio */}
+      <p className="mt-1.5 text-[11px] leading-relaxed text-slate-500">
+        Tutte {counts.tutte} = Da giocare {counts["da-giocare"]} + Giocate{" "}
+        {counts.giocate}. Dentro «Da giocare»: {counts.oggi} oggi (giornata
+        italiana) e {counts.inArrivo} nei giorni successivi. «Giocate» = calcio
+        d&apos;inizio passato da oltre 3 ore.
+      </p>
     </div>
   );
 }

@@ -16,6 +16,8 @@ import {
 } from "./Badges";
 import { ND, fmtDay, fmtMinutes, fmtPct, fmtPp, fmtPrice, fmtTime } from "./format";
 import { fmtCountdown, isPlayed } from "@/lib/view/timeline";
+import { PLAIN_STRENGTH_LABELS, plainSentence, plainStrengthOf } from "@/lib/view/plain";
+import { Info } from "./Info";
 
 function PriceStep({
   label,
@@ -116,6 +118,7 @@ export function SignalCard({
                 .join(" — ")}
             >
               ⚠ possibile iper-reazione (storico)
+              <Info term="iperreazione" />
             </span>
           ) : null}
           {/* drop ampio: fascia ≥15%, quella con il CLV per campione più
@@ -151,6 +154,7 @@ export function SignalCard({
               title={`La quota è scesa del ${signal.wideDropPct}% dall'apertura: fascia oltre il 15%, la più alta per CLV per campione nel backtest R1.5 (bound pre-movimento, non un rendimento).`}
             >
               drop ampio ≥15%
+              <Info term="drop-ampio" />
             </span>
           ) : null}
         </div>
@@ -223,13 +227,18 @@ export function SignalCard({
             className="text-[11px] uppercase tracking-wide text-slate-500"
             title="Spostamento della probabilità implicita (1/quota), in punti percentuali."
           >
-            Spostamento probabilità
+            Spostamento probabilità (pp)
+            <Info term="pp" />
           </div>
           <div className="flex flex-wrap items-center gap-x-2">
             <span className="text-lg font-semibold whitespace-nowrap tabular-nums text-slate-900">
               {fmtPp(signal.shiftPp)}
             </span>
             <MagnitudeBadge label={signal.magnitudeLabel} />
+            {/* stessa informazione, in lingua piana: nessuna metrica nuova */}
+            <span className="text-[11px] text-slate-600">
+              {PLAIN_STRENGTH_LABELS[plainStrengthOf(signal)]}
+            </span>
           </div>
         </div>
       </div>
@@ -284,14 +293,22 @@ export function SignalCard({
         </p>
       )}
 
+      {/* frase piana generata da template sui dati a registro: nessuna AI,
+          nessun giudizio — riformula i numeri già mostrati sopra */}
+      <p className="mb-3 rounded border border-slate-200 bg-slate-50 px-3 py-2 text-xs leading-relaxed text-slate-700">
+        {plainSentence(signal, now)}
+      </p>
+
       {/* piè di card: indice e tracciabilità */}
       <footer className="flex flex-wrap items-center gap-1.5 border-t border-slate-100 pt-2.5">
         <MetaPill title="Indice di fiducia 0–100 calcolato dal motore su ampiezza, conferme, persistenza e copertura dati.">
           Indice {signal.confidenceScore ?? ND}/100 · {signal.confidenceLabel}
+          <Info term="indice" />
         </MetaPill>
         {signal.openGaps > 0 && (
           <MetaPill title="Informazioni mancanti dichiarate a registro per questa partita.">
-            {signal.openGaps} {signal.openGaps === 1 ? "dato" : "dati"} mancanti
+            {signal.openGaps === 1 ? "1 dato mancante" : `${signal.openGaps} dati mancanti`}
+            <Info term="gap" />
           </MetaPill>
         )}
         <MetaPill title={signal.freshnessReason}>

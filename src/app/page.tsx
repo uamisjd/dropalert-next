@@ -21,14 +21,17 @@ import { BacktestNoteR2 } from "@/components/BacktestNoteR2";
 import { ClvSection } from "@/components/ClvSection";
 import { CoverageSummary } from "@/components/CoverageSummary";
 import { EmptyState } from "@/components/EmptyState";
-import { SignalCard } from "@/components/SignalCard";
 import { SignalFilters } from "@/components/SignalFilters";
 import { TimeChips } from "@/components/TimeChips";
 import { RecentStrip } from "@/components/RecentStrip";
 import { StatusPanel } from "@/components/StatusPanel";
 import { fmtDateTime } from "@/components/format";
+import { GuideBanner } from "@/components/GuideBanner";
+import { BadgeLegend } from "@/components/BadgeLegend";
+import { MatchCard } from "@/components/MatchCard";
+import { groupByMatch } from "@/lib/view/plain";
 import {
-  TIME_CHIPS,
+  chipCounts,
   groupByDay,
   matchesTimeChip,
   parseTimeChip,
@@ -78,16 +81,20 @@ export default async function Home({
      Il filtro per tempo è applicato qui, sopra alla lista già filtrata dai
      criteri di segnale: la chip decide solo cosa è ancora rilevante adesso. */
   const chip = parseTimeChip(Array.isArray(sp.when) ? sp.when[0] : sp.when);
-  const timeCounts = Object.fromEntries(
-    TIME_CHIPS.map((c) => [
-      c.value,
-      data.signals.filter((s) => matchesTimeChip(s.kickoffAt, c.value, now)).length,
-    ]),
-  );
+  /* i conteggi delle chip si calcolano UNA volta per partita, non per
+     segnale: la lista mostra una card per match, quindi il numero sulla chip
+     e il numero di card visibili sono lo stesso numero. */
+  const perMatch = groupByMatch(data.signals).map((g) => g.primary);
+  const timeCounts = chipCounts(perMatch, now);
   const visible = data.signals.filter((s) =>
     matchesTimeChip(s.kickoffAt, chip, now),
   );
-  const groups = groupByDay(visible, now);
+  /* una card per partita: in vista il segnale più forte, gli altri espandibili */
+  const visibleMatches = groupByMatch(visible);
+  const groups = groupByDay(
+    visibleMatches.map((g) => ({ ...g.primary, group: g })),
+    now,
+  );
   const recent = recentMovements(data.signals, now).slice(0, 8);
 
   /* la copertura è un'informazione accessoria alla dashboard: se non è
@@ -148,6 +155,10 @@ export default async function Home({
       </header>
 
       <div className="mb-5">
+        <GuideBanner />
+      </div>
+
+      <div className="mb-5">
         <RecentStrip signals={recent} now={now} />
       </div>
 
@@ -189,13 +200,13 @@ export default async function Home({
           >
             <SignalFilters
               leagues={data.leagues}
-              shown={visible.length}
+              shown={visibleMatches.length}
               total={data.totalSignals}
             />
           </Suspense>
         </div>
 
-        {visible.length === 0 ? (
+        {visibleMatches.length === 0 ? (
           <EmptyState
             status={data.status}
             filtered={
@@ -215,7 +226,7 @@ export default async function Home({
                 </h3>
                 <div className="space-y-3">
                   {g.items.map((s) => (
-                    <SignalCard key={s.id} signal={s} now={now} />
+                    <MatchCard key={s.group.matchId} group={s.group} now={now} />
                   ))}
                 </div>
               </div>
@@ -223,6 +234,10 @@ export default async function Home({
           </div>
         )}
       </section>
+
+      <div className="mt-5">
+        <BadgeLegend />
+      </div>
 
       <div className="mt-6">
         <ClvSection clv={data.clv} />

@@ -1,5 +1,5 @@
 /**
- * Sprint UX-1 — lettura temporale della lista partite.
+ * Sprint UX-1/UX-2 — lettura temporale della lista partite.
  *
  * Funzioni pure, nessun accesso al database e nessuna metrica nuova: qui si
  * decide soltanto QUANDO una partita è ancora rilevante per la lista
@@ -7,6 +7,16 @@
  *
  * Il giorno di riferimento è sempre quello civile italiano (Europe/Rome):
  * confrontare istanti UTC produrrebbe un "oggi" sbagliato per due ore.
+ *
+ * UX-2 — la partizione delle chip è stata SEMPLIFICATA per essere verificabile
+ * a mente: tre chip mutuamente esclusive, con un'aritmetica dichiarata,
+ *
+ *     Tutte = Da giocare + Giocate
+ *     Da giocare = oggi + in arrivo   (le due quote sono mostrate come testo)
+ *
+ * "Oggi" e "In arrivo" non sono più chip perché la lista è già raggruppata per
+ * giorno (Oggi / Domani / Poi): erano due filtri che si sovrapponevano alla
+ * chip predefinita e rendevano i conteggi non sommabili.
  */
 
 const ROME = "Europe/Rome";
@@ -17,20 +27,34 @@ export const PLAYED_GRACE_MINUTES = 180;
 /** Finestra della striscia "Ultimi movimenti", in ore. */
 export const RECENT_WINDOW_HOURS = 3;
 
-export type TimeChip = "oggi-e-in-arrivo" | "oggi" | "in-arrivo" | "giocate" | "tutte";
+export type TimeChip = "da-giocare" | "giocate" | "tutte";
 
-export const TIME_CHIPS: Array<{ value: TimeChip; label: string }> = [
-  { value: "oggi-e-in-arrivo", label: "Oggi e in arrivo" },
-  { value: "oggi", label: "Oggi" },
-  { value: "in-arrivo", label: "In arrivo" },
-  { value: "giocate", label: "Giocate" },
-  { value: "tutte", label: "Tutte" },
+export const TIME_CHIPS: Array<{
+  value: TimeChip;
+  label: string;
+  hint: string;
+}> = [
+  {
+    value: "da-giocare",
+    label: "Da giocare",
+    hint: "Calcio d'inizio non ancora avvenuto, oppure iniziata da meno di 3 ore. È la vista predefinita.",
+  },
+  {
+    value: "giocate",
+    label: "Giocate",
+    hint: "Archiviate: calcio d'inizio passato da oltre 3 ore. Restano consultabili anche in /ieri.",
+  },
+  {
+    value: "tutte",
+    label: "Tutte",
+    hint: "Intero archivio in lista: da giocare più giocate. Tutte = Da giocare + Giocate.",
+  },
 ];
 
 const VALID_CHIPS = new Set<string>(TIME_CHIPS.map((c) => c.value));
 
-/** Chip predefinita: "Oggi e in arrivo". */
-export const DEFAULT_TIME_CHIP: TimeChip = "oggi-e-in-arrivo";
+/** Chip predefinita: "Da giocare". */
+export const DEFAULT_TIME_CHIP: TimeChip = "da-giocare";
 
 /** Legge la chip dall'URL; qualunque valore ignoto torna al default. */
 export function parseTimeChip(raw: string | undefined | null): TimeChip {
@@ -91,41 +115,71 @@ export function isPlayed(kickoffAt: string | Date, now: Date): boolean {
   return minutesSinceKickoff(kickoffAt, now) > 0;
 }
 
-/** true quando la partita ha superato la tolleranza di +3h. */
+/** true quando la partita ha superato la tolleranza di +3h: è archiviata. */
 export function isExpiredFromMain(kickoffAt: string | Date, now: Date): boolean {
   return minutesSinceKickoff(kickoffAt, now) > PLAYED_GRACE_MINUTES;
 }
 
 /**
- * Filtro della chip.
- *
- * - "oggi-e-in-arrivo": kickoff futuro, più le partite iniziate da meno di 3h
- *   (dopo escono dalla lista principale e restano in /ieri);
- * - "oggi": la sola giornata civile italiana corrente, con la stessa tolleranza;
- * - "in-arrivo": solo kickoff futuri;
- * - "giocate": kickoff passato (nessuna tolleranza: appena inizia è giocata);
- * - "tutte": nessun filtro temporale.
+ * Filtro della chip. Le prime due sono complementari per costruzione:
+ * "giocate" è esattamente il complemento di "da-giocare".
  */
 export function matchesTimeChip(
   kickoffAt: string | Date,
   chip: TimeChip,
   now: Date,
 ): boolean {
-  const played = isPlayed(kickoffAt, now);
-  const expired = isExpiredFromMain(kickoffAt, now);
+  const archived = isExpiredFromMain(kickoffAt, now);
   switch (chip) {
-    case "in-arrivo":
-      return !played;
     case "giocate":
-      return played;
-    case "oggi":
-      return dayBucketOf(kickoffAt, now) === "oggi" && !expired;
+      return archived;
     case "tutte":
       return true;
-    case "oggi-e-in-arrivo":
+    case "da-giocare":
     default:
-      return !expired;
+      return !archived;
   }
+}
+
+/** Conteggi delle chip più le due quote interne alla chip predefinita. */
+export interface ChipCounts {
+  "da-giocare": number;
+  giocate: number;
+  tutte: number;
+  /** dentro "da giocare": giornata civile italiana corrente */
+  oggi: number;
+  /** dentro "da giocare": giornate successive */
+  inArrivo: number;
+}
+
+/**
+ * Calcola i conteggi e li rende verificabili: chi legge deve poter fare la
+ * somma a mente e ritrovare il totale.
+ */
+export function chipCounts(
+  items: Array<{ kickoffAt: string }>,
+  now: Date,
+): ChipCounts {
+  let daGiocare = 0;
+  let giocate = 0;
+  let oggi = 0;
+  let inArrivo = 0;
+  for (const it of items) {
+    if (isExpiredFromMain(it.kickoffAt, now)) {
+      giocate++;
+      continue;
+    }
+    daGiocare++;
+    if (romeDayDiff(now, it.kickoffAt) <= 0) oggi++;
+    else inArrivo++;
+  }
+  return {
+    "da-giocare": daGiocare,
+    giocate,
+    tutte: daGiocare + giocate,
+    oggi,
+    inArrivo,
+  };
 }
 
 /** Countdown leggibile: "tra 2h 15m", "tra 40m", "giocata 1h fa". */

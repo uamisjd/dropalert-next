@@ -7,6 +7,7 @@
  */
 import type { DashboardStatus } from "@/lib/repo/dashboard";
 import { ND, fmtAgo, fmtDateTime, gapReasonLabel, sourceStatusLabel } from "./format";
+import { sourcesLabel } from "@/lib/view/plain";
 
 const BANNER_STYLES: Record<DashboardStatus["overall"], string> = {
   ok: "border-emerald-300 bg-emerald-50 text-emerald-900",
@@ -70,12 +71,16 @@ export function StatusPanel({
         {status.overallLabel}
       </p>
 
-      <div className="mb-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
-        <Stat
-          label="Fonti attive"
-          value={`${status.sourcesOk}/${status.sources.length}`}
-          hint="Fonti che hanno risposto correttamente sul totale di quelle registrate."
-        />
+      {/* Stato delle fonti in chiaro: un "0/1" senza spiegazione faceva
+          sembrare spenta una fonte degradata che invece sta rispondendo. */}
+      <p
+        className="mb-2 rounded border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-800"
+        title="Conteggio per stato reale della fonte, non un rapporto attive/totali."
+      >
+        {sourcesLabel(status.sources, now)}
+      </p>
+
+      <div className="mb-3 grid grid-cols-1 gap-2 sm:grid-cols-3">
         <Stat
           label="Partite oggi"
           value={status.matchesToday}
