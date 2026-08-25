@@ -16,6 +16,8 @@ import { Context360 } from "@/components/Context360";
 import { NewsBlock } from "@/components/NewsBlock";
 import { getNewsForMatch } from "@/lib/repo/news";
 import { getContextForMatch } from "@/lib/repo/context";
+import { getDeepAnalysis } from "@/lib/repo/analysis";
+import { DeepAnalysis360 } from "@/components/DeepAnalysis360";
 import { fetchTeamNews } from "@/lib/context/rss";
 import { SignalTimeline } from "@/components/SignalTimeline";
 import {
@@ -222,6 +224,47 @@ export default async function MatchDetailPage({
       }
     : undefined;
 
+  /* Analisi 360° completa: on-demand alla prima apertura, sui fatti GIÀ
+     recuperati (campi di contesto con fonte, documenti, profilo del
+     movimento). Nessuna ricerca nuova, nessun budget speso su partite mai
+     aperte; cache 24h. Se qualcosa va storto, la sezione lo dichiara. */
+  const analysis =
+    profile !== undefined
+      ? await getDeepAnalysis(
+          matchId,
+          {
+            homeTeam: detail.match.homeTeam,
+            awayTeam: detail.match.awayTeam,
+            league: detail.match.league,
+            country: detail.match.country,
+            kickoffAt: detail.match.kickoffAt,
+            fase:
+              context?.detail?.fields.find((f) => f.key === "posta_in_palo")
+                ?.valore ?? null,
+            stadio: null,
+            citta: detail.match.country,
+            fields: context?.detail?.fields ?? [],
+            docs: (context?.sources ?? []).map((s) => ({
+              titolo: s.title ?? s.uri,
+              url: s.uri,
+            })),
+            movimento: {
+              selezione: lead!.selectionLabel,
+              apertura: leadSeries?.opening ?? null,
+              corrente: leadSeries?.current ?? null,
+              oreAlKickoff: profile.hoursToKickoff,
+              sostenutoMinuti: profile.sustainedMinutes,
+              flash: profile.isFlash,
+              rimbalzato: profile.rebounded,
+              bookConfermano: profile.booksConfirming,
+              bookTotali: profile.booksTotal,
+              scesa: profile.falling,
+            },
+          },
+          now,
+        ).catch(() => null)
+      : null;
+
   const { match } = detail;
   const hasResult = match.homeGoals !== null && match.awayGoals !== null;
 
@@ -307,6 +350,13 @@ export default async function MatchDetailPage({
           profile={profile}
         />
       </section>
+
+      {/* ---------------- analisi 360 completa ---------------- */}
+      {analysis !== null ? (
+        <section aria-labelledby="analisi-360-wrap" className="mb-5">
+          <DeepAnalysis360 view={analysis} />
+        </section>
+      ) : null}
 
       {/* ---------------- notizie pubbliche ---------------- */}
       <section aria-labelledby="notizie-wrap" className="mb-5">
