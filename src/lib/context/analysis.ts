@@ -120,11 +120,24 @@ const hourFmt = new Intl.DateTimeFormat("it-IT", {
  */
 export function buildHeadline(f: AnalysisFacts): string {
   const parts: string[] = ["La sfida"];
-  if (f.fase !== null && f.fase.trim() !== "") {
-    parts.push(`valevole per ${f.fase.trim()}`);
-  }
-  if (f.league !== null && f.league.trim() !== "") {
-    parts.push(`${f.fase ? "di" : "valevole per"} ${f.league.trim()}`);
+  const fase = f.fase?.trim() ?? "";
+  const lega = f.league?.trim() ?? "";
+  /* la fase recuperata spesso nomina già la competizione: ripeterla
+     produrrebbe «fase a gironi della Coppa di Paese: Coppa». Si confronta
+     sui token, e in caso di sovrapposizione si tiene la sola fase. */
+  const legaTokens = lega
+    .toLowerCase()
+    .split(/[^a-zà-ù0-9]+/)
+    .filter((w) => w.length >= 4);
+  const faseCitaLega =
+    fase !== "" &&
+    legaTokens.length > 0 &&
+    legaTokens.filter((w) => fase.toLowerCase().includes(w)).length >=
+      Math.ceil(legaTokens.length / 2);
+
+  if (fase !== "") parts.push(`valevole per ${fase}`);
+  if (lega !== "" && !faseCitaLega) {
+    parts.push(`${fase !== "" ? "di" : "valevole per"} ${lega}`);
   }
   parts.push(`tra ${f.homeTeam} e ${f.awayTeam}`);
 
@@ -140,9 +153,9 @@ export function buildHeadline(f: AnalysisFacts): string {
         ? `presso ${f.stadio.trim()} di ${f.citta.trim()}`
         : `presso ${f.stadio.trim()}`,
     );
-  } else if (f.citta !== null && f.citta.trim() !== "") {
-    parts.push(`a ${f.citta.trim()}`);
   }
+  /* senza stadio non si scrive la sede: il paese non è una città e
+     «a Scotland» è un dato sbagliato, non un dato parziale */
   return `${parts.join(" ")}.`;
 }
 

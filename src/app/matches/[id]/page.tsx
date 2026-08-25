@@ -242,7 +242,7 @@ export default async function MatchDetailPage({
               context?.detail?.fields.find((f) => f.key === "posta_in_palo")
                 ?.valore ?? null,
             stadio: null,
-            citta: detail.match.country,
+            citta: null,
             fields: context?.detail?.fields ?? [],
             docs: (context?.sources ?? []).map((s) => ({
               titolo: s.title ?? s.uri,

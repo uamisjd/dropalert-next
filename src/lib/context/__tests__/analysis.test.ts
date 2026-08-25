@@ -71,6 +71,13 @@ check("chiude con punto", head.endsWith("."));
 const magro = buildHeadline({ ...facts, fase: null, stadio: null, citta: null });
 check("dato mancante omesso, non inventato", !magro.includes("presso") && !magro.includes("undefined") && !magro.includes("null"));
 check("resta leggibile senza stadio", magro.includes("si disputerà"));
+check("nessuna sede senza stadio", !magro.includes(" a Aberdeen"));
+const doppia = buildHeadline({
+  ...facts,
+  fase: "fase a gironi della Scottish League Challenge Cup",
+  league: "Scotland: Challenge Cup",
+});
+check("competizione non ripetuta", (doppia.match(/Challenge Cup/g) ?? []).length === 1);
 
 /* --- schemi: il vincolo è di codice --- */
 const albero = buildTreeSchema(facts);
