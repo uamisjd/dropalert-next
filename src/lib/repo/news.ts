@@ -82,18 +82,50 @@ function isFresh(expiresAt: Date, now: Date): boolean {
   return expiresAt.getTime() > now.getTime();
 }
 
-async function readItems(matchId: number): Promise<NewsItemView[]> {
+/**
+ * Lettura delle notizie a registro, con gli STESSI due filtri della scrittura.
+ * Applicarli anche in lettura è necessario, non ridondante: le righe salvate
+ * prima dei filtri resterebbero in pagina per tutta la cache (24h) e sono
+ * proprio quelle che l'audit ha trovato — un articolo del 22/03 e una partita
+ * diversa.
+ */
+async function readItems(
+  matchId: number,
+  homeTeam?: string,
+  awayTeam?: string,
+  now: Date = new Date(),
+): Promise<NewsItemView[]> {
   const rows = await db
     .select()
     .from(newsItems)
     .where(eq(newsItems.matchId, matchId))
     .orderBy(desc(newsItems.publishedAt));
-  return rows.map((r) => ({
+  const mapped = rows.map((r) => ({
     title: r.title,
     link: r.link,
     source: r.source,
     publishedAt: r.publishedAt?.toISOString() ?? null,
     language: r.language,
+    _publishedAt: r.publishedAt,
+  }));
+  const filtered =
+    homeTeam === undefined || awayTeam === undefined
+      ? mapped
+      : filterRelevantNews(
+          mapped.map((m) => ({ ...m, publishedAt: m._publishedAt })),
+          homeTeam,
+          awayTeam,
+          now,
+        ).map((m) => ({
+          ...m,
+          publishedAt: m.publishedAt?.toISOString() ?? null,
+        }));
+  return filtered.map(({ title, link, source, publishedAt, language }) => ({
+    title,
+    link,
+    source,
+    publishedAt: typeof publishedAt === "string" ? publishedAt : null,
+    language,
   }));
 }
 
@@ -143,12 +175,17 @@ export async function getNewsForMatch(
     .limit(1);
 
   if (fetchRow !== undefined && isFresh(fetchRow.expiresAt, now)) {
+    /* il conteggio segue ciò che si mostra davvero dopo i filtri: se le
+       righe in cache non passano più freschezza e pertinenza, lo stato
+       torna a essere «vuoto» invece di promettere notizie che non ci sono */
+    const visibili = await readItems(matchId, homeTeam, awayTeam, now);
     return {
-      state: fetchRow.state as NewsState,
-      itemsCount: fetchRow.itemsCount,
+      state: visibili.length > 0 ? (fetchRow.state as NewsState) : "vuoto",
+      itemsCount: visibili.length,
       language: fetchRow.language,
       updatedAt: fetchRow.updatedAt.toISOString(),
-      items: await readItems(matchId),
+      items: visibili,
+      tavilyBudget: { used: await readTavilyUsage(now), limit: TAVILY_DAILY_LIMIT },
     };
   }
 
@@ -156,12 +193,13 @@ export async function getNewsForMatch(
   const slot = await acquireNewsSlot();
   if (!slot) {
     if (fetchRow !== undefined) {
+      const visibili = await readItems(matchId, homeTeam, awayTeam, now);
       return {
         state: "rinviato",
-        itemsCount: fetchRow.itemsCount,
+        itemsCount: visibili.length,
         language: fetchRow.language,
         updatedAt: fetchRow.updatedAt.toISOString(),
-        items: await readItems(matchId),
+        items: visibili,
       };
     }
     return {
@@ -247,7 +285,7 @@ export async function getNewsForMatch(
       .onConflictDoNothing({ target: [newsItems.matchId, newsItems.link] });
   }
 
-  const stored = await readItems(matchId);
+  const stored = await readItems(matchId, homeTeam, awayTeam, now);
   const state: NewsState = stored.length > 0 ? "ok" : "vuoto";
   await writeFetchState(matchId, state, stored.length, language, now);
 
