@@ -20,7 +20,7 @@
  * Tetto giornaliero dichiarato, CONDIVISO fra Contesto 360° e Notizie:
  * un solo contatore per un solo piano gratuito.
  */
-export const TAVILY_DAILY_LIMIT = 40;
+export const TAVILY_DAILY_LIMIT = 30;
 
 /** Query massime per partita, contesto e notizie insieme. */
 export const TAVILY_MAX_PER_MATCH = 4;
@@ -30,6 +30,16 @@ export const TAVILY_MAX_CONTEXT_PER_MATCH = 2;
 
 /** Quota per partita riservata alle notizie. */
 export const TAVILY_MAX_NEWS_PER_MATCH = 2;
+
+/**
+ * Formulazione UNICA del budget, usata ovunque si parli di ricerca web.
+ * Un solo numero in un solo posto: intestazione e piè di pagina dicevano
+ * due cose diverse («40 al giorno» e «12/50»), e due numeri sono un numero
+ * sbagliato.
+ */
+export function tavilyBudgetLine(used: number): string {
+  return `Ricerca web (Contesto 360° + Notizie): ${used}/${TAVILY_DAILY_LIMIT} query oggi, massimo ${TAVILY_MAX_PER_MATCH} per partita.`;
+}
 
 /** Frase unica quando il budget è finito: mai un vuoto senza spiegazione. */
 export const TAVILY_BUDGET_MESSAGE =

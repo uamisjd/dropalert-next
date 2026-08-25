@@ -17,11 +17,7 @@ import {
   MODEL_KNOWLEDGE_TAG,
 } from "@/lib/context/pure";
 import type { NewsItem } from "@/lib/context/rss";
-import {
-  TAVILY_BUDGET_MESSAGE,
-  TAVILY_DAILY_LIMIT,
-  TAVILY_MAX_PER_MATCH,
-} from "@/lib/context/tavily";
+
 import type { MovementProfile } from "@/lib/context/why";
 import { WhyMoves } from "./WhyMoves";
 
@@ -111,14 +107,6 @@ export function Context360({
 
       <p className="mb-3 rounded border border-slate-300 bg-slate-50 px-3 py-2 text-xs font-medium text-slate-800">
         {CONTEXT_DISCLAIMER}
-      </p>
-
-      {/* budget della ricerca web, condiviso con il blocco Notizie */}
-      <p className="mb-3 text-[11px] leading-relaxed text-slate-500">
-        Ricerca web condivisa con le Notizie: massimo{" "}
-        {TAVILY_MAX_PER_MATCH} query per partita e {TAVILY_DAILY_LIMIT} al
-        giorno, contate per giornata italiana. Esaurito il tetto:{" "}
-        «{TAVILY_BUDGET_MESSAGE}», mai un campo inventato al suo posto.
       </p>
 
       {context === null ? (
@@ -258,8 +246,8 @@ export function Context360({
       ) : null}
 
       <p className="mt-3 border-t border-slate-100 pt-2 text-[11px] leading-relaxed text-slate-500">
-        Cache di 24 ore per partita · tetto giornaliero:{" "}
-        {context?.usage.used ?? 0}/{context?.usage.limit ?? "—"} chiamate
+        Cache di 24 ore per partita · chiamate al modello:{" "}
+        {context?.usage.used ?? 0}/{context?.usage.limit ?? "—"}
         {context?.usage.exhausted ? " — in pausa fino a domani" : ""} ·
         ricerca attiva:{" "}
         {context !== null &&

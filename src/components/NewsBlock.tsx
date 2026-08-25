@@ -11,7 +11,11 @@
  * sono fonti citate accanto ai numeri del monitor.
  */
 import type { NewsView } from "@/lib/repo/news";
-import { TAVILY_NEWS_SOURCE_LABEL } from "@/lib/news/tavily-news";
+import {
+  NEWS_MAX_AGE_HOURS,
+  TAVILY_NEWS_SOURCE_LABEL,
+} from "@/lib/news/tavily-news";
+import { tavilyBudgetLine } from "@/lib/context/tavily";
 import { italianTranslationLink } from "@/lib/news/source";
 import { fmtDay, fmtTime } from "./format";
 
@@ -41,12 +45,8 @@ export function NewsBlock({ news }: { news: NewsView }) {
 
       {/* budget della ricerca, dichiarato: senza budget non si inventa nulla */}
       {news.tavilyBudget !== undefined ? (
-        <p className="mb-2 text-[11px] text-slate-500">
-          Budget ricerca condiviso con il Contesto 360°:{" "}
-          <span className="tabular-nums">
-            {news.tavilyBudget.used}/{news.tavilyBudget.limit}
-          </span>{" "}
-          query oggi, massimo 4 per partita.
+        <p className="mb-2 text-[11px] tabular-nums text-slate-500">
+          {tavilyBudgetLine(news.tavilyBudget.used)}
         </p>
       ) : null}
       {news.searchUnavailableReason ? (
@@ -91,15 +91,18 @@ export function NewsBlock({ news }: { news: NewsView }) {
         </ul>
       ) : news.state === "vuoto" ? (
         <p className="text-xs leading-relaxed text-slate-600">
-          La fonte è stata interrogata e non ha notizie pubbliche recenti
-          per questa partita: è un risultato, non un guasto. Nessun
-          contenuto viene sostituito o inventato.
+          La fonte è stata interrogata e non ha notizie pubbliche delle ultime
+          {" "}{NEWS_MAX_AGE_HOURS} ore che citino entrambe le squadre: è un
+          risultato, non un guasto. Nessun contenuto viene sostituito o
+          inventato.
         </p>
       ) : null}
 
       <p className="mt-3 border-t border-slate-100 pt-2 text-[11px] leading-relaxed text-slate-500">
-        Fonte: {TAVILY_NEWS_SOURCE_LABEL}. Cache di 24 ore per partita, dedupe
-        per URL, massimo 1 richiesta ogni 5 secondi e 20 per quarto d&apos;ora
+        Fonte: {TAVILY_NEWS_SOURCE_LABEL}. Sono mostrate solo notizie delle
+        ultime {NEWS_MAX_AGE_HOURS} ore che citano entrambe le squadre: ciò che
+        non passa questi due filtri non viene mostrato. Cache di 24 ore per
+        partita, dedupe per URL, massimo 1 richiesta ogni 5 secondi e 20 per quarto d&apos;ora
         verso i feed. Le notizie non influenzano punteggio e segnali.
       </p>
     </section>

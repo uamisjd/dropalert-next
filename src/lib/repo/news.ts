@@ -20,7 +20,7 @@ import {
   NEWS_MAX_ITEMS,
   fetchMatchNews,
 } from "@/lib/news/source";
-import { dedupeByUrl } from "@/lib/news/tavily-news";
+import { dedupeByUrl, filterRelevantNews } from "@/lib/news/tavily-news";
 import { acquireNewsSlot } from "@/lib/news/limiter";
 import { searchNewsForMatch } from "@/lib/news/tavily-news";
 import {
@@ -200,11 +200,20 @@ export async function getNewsForMatch(
     }),
   );
   const rssItems = rss.ok
-    ? rss.result.items.map((i) => ({ ...i, language: rss.result.language }))
+    ? rss.result.items.map((i) => ({
+        ...i,
+        language: rss.result.language,
+        snippet: "",
+      }))
     : [];
 
   /* dedupe per URL fra le due fonti: la stessa notizia compare una volta */
-  const merged = dedupeByUrl([...tavily.items, ...rssItems]);
+  const deduped = dedupeByUrl([...tavily.items, ...rssItems]);
+
+  /* freschezza e pertinenza: solo notizie delle ultime 72 ore che citano
+     ENTRAMBE le squadre. Meglio nessuna notizia che una notizia di un'altra
+     partita o di sette mesi fa. */
+  const merged = filterRelevantNews(deduped, homeTeam, awayTeam, now);
 
   if (merged.length === 0 && !rss.ok && tavily.queriesUsed === 0) {
     await writeFetchState(matchId, "irraggiungibile", 0, null, now);

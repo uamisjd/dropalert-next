@@ -15,13 +15,19 @@ import {
   type SourcedField,
 } from "../why";
 import {
+  tavilyBudgetLine,
   TAVILY_DAILY_LIMIT,
   TAVILY_MAX_PER_MATCH,
   TAVILY_MAX_CONTEXT_PER_MATCH,
   TAVILY_MAX_NEWS_PER_MATCH,
 } from "../tavily";
 import {
+  NEWS_MAX_AGE_HOURS,
   dedupeByUrl,
+  filterRelevantNews,
+  isFreshNews,
+  mentionsBothTeams,
+  teamTokens,
   domainOf,
   newsQueryEnglish,
   newsQueryPrimary,
@@ -52,7 +58,12 @@ const neutral: MovementProfile = {
 };
 
 /* --- budget condiviso --- */
-eq("tetto giornaliero dichiarato", TAVILY_DAILY_LIMIT, 40);
+eq("tetto giornaliero dichiarato", TAVILY_DAILY_LIMIT, 30);
+/* fix 3: un solo numero, una sola formulazione */
+const linea = tavilyBudgetLine(12);
+eq("formulazione unica del budget", linea, "Ricerca web (Contesto 360° + Notizie): 12/30 query oggi, massimo 4 per partita.");
+check("il tetto nella frase è quello dichiarato", linea.includes(`/${TAVILY_DAILY_LIMIT} `));
+check("nessun secondo tetto nella frase", (linea.match(/\d+\/\d+/g) ?? []).length === 1);
 eq("massimo per partita", TAVILY_MAX_PER_MATCH, 4);
 eq("le due quote sommano al tetto per partita",
   TAVILY_MAX_CONTEXT_PER_MATCH + TAVILY_MAX_NEWS_PER_MATCH, TAVILY_MAX_PER_MATCH);
@@ -140,6 +151,43 @@ const dd = dedupeByUrl([
   { link: "https://b.it/y" },
 ]);
 eq("dedupe per URL normalizzato", dd.length, 2);
+
+
+
+/* --- fix 1: freschezza 72h --- */
+const oggi = new Date("2026-08-25T18:00:00Z");
+eq("finestra dichiarata", NEWS_MAX_AGE_HOURS, 72);
+eq("notizia di due giorni fa passa", isFreshNews("2026-08-23T18:00:00Z", oggi), true);
+eq("notizia di 71 ore passa", isFreshNews(new Date(oggi.getTime() - 71 * 3600000), oggi), true);
+eq("notizia di 73 ore scartata", isFreshNews(new Date(oggi.getTime() - 73 * 3600000), oggi), false);
+eq("articolo del 22/03 scartato", isFreshNews("2026-03-22T10:00:00Z", oggi), false);
+eq("articolo dell'11/10 scartato", isFreshNews("2025-10-11T10:00:00Z", oggi), false);
+eq("data assente scartata", isFreshNews(null, oggi), false);
+eq("data impossibile scartata", isFreshNews("non-una-data", oggi), false);
+
+/* --- fix 2: pertinenza, servono entrambe le squadre --- */
+eq("token identificanti senza rumore", teamTokens("Cove Rangers FC").join(","), "cove,rangers");
+check("entrambe citate: passa", mentionsBothTeams("Cove Rangers - Dundee United B, match sheet", "Cove Rangers FC", "Dundee United B"));
+check("una sola citata: scartata", !mentionsBothTeams("Clyde - Rangers B live score", "Cove Rangers FC", "Dundee United B"));
+check("altra partita con nome comune: scartata", !mentionsBothTeams("Bonnyrigg Rose FC - Rangers FC B", "Cove Rangers FC", "Dundee United B"));
+check("accenti e maiuscole non contano", mentionsBothTeams("HÄCKEN batte l'Utsiktens", "BK Häcken", "Utsiktens BK"));
+check("citazione nello snippet vale", mentionsBothTeams("Anteprima Cove Rangers", "Cove Rangers FC", "Dundee United B") === false);
+
+const filtrate = filterRelevantNews(
+  [
+    { title: "Cove Rangers - Dundee United B, match sheet", publishedAt: new Date(oggi.getTime() - 5 * 3600000), snippet: "" },
+    { title: "Clyde - Rangers B live score", publishedAt: new Date(oggi.getTime() - 5 * 3600000), snippet: "" },
+    { title: "Cove Rangers - Dundee United B, precedenti", publishedAt: new Date("2026-03-22T10:00:00Z"), snippet: "" },
+    { title: "Anteprima", publishedAt: new Date(oggi.getTime() - 2 * 3600000), snippet: "Cove Rangers ospita il Dundee United B" },
+  ],
+  "Cove Rangers FC",
+  "Dundee United B",
+  oggi,
+);
+eq("restano solo le pertinenti e recenti", filtrate.length, 2);
+check("il vecchio è fuori", !filtrate.some((f) => f.title.includes("precedenti")));
+check("l'altra partita è fuori", !filtrate.some((f) => f.title.includes("Clyde")));
+check("lo snippet salva la pertinente", filtrate.some((f) => f.title === "Anteprima"));
 
 if (failures.length > 0) {
   console.error(`✗ ${failures.length} test falliti su ${passed + failures.length}`);

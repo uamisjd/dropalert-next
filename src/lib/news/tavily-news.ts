@@ -52,6 +52,79 @@ export function newsQueryEnglish(
   return `${homeTeam} ${awayTeam} injuries suspensions lineup news`;
 }
 
+/**
+ * Finestra di freschezza: una notizia più vecchia di tre giorni non spiega
+ * un movimento di oggi. Trovato in produzione: articoli del 22/03 e dell'11/10
+ * mostrati come «notizie» di una partita di agosto.
+ */
+export const NEWS_MAX_AGE_HOURS = 72;
+
+/** true se la notizia è dentro la finestra e la data è nota. */
+export function isFreshNews(
+  publishedAt: Date | string | null,
+  now: Date,
+  maxAgeHours = NEWS_MAX_AGE_HOURS,
+): boolean {
+  if (publishedAt === null) return false;
+  const t =
+    publishedAt instanceof Date
+      ? publishedAt.getTime()
+      : new Date(publishedAt).getTime();
+  if (!Number.isFinite(t)) return false;
+  const ageH = (now.getTime() - t) / 3_600_000;
+  /* una data nel futuro oltre il giorno è un errore della fonte, non una
+     notizia freschissima: si scarta invece di fidarsi */
+  if (ageH < -24) return false;
+  return ageH <= maxAgeHours;
+}
+
+/** Normalizza per il confronto: minuscole, senza accenti e punteggiatura. */
+function norm(s: string): string {
+  return s
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9 ]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/** Parole di squadra ignorate nel confronto: non identificano nessuno. */
+const STOPWORDS = new Set([
+  "fc", "cf", "afc", "sc", "ac", "as", "ss", "us", "cd", "ca", "club",
+  "calcio", "football", "futbol", "team", "the", "de", "del", "di", "b", "ii",
+  "u21", "u23", "reserves", "riserve", "women", "femminile",
+]);
+
+/** I token identificanti di un nome squadra (almeno 3 caratteri). */
+export function teamTokens(team: string): string[] {
+  return norm(team)
+    .split(" ")
+    .filter((w) => w.length >= 3 && !STOPWORDS.has(w));
+}
+
+/**
+ * Pertinenza: il testo deve citare ENTRAMBE le squadre.
+ *
+ * Trovato in produzione: «Clyde - Rangers B» e «Bonnyrigg Rose - Rangers B»
+ * comparivano fra le notizie di «Cove Rangers - Dundee United B», perché
+ * bastava una squadra (anzi, un pezzo di nome) per passare. Ora serve almeno
+ * un token identificante per ciascuna delle due squadre.
+ */
+export function mentionsBothTeams(
+  text: string,
+  homeTeam: string,
+  awayTeam: string,
+): boolean {
+  const hay = norm(text);
+  const has = (team: string): boolean => {
+    const tokens = teamTokens(team);
+    if (tokens.length === 0) return false;
+    return tokens.some((t) => hay.includes(t));
+  };
+  return has(homeTeam) && has(awayTeam);
+}
+
 /** Estrae il dominio, per dichiarare la testata quando manca. */
 export function domainOf(url: string): string | null {
   const m = url.match(/^https?:\/\/(?:www\.)?([^/?#]+)/i);
@@ -68,13 +141,30 @@ function parseDate(raw: unknown): Date | null {
 /** I risultati Tavily diventano righe di notizia, con lingua della query. */
 export function toNewsItems(
   results: Array<TavilyResult & { publishedDate?: unknown }>,
-): NewsFeedItem[] {
+): Array<NewsFeedItem & { snippet: string }> {
   return results.map((r) => ({
     title: r.title,
     link: r.url,
     source: domainOf(r.url),
     publishedAt: parseDate(r.publishedDate),
+    snippet: r.content ?? "",
   }));
+}
+
+/**
+ * Il filtro unico applicato a ogni notizia, da qualunque fonte arrivi:
+ * dev'essere recente E citare entrambe le squadre. Ciò che non passa non
+ * viene mostrato — e se non passa niente lo stato è «nessuna notizia
+ * pubblica trovata», che è un risultato valido.
+ */
+export function filterRelevantNews<
+  T extends { title: string; publishedAt: Date | null; snippet?: string },
+>(items: T[], homeTeam: string, awayTeam: string, now: Date): T[] {
+  return items.filter(
+    (i) =>
+      isFreshNews(i.publishedAt, now) &&
+      mentionsBothTeams(`${i.title} ${i.snippet ?? ""}`, homeTeam, awayTeam),
+  );
 }
 
 /**
@@ -99,7 +189,7 @@ export function dedupeByUrl<T extends { link: string }>(items: T[]): T[] {
 }
 
 export interface TavilyNewsOutcome {
-  items: Array<NewsFeedItem & { language: "it" | "en" }>;
+  items: Array<NewsFeedItem & { language: "it" | "en"; snippet: string }>;
   queriesUsed: number;
   /** motivo in italiano quando la ricerca non ha potuto girare */
   unavailableReason: string | null;
@@ -162,7 +252,7 @@ export async function searchNewsForMatch(
     { query: newsQueryEnglish(homeTeam, awayTeam), language: "en" },
   ];
 
-  const out: Array<NewsFeedItem & { language: "it" | "en" }> = [];
+  const out: Array<NewsFeedItem & { language: "it" | "en"; snippet: string }> = [];
   let used = 0;
   let failed = false;
   const maxQueries = Math.min(TAVILY_MAX_NEWS_PER_MATCH, options.budgetLeft);

@@ -233,8 +233,8 @@ function main(): void {
     assert(q.includes("ultime 5") && q.includes("classifica"), "forma e classifica");
   });
 
-  test("budget condiviso dichiarato: 40 al giorno, 4 per partita, chiave per giornata italiana", () => {
-    assertEqual(TAVILY_DAILY_LIMIT, 40);
+  test("budget condiviso dichiarato: 30 al giorno, 4 per partita, chiave per giornata italiana", () => {
+    assertEqual(TAVILY_DAILY_LIMIT, 30);
     assertEqual(TAVILY_MAX_PER_MATCH, 4);
     assertEqual(
       tavilyUsageKey(new Date("2026-08-21T23:30:00Z")),
