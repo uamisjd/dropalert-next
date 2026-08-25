@@ -65,12 +65,38 @@ export function movementHours(sustainedMinutes: number): number | null {
 
 /**
  * Verso del movimento in parole: chi/che cosa il mercato sta prezzando meglio.
- * Usa l'etichetta di selezione già tradotta, mai una squadra indovinata.
+ * Usa il nome della squadra quando la selezione lo identifica, mai un codice.
  */
-function towards(signal: DashboardSignal): string {
+export function towards(signal: {
+  selection: string;
+  homeTeam: string;
+  awayTeam: string;
+  selectionLabel: string;
+}): string {
   if (signal.selection === "home") return signal.homeTeam;
   if (signal.selection === "away") return signal.awayTeam;
+  if (signal.selection === "draw") return "il pareggio";
   return signal.selectionLabel.toLowerCase();
+}
+
+/**
+ * Soggetto della frase: "la quota della vittoria di X", "la quota del
+ * pareggio". Il codice di selezione (1, X, 2) non compare mai in lingua piana.
+ */
+export function subjectOf(signal: {
+  selection: string;
+  homeTeam: string;
+  awayTeam: string;
+  selectionLabel: string;
+}): string {
+  if (signal.selection === "home") {
+    return `La quota della vittoria di ${signal.homeTeam}`;
+  }
+  if (signal.selection === "away") {
+    return `La quota della vittoria di ${signal.awayTeam}`;
+  }
+  if (signal.selection === "draw") return "La quota del pareggio";
+  return `La quota di ${signal.selectionLabel.toLowerCase()}`;
 }
 
 /**
@@ -95,25 +121,30 @@ export function plainSentence(
       hours !== null && hours > 0
         ? ` in ${String(hours).replace(".", ",")} ore`
         : "";
+    /* elisione obbligatoria: "dal pareggio", non "da il pareggio" */
+    const meta = towards(signal);
+    const daMeta = meta.startsWith("il ") ? `dal ${meta.slice(3)}` : `da ${meta}`;
     const direzione =
       current < opening
-        ? ` : il mercato si sta spostando verso ${towards(signal)}`
-        : ` : il mercato si sta allontanando da ${towards(signal)}`;
+        ? ` : il mercato si sta spostando verso ${meta}`
+        : ` : il mercato si sta allontanando ${daMeta}`;
     parts.push(
-      `La quota di ${signal.selectionLabel.toLowerCase()} ${verso} da ${fmtOdd(opening)} a ${fmtOdd(current)}${durata}${direzione}.`.replace(
+      `${subjectOf(signal)} ${verso} da ${fmtOdd(opening)} a ${fmtOdd(current)}${durata}${direzione}.`.replace(
         " : ",
         ": ",
       ),
     );
   } else {
     parts.push(
-      `Per ${signal.selectionLabel.toLowerCase()} non c'è un percorso di quota completo a registro: il movimento non è raccontabile in numeri.`,
+      `${subjectOf(signal)} non ha un percorso completo a registro: il movimento non è raccontabile in numeri.`,
     );
   }
 
   if (signal.newsCount !== null && signal.newsCount > 0) {
     parts.push(
-      `Notizie: ${signal.newsCount}${signal.newsCount === 1 ? " in archivio" : " in archivio"}.`,
+      signal.newsCount === 1
+        ? "Notizie: 1 in archivio."
+        : `Notizie: ${signal.newsCount} in archivio.`,
     );
   } else if (signal.newsEmpty) {
     parts.push("Nessuna notizia pubblica trovata.");
@@ -129,6 +160,42 @@ export function plainSentence(
 
   void now;
   return parts.join(" ");
+}
+
+/* ------------------------------------------------------------------ */
+/* Snippet di contesto                                                 */
+/* ------------------------------------------------------------------ */
+
+/** Lunghezza massima dello snippet "Contesto:" mostrato sulla card. */
+export const CONTEXT_SNIPPET_MAX = 120;
+
+/**
+ * Taglia lo snippet di contesto in modo leggibile.
+ *
+ * Se il testo ci sta, resta intero. Se la prima frase ci sta, si mostra quella
+ * intera e basta. Altrimenti si taglia all'ultima parola utile e si chiude con
+ * l'ellissi: mai una parola mozzata a metà, mai un taglio silenzioso.
+ */
+export function contextSnippet(
+  raw: string | null,
+  max = CONTEXT_SNIPPET_MAX,
+): string | null {
+  if (raw === null) return null;
+  const text = raw.replace(/\s+/g, " ").trim();
+  if (text.length === 0) return null;
+  if (text.length <= max) return text;
+
+  /* prima frase completa, se entra nel budget */
+  const sentence = text.match(/^[^.!?·]+[.!?]/);
+  if (sentence && sentence[0].trim().length <= max) {
+    return sentence[0].trim();
+  }
+
+  const cut = text.slice(0, max);
+  const lastSpace = cut.lastIndexOf(" ");
+  const base = (lastSpace > max * 0.5 ? cut.slice(0, lastSpace) : cut)
+    .replace(/[\s,;:·—-]+$/, "");
+  return `${base}…`;
 }
 
 /* ------------------------------------------------------------------ */

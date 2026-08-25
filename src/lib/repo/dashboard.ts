@@ -9,7 +9,7 @@
  * accanto viaggia il motivo. Mai uno zero al posto di un'assenza, mai una
  * stima al posto di una lacuna.
  */
-import { and, desc, eq, gte, inArray, sql as raw } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, sql as raw } from "drizzle-orm";
 import { db } from "@/db/client";
 import {
   clvRecords,
@@ -227,6 +227,14 @@ export interface DashboardSignal {
   /** true quando il calo della quota è ≥ 15% */
   wideDrop: boolean;
 
+  /* --- mini-grafico (UX-3) --- */
+  /**
+   * Punti realmente registrati della serie del segnale, per la sparkline:
+   * nessuna interpolazione e nessun punto costruito. Meno di due punti
+   * significa niente grafico, non un grafico piatto per finta.
+   */
+  sparkline: Array<{ t: number; v: number }>;
+
   /* --- Contesto 360° (solo cache, mai generato dalla lista) --- */
   /** forma compatta "livello · campo · posta", null se non in cache */
   contextCompact: string | null;
@@ -315,6 +323,23 @@ export interface DashboardData {
   status: DashboardStatus;
   clv: ClvMaturity;
   generatedAt: string;
+}
+
+/**
+ * Numero massimo di punti trasportati fino alla card.
+ * Il campionamento tiene sempre primo e ultimo punto e non inventa valori
+ * intermedi: scarta rilevazioni, non le fonde.
+ */
+export const SPARKLINE_MAX_POINTS = 60;
+
+export function downsample<T>(points: T[], max = SPARKLINE_MAX_POINTS): T[] {
+  if (points.length <= max) return points;
+  const step = (points.length - 1) / (max - 1);
+  const out: T[] = [];
+  for (let i = 0; i < max; i++) {
+    out.push(points[Math.round(i * step)]);
+  }
+  return out;
 }
 
 function toIso(d: Date | string | null): string | null {
@@ -498,11 +523,32 @@ export async function getDashboardSignals(
   const matchIds = [...new Set(rows.map((r) => r.matchId))];
   const teamIds = [...new Set(rows.flatMap((r) => [r.homeTeamId, r.awayTeamId]))];
 
-  const [teamRows, snapAgg, gapRows] = await Promise.all([
+  const [teamRows, sparkRows, snapAgg, gapRows] = await Promise.all([
     db
       .select({ id: teams.id, name: teams.name })
       .from(teams)
       .where(inArray(teams.id, teamIds)),
+    /* serie storica compatta per il mini-grafico di card: gli stessi punti
+       di odds_snapshots usati dal dettaglio, media fra bookmaker sullo stesso
+       istante (la fonte pubblica una linea di consenso). Nessuna raccolta
+       nuova: è lettura dell'archivio. */
+    db
+      .select({
+        matchId: oddsSnapshots.matchId,
+        market: oddsSnapshots.market,
+        selection: oddsSnapshots.selection,
+        collectedAt: oddsSnapshots.collectedAt,
+        price: raw<string>`avg(${oddsSnapshots.price})`,
+      })
+      .from(oddsSnapshots)
+      .where(inArray(oddsSnapshots.matchId, matchIds))
+      .groupBy(
+        oddsSnapshots.matchId,
+        oddsSnapshots.market,
+        oddsSnapshots.selection,
+        oddsSnapshots.collectedAt,
+      )
+      .orderBy(asc(oddsSnapshots.collectedAt)),
     /* ultima rilevazione e prezzo minimo per (partita, mercato, selezione) */
     db
       .select({
@@ -535,6 +581,19 @@ export async function getDashboardSignals(
   const snapByKey = new Map(
     snapAgg.map((s) => [`${s.matchId}::${s.market}::${s.selection}`, s]),
   );
+
+  /* punti della sparkline, già ordinati dalla query */
+  const sparkByKey = new Map<string, Array<{ t: number; v: number }>>();
+  for (const r of sparkRows) {
+    const v = num(r.price);
+    if (v === null || v <= 0) continue;
+    const t = new Date(r.collectedAt).getTime();
+    if (!Number.isFinite(t)) continue;
+    const k = `${r.matchId}::${r.market}::${r.selection}`;
+    const list = sparkByKey.get(k);
+    if (list) list.push({ t, v });
+    else sparkByKey.set(k, [{ t, v }]);
+  }
 
   const items: DashboardSignal[] = rows.map((r) => {
     const s = r.signal;
@@ -620,14 +679,16 @@ export async function getDashboardSignals(
       suspicion: explanation.suspicion ?? null,
       wideDropPct,
       wideDrop: wideDropPct !== null && wideDropPct >= WIDE_DROP_THRESHOLD * 100,
+      sparkline: downsample(
+        sparkByKey.get(`${r.matchId}::${s.market}::${s.selection}`) ?? [],
+      ),
       contextCompact: (() => {
         const c = contextByMatch.get(r.matchId);
         if (c === undefined) return null;
         return [c.livelloCategorie, c.anomaliaCampo, c.postaInPalo]
           .map((x) => x.trim())
           .filter((x) => x.length > 0 && x.toLowerCase() !== "non noto")
-          .join(" · ")
-          .slice(0, 120) || null;
+          .join(" · ") || null;
       })(),
       newsCount: newsByMatch.get(r.matchId)?.count ?? null,
       newsEmpty: newsByMatch.get(r.matchId)?.state === "vuoto",

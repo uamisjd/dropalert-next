@@ -16,8 +16,14 @@ import {
 } from "./Badges";
 import { ND, fmtDay, fmtMinutes, fmtPct, fmtPp, fmtPrice, fmtTime } from "./format";
 import { fmtCountdown, isPlayed } from "@/lib/view/timeline";
-import { PLAIN_STRENGTH_LABELS, plainSentence, plainStrengthOf } from "@/lib/view/plain";
+import {
+  PLAIN_STRENGTH_LABELS,
+  contextSnippet,
+  plainSentence,
+  plainStrengthOf,
+} from "@/lib/view/plain";
 import { Info } from "./Info";
+import { Sparkline } from "./Sparkline";
 
 function PriceStep({
   label,
@@ -130,7 +136,7 @@ export function SignalCard({
               className="rounded border border-slate-200 bg-white px-1.5 py-0.5 text-[11px] font-medium text-slate-600"
               title={`Contesto generato automaticamente: non è un pronostico né una garanzia. ${signal.contextCompact} — conoscenza modello, da verificare.`}
             >
-              Contesto: {signal.contextCompact}
+              Contesto: {contextSnippet(signal.contextCompact)}
             </span>
           ) : null}
           {signal.newsCount !== null && signal.newsCount > 0 ? (
@@ -138,7 +144,7 @@ export function SignalCard({
               className="rounded border border-slate-200 bg-white px-1.5 py-0.5 text-[11px] font-medium text-slate-600"
               title="Notizie pubbliche in cache per questa partita (fonte dichiarata nel dettaglio). Non influenzano il punteggio."
             >
-              Contesto: {signal.newsCount} notizie
+              Contesto: {signal.newsCount === 1 ? "1 notizia" : `${signal.newsCount} notizie`}
             </span>
           ) : signal.newsEmpty ? (
             <span
@@ -211,6 +217,9 @@ export function SignalCard({
           emphasis
         />
       </div>
+
+      {/* andamento della quota: solo rilevazioni già in archivio */}
+      <Sparkline signal={signal} />
 
       {/* le due misure del movimento */}
       <div className="mb-3 grid grid-cols-2 gap-3">

@@ -4,8 +4,12 @@
  * Eseguire con: npm run test:plain
  */
 import type { DashboardSignal } from "@/lib/repo/dashboard";
+import { buildSparkline, MIN_POINTS_FOR_SPARKLINE } from "../sparkline";
+import { downsample } from "@/lib/repo/dashboard";
 import {
   PLAIN_STRENGTH_LABELS,
+  contextSnippet,
+  subjectOf,
   groupByMatch,
   movementHours,
   othersLabel,
@@ -78,6 +82,7 @@ function sig(over: Partial<DashboardSignal> = {}): DashboardSignal {
     contextCompact: null,
     newsCount: null,
     newsEmpty: false,
+    sparkline: [],
     ...over,
   } as DashboardSignal;
 }
@@ -97,6 +102,8 @@ eq("durata assente resta assente", movementHours(0), null);
 
 /* --- frase piana --- */
 const f1 = plainSentence(sig({ newsEmpty: true }), now);
+check("frase: soggetto con nome squadra", f1.startsWith("La quota della vittoria di Alfa"));
+check("frase: nessun codice esito", !/quota di (1|x|2)\b/i.test(f1));
 check("frase: quota scesa", f1.includes("è scesa da 2,50 a 2,00"));
 check("frase: durata in ore", f1.includes("in 3 ore"));
 check("frase: verso la squadra", f1.includes("verso Alfa"));
@@ -110,6 +117,67 @@ check("frase: notizie contate", f2.includes("Notizie: 3"));
 
 const f3 = plainSentence(sig({ openingPrice: null, currentPrice: null }), now);
 check("frase: senza prezzi non inventa", f3.includes("non è raccontabile in numeri"));
+
+const fx = plainSentence(sig({ selection: "draw", selectionLabel: "Pareggio" }), now);
+check("frase: pareggio senza nome squadra", fx.startsWith("La quota del pareggio"));
+check("frase: verso il pareggio", fx.includes("verso il pareggio"));
+const fxUp = plainSentence(
+  sig({ selection: "draw", selectionLabel: "Pareggio", openingPrice: 2, currentPrice: 3 }),
+  now,
+);
+check("frase: elisione dal pareggio", fxUp.includes("allontanando dal pareggio"));
+check("frase: mai «da il»", !fxUp.includes("da il "));
+
+eq("soggetto trasferta", subjectOf(sig({ selection: "away" })), "La quota della vittoria di Beta");
+
+/* --- snippet di contesto --- */
+eq("snippet corto resta intero", contextSnippet("Coppa nazionale, turno unico."), "Coppa nazionale, turno unico.");
+eq("snippet assente resta assente", contextSnippet(null), null);
+eq("snippet vuoto è assente", contextSnippet("   "), null);
+const longOne = "a".repeat(200);
+const cutHard = contextSnippet(longOne, 20);
+eq("taglio duro con ellissi", cutHard, `${"a".repeat(20)}…`);
+const twoSentences = "Prima frase breve. " + "parola ".repeat(40);
+eq("prima frase completa se entra", contextSnippet(twoSentences), "Prima frase breve.");
+const wordy = contextSnippet("alfa beta gamma delta epsilon zeta eta theta iota", 20)!;
+check("nessuna parola mozzata", wordy.endsWith("…") && !wordy.includes("  "));
+check("taglio entro il budget", wordy.length <= 21);
+
+/* --- mini-grafico --- */
+eq("meno di due punti: niente grafico", buildSparkline([{ t: 1, v: 2 }]), null);
+eq("soglia dichiarata", MIN_POINTS_FOR_SPARKLINE, 2);
+const geo = buildSparkline([
+  { t: 1000, v: 3 },
+  { t: 2000, v: 2 },
+  { t: 3000, v: 2.4 },
+])!;
+check("geometria prodotta", geo !== null);
+eq("tutti i punti disegnati", geo.dots.length, 3);
+eq("serie in discesa", geo.falling, true);
+eq("picco = minimo nella direzione", geo.peak.v, 2);
+eq("ultimo punto conservato", geo.last.v, 2.4);
+check("percorso non vuoto", geo.path.startsWith("M"));
+check("nessun NaN nelle coordinate", geo.dots.every((d) => Number.isFinite(d.x) && Number.isFinite(d.y)));
+const flat = buildSparkline([
+  { t: 1, v: 2 },
+  { t: 2, v: 2 },
+])!;
+eq("serie ferma dichiarata piatta", flat.flat, true);
+check("piatta senza NaN", flat.dots.every((d) => Number.isFinite(d.y)));
+const sameInstant = buildSparkline([
+  { t: 5, v: 2 },
+  { t: 5, v: 3 },
+])!;
+check("istanti uguali distribuiti", sameInstant.dots[0].x !== sameInstant.dots[1].x);
+eq("prezzi non validi scartati", buildSparkline([{ t: 1, v: 0 }, { t: 2, v: -1 }, { t: 3, v: 2 }]), null);
+
+/* --- campionamento --- */
+const many = Array.from({ length: 500 }, (_, i) => i);
+const ds = downsample(many, 60);
+eq("campionamento al tetto", ds.length, 60);
+eq("primo punto conservato", ds[0], 0);
+eq("ultimo punto conservato", ds[ds.length - 1], 499);
+eq("serie corta intatta", downsample([1, 2, 3], 60).length, 3);
 
 const f4 = plainSentence(sig({ openingPrice: 2.0, currentPrice: 2.5, selection: "away" }), now);
 check("frase: quota salita", f4.includes("è salita da 2,00 a 2,50"));
@@ -161,4 +229,4 @@ if (failures.length > 0) {
   for (const f of failures) console.error(`  - ${f}`);
   process.exit(1);
 }
-console.log(`✓ ${passed} test superati (lingua piana UX-2)`);
+console.log(`✓ ${passed} test superati (lingua piana e mini-grafico UX-2/UX-3)`);
