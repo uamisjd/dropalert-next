@@ -16,11 +16,24 @@
  * nasce dalle altre fonti (Wikipedia, feed) o dal modello — mai inventato.
  */
 
-/** Tetto giornaliero dichiarato per il piano gratuito. */
-export const TAVILY_DAILY_LIMIT = 30;
+/**
+ * Tetto giornaliero dichiarato, CONDIVISO fra Contesto 360° e Notizie:
+ * un solo contatore per un solo piano gratuito.
+ */
+export const TAVILY_DAILY_LIMIT = 40;
 
-/** Query massime per partita. */
-export const TAVILY_MAX_PER_MATCH = 2;
+/** Query massime per partita, contesto e notizie insieme. */
+export const TAVILY_MAX_PER_MATCH = 4;
+
+/** Quota per partita riservata al contesto (il resto va alle notizie). */
+export const TAVILY_MAX_CONTEXT_PER_MATCH = 2;
+
+/** Quota per partita riservata alle notizie. */
+export const TAVILY_MAX_NEWS_PER_MATCH = 2;
+
+/** Frase unica quando il budget è finito: mai un vuoto senza spiegazione. */
+export const TAVILY_BUDGET_MESSAGE =
+  "ricerca non disponibile per budget";
 
 /** Timeout di una query. */
 export const TAVILY_TIMEOUT_MS = 8_000;
@@ -43,7 +56,7 @@ export function primaryQuery(
   league: string | null,
 ): string {
   const l = league === null || league.trim() === "" ? "" : ` ${league.trim()}`;
-  return `${homeTeam} ${awayTeam}${l} H2H standings`;
+  return `${homeTeam} ${awayTeam}${l} H2H classifica ultime 5 partite forma`;
 }
 
 /** Seconda query, solo a vuoto della prima: fase e playoff. */
@@ -53,7 +66,7 @@ export function fallbackQueryTavily(
   league: string | null,
 ): string {
   const l = league === null || league.trim() === "" ? "" : ` ${league.trim()}`;
-  return `${homeTeam} ${awayTeam}${l} semifinal playoff recent form`;
+  return `${homeTeam} ${awayTeam}${l} vigilia dichiarazioni infortuni assenze posta in palio`;
 }
 
 /** Estrae i risultati dalla risposta Tavily. Puro, testato. */
@@ -118,7 +131,7 @@ export async function searchForMatch(
   let used = 0;
 
   for (const query of queries) {
-    if (used >= Math.min(TAVILY_MAX_PER_MATCH, options.budgetLeft)) break;
+    if (used >= Math.min(TAVILY_MAX_CONTEXT_PER_MATCH, options.budgetLeft)) break;
 
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), TAVILY_TIMEOUT_MS);

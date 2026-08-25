@@ -17,6 +17,13 @@ import {
   MODEL_KNOWLEDGE_TAG,
 } from "@/lib/context/pure";
 import type { NewsItem } from "@/lib/context/rss";
+import {
+  TAVILY_BUDGET_MESSAGE,
+  TAVILY_DAILY_LIMIT,
+  TAVILY_MAX_PER_MATCH,
+} from "@/lib/context/tavily";
+import type { MovementProfile } from "@/lib/context/why";
+import { WhyMoves } from "./WhyMoves";
 
 const ACCORDO_STYLES: Record<string, string> = {
   sostiene: "border-emerald-300 bg-emerald-50 text-emerald-900",
@@ -78,10 +85,13 @@ export function Context360({
   context,
   news,
   now,
+  profile,
 }: {
   context: ContextRowView | null;
   news: NewsItem[];
   now: Date;
+  /** profilo del movimento già misurato: alimenta la lettura «Perché si muove» */
+  profile?: MovementProfile;
 }) {
   const ok = context !== null && context.status === "ok" && context.fields !== null;
   const detailFields = context?.detail?.fields ?? null;
@@ -101,6 +111,14 @@ export function Context360({
 
       <p className="mb-3 rounded border border-slate-300 bg-slate-50 px-3 py-2 text-xs font-medium text-slate-800">
         {CONTEXT_DISCLAIMER}
+      </p>
+
+      {/* budget della ricerca web, condiviso con il blocco Notizie */}
+      <p className="mb-3 text-[11px] leading-relaxed text-slate-500">
+        Ricerca web condivisa con le Notizie: massimo{" "}
+        {TAVILY_MAX_PER_MATCH} query per partita e {TAVILY_DAILY_LIMIT} al
+        giorno, contate per giornata italiana. Esaurito il tetto:{" "}
+        «{TAVILY_BUDGET_MESSAGE}», mai un campo inventato al suo posto.
       </p>
 
       {context === null ? (
@@ -183,6 +201,11 @@ export function Context360({
           </div>
         </div>
       )}
+
+      {/* lettura «Perché si muove»: sotto i campi, collassabile */}
+      {profile !== undefined ? (
+        <WhyMoves fields={detailFields ?? []} profile={profile} />
+      ) : null}
 
       {/* Fonti consultate: i link del grounding, massimo tre */}
       {ok && sources !== null && sources.length > 0 ? (

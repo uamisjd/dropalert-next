@@ -136,15 +136,19 @@ function main(): void {
     posta_in_palo: { valore: "semifinale playoff scudetto", fonte_url: "https://esempio.it/coppa" },
     rotazioni_fatica: { valore: "turno di coppa a tre giorni", fonte_url: "" },
     h2h_e_forma_recente: { valore: "ultimi tre scontri diretti in casa", fonte_url: "" },
+    forma_recente_5: { valore: "casa: 3V 1N 1P; trasferta: 1V 1N 3P", fonte_url: "" },
+    assenze_note: { valore: "non noto", fonte_url: "" },
     accordo_col_drop: "sostiene",
   };
 
-  test("v2: sei chiavi, h2h compresa, accordo chiuso", () => {
-    assertEqual(CONTEXT_FIELD_KEYS.length, 6, "sei campi");
+  test("v2: otto chiavi, forma e assenze comprese, accordo chiuso", () => {
+    assertEqual(CONTEXT_FIELD_KEYS.length, 8, "otto campi");
     const d = parseContextDetail(v2payload, true)!;
     assert(d !== null, "payload valido");
-    assertEqual(d.fields.length, 6);
+    assertEqual(d.fields.length, 8);
     assert(d.fields.some((f) => f.key === "h2h_e_forma_recente"), "h2h presente");
+    assert(d.fields.some((f) => f.key === "forma_recente_5"), "forma 5 presente");
+    assert(d.fields.some((f) => f.key === "assenze_note"), "assenze presenti");
   });
 
   test("v2: il tag nasce qui — fonte accettata solo se grounded", () => {
@@ -226,11 +230,12 @@ function main(): void {
     const q = tavilyPrimary("A", "B", "Coppa");
     assert(q.includes("A") && q.includes("B"), "squadre presenti");
     assert(q.includes("Coppa") && q.includes("H2H"), "competizione e H2H");
+    assert(q.includes("ultime 5") && q.includes("classifica"), "forma e classifica");
   });
 
-  test("budget dichiarato: 30 al giorno, 2 per partita, chiave per giornata italiana", () => {
-    assertEqual(TAVILY_DAILY_LIMIT, 30);
-    assertEqual(TAVILY_MAX_PER_MATCH, 2);
+  test("budget condiviso dichiarato: 40 al giorno, 4 per partita, chiave per giornata italiana", () => {
+    assertEqual(TAVILY_DAILY_LIMIT, 40);
+    assertEqual(TAVILY_MAX_PER_MATCH, 4);
     assertEqual(
       tavilyUsageKey(new Date("2026-08-21T23:30:00Z")),
       "tavily:daily:2026-08-22",

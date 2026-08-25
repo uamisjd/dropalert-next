@@ -43,6 +43,8 @@ export const CONTEXT_FIELD_KEYS = [
   "posta_in_palo",
   "rotazioni_fatica",
   "h2h_e_forma_recente",
+  "forma_recente_5",
+  "assenze_note",
   "accordo_col_drop",
 ] as const;
 export type ContextFieldKey = (typeof CONTEXT_FIELD_KEYS)[number];
@@ -82,7 +84,7 @@ export const MAX_CONTEXT_SOURCES = 3;
  * le righe con versione diversa si rigenerano al primo render. Serve a non
  * mostrare contesti nati con fonti vecchie (es. pre-Tavily).
  */
-export const CONTEXT_RETRIEVAL_VERSION = 4;
+export const CONTEXT_RETRIEVAL_VERSION = 5;
 
 function cleanUrl(value: unknown): string | null {
   if (typeof value !== "string") return null;

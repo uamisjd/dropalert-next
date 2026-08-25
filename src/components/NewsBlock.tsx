@@ -11,14 +11,14 @@
  * sono fonti citate accanto ai numeri del monitor.
  */
 import type { NewsView } from "@/lib/repo/news";
-import { NEWS_SOURCE_LABEL } from "@/lib/news/source";
+import { TAVILY_NEWS_SOURCE_LABEL } from "@/lib/news/tavily-news";
 import { italianTranslationLink } from "@/lib/news/source";
 import { fmtDay, fmtTime } from "./format";
 
 export function NewsBlock({ news }: { news: NewsView }) {
   const stateLine =
     news.state === "ok"
-      ? `${news.itemsCount} notizie trovate`
+      ? `${news.itemsCount === 1 ? "1 notizia trovata" : `${news.itemsCount} notizie trovate`}`
       : news.state === "vuoto"
         ? "nessuna notizia pubblica trovata"
         : news.state === "irraggiungibile"
@@ -38,6 +38,23 @@ export function NewsBlock({ news }: { news: NewsView }) {
       </h2>
 
       <p className="mb-3 text-xs font-medium text-slate-700">{stateLine}</p>
+
+      {/* budget della ricerca, dichiarato: senza budget non si inventa nulla */}
+      {news.tavilyBudget !== undefined ? (
+        <p className="mb-2 text-[11px] text-slate-500">
+          Budget ricerca condiviso con il Contesto 360°:{" "}
+          <span className="tabular-nums">
+            {news.tavilyBudget.used}/{news.tavilyBudget.limit}
+          </span>{" "}
+          query oggi, massimo 4 per partita.
+        </p>
+      ) : null}
+      {news.searchUnavailableReason ? (
+        <p className="mb-2 rounded border border-slate-300 bg-slate-50 px-2.5 py-1.5 text-[11px] text-slate-700">
+          {news.searchUnavailableReason}: nessuna notizia viene inventata al suo
+          posto.
+        </p>
+      ) : null}
 
       {news.items.length > 0 ? (
         <ul className="space-y-2">
@@ -81,10 +98,9 @@ export function NewsBlock({ news }: { news: NewsView }) {
       ) : null}
 
       <p className="mt-3 border-t border-slate-100 pt-2 text-[11px] leading-relaxed text-slate-500">
-        Fonte: {NEWS_SOURCE_LABEL}. Cache di 6 ore per partita, dedupe per
-        link, massimo 1 richiesta ogni 5 secondi e 20 per quarto d&apos;ora
-        verso la fonte. Le notizie non influenzano punteggio, segnali o
-        Contesto 360°.
+        Fonte: {TAVILY_NEWS_SOURCE_LABEL}. Cache di 24 ore per partita, dedupe
+        per URL, massimo 1 richiesta ogni 5 secondi e 20 per quarto d&apos;ora
+        verso i feed. Le notizie non influenzano punteggio e segnali.
       </p>
     </section>
   );

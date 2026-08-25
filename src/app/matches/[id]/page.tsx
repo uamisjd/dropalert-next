@@ -192,6 +192,36 @@ export default async function MatchDetailPage({
     ),
   ]);
 
+  /* profilo del movimento per la lettura: solo misure già a registro,
+     prese dal segnale più forte della partita */
+  const lead = detail.signals[0] ?? null;
+  const leadSeries = lead
+    ? detail.series.find(
+        (x) => x.market === lead.market && x.selection === lead.selection,
+      ) ?? null
+    : null;
+  const profile = lead
+    ? {
+        hoursToKickoff:
+          (new Date(detail.match.kickoffAt).getTime() -
+            new Date(lead.firstMoveAt).getTime()) /
+          3_600_000,
+        sustainedMinutes: lead.sustainedMinutes,
+        isFlash: lead.isFlash,
+        rebounded: lead.rebounded,
+        booksConfirming: lead.booksConfirming,
+        booksTotal: lead.booksTotal,
+        falling:
+          leadSeries?.opening !== null &&
+          leadSeries?.opening !== undefined &&
+          leadSeries?.current !== null &&
+          leadSeries?.current !== undefined
+            ? leadSeries.current < leadSeries.opening
+            : null,
+        magnitudeClass: lead.magnitudeClass,
+      }
+    : undefined;
+
   const { match } = detail;
   const hasResult = match.homeGoals !== null && match.awayGoals !== null;
 
@@ -270,7 +300,12 @@ export default async function MatchDetailPage({
 
       {/* ---------------- contesto 360 ---------------- */}
       <section aria-labelledby="contesto-360-wrap" className="mb-5">
-        <Context360 context={context} news={news} now={now} />
+        <Context360
+          context={context}
+          news={news}
+          now={now}
+          profile={profile}
+        />
       </section>
 
       {/* ---------------- notizie pubbliche ---------------- */}

@@ -14,12 +14,20 @@
  */
 import { desc, eq } from "drizzle-orm";
 import { db } from "@/db/client";
-import { newsFetch, newsItems } from "@/db/schema";
+import { leagues, matches, newsFetch, newsItems, systemState } from "@/db/schema";
 import {
   NEWS_CACHE_HOURS,
+  NEWS_MAX_ITEMS,
   fetchMatchNews,
 } from "@/lib/news/source";
+import { dedupeByUrl } from "@/lib/news/tavily-news";
 import { acquireNewsSlot } from "@/lib/news/limiter";
+import { searchNewsForMatch } from "@/lib/news/tavily-news";
+import {
+  TAVILY_BUDGET_MESSAGE,
+  TAVILY_DAILY_LIMIT,
+  tavilyUsageKey,
+} from "@/lib/context/tavily";
 
 export type NewsState = "ok" | "vuoto" | "irraggiungibile" | "rinviato";
 
@@ -37,6 +45,37 @@ export interface NewsView {
   language: string | null;
   updatedAt: string | null;
   items: NewsItemView[];
+  /** motivo dichiarato quando la ricerca web non ha potuto girare */
+  searchUnavailableReason?: string | null;
+  /** budget Tavily condiviso con il Contesto 360°, per il pannello */
+  tavilyBudget?: { used: number; limit: number };
+}
+
+/* ------------------------------------------------------------------ */
+/* Budget Tavily condiviso (stesso contatore del Contesto 360°)         */
+/* ------------------------------------------------------------------ */
+
+async function readTavilyUsage(now: Date): Promise<number> {
+  const [row] = await db
+    .select({ value: systemState.value })
+    .from(systemState)
+    .where(eq(systemState.key, tavilyUsageKey(now)))
+    .limit(1);
+  return row !== undefined &&
+    typeof (row.value as { used?: unknown }).used === "number"
+    ? (row.value as { used: number }).used
+    : 0;
+}
+
+async function addTavilyUsage(now: Date, add: number): Promise<void> {
+  if (add <= 0) return;
+  const key = tavilyUsageKey(now);
+  const current = await readTavilyUsage(now);
+  const value = { used: Math.min(current + add, TAVILY_DAILY_LIMIT) };
+  await db
+    .insert(systemState)
+    .values({ key, value, updatedAt: now })
+    .onConflictDoUpdate({ target: systemState.key, set: { value, updatedAt: now } });
 }
 
 function isFresh(expiresAt: Date, now: Date): boolean {
@@ -67,8 +106,10 @@ async function writeFetchState(
 ): Promise<void> {
   /* un fallimento si riprova prima: un'ora, non sei. Un vuoto è un
      risultato e invecchia come tale */
-  const hours =
-    state === "irraggiungibile" ? 1 : NEWS_CACHE_HOURS;
+  /* cache 24h come il Contesto 360°: la ricerca costa budget condiviso.
+     Un fallimento invece si riprova dopo un'ora. */
+  const hours = state === "irraggiungibile" ? 1 : 24;
+  void NEWS_CACHE_HOURS;
   const expiresAt = new Date(now.getTime() + hours * 3_600_000);
   const values = {
     matchId,
@@ -132,9 +173,40 @@ export async function getNewsForMatch(
     };
   }
 
-  const outcome = await fetchMatchNews(homeTeam, awayTeam);
+  /* 1. fonte principale: ricerca Tavily, entro il budget condiviso */
+  const [{ name: leagueName } = { name: null }] = await db
+    .select({ name: leagues.name })
+    .from(matches)
+    .leftJoin(leagues, eq(leagues.id, matches.leagueId))
+    .where(eq(matches.id, matchId))
+    .limit(1);
 
-  if (!outcome.ok) {
+  const usedToday = await readTavilyUsage(now);
+  const budgetLeft = Math.max(0, TAVILY_DAILY_LIMIT - usedToday);
+  const tavily = await searchNewsForMatch(homeTeam, awayTeam, leagueName, {
+    budgetLeft,
+  }).catch(() => ({
+    items: [],
+    queriesUsed: 0,
+    unavailableReason: "ricerca non disponibile: errore della fonte",
+  }));
+  await addTavilyUsage(now, tavily.queriesUsed);
+
+  /* 2. integrazione gratuita: i feed RSS già in cache */
+  const rss = await fetchMatchNews(homeTeam, awayTeam).catch(
+    (): Awaited<ReturnType<typeof fetchMatchNews>> => ({
+      ok: false,
+      reason: "irraggiungibile",
+    }),
+  );
+  const rssItems = rss.ok
+    ? rss.result.items.map((i) => ({ ...i, language: rss.result.language }))
+    : [];
+
+  /* dedupe per URL fra le due fonti: la stessa notizia compare una volta */
+  const merged = dedupeByUrl([...tavily.items, ...rssItems]);
+
+  if (merged.length === 0 && !rss.ok && tavily.queriesUsed === 0) {
     await writeFetchState(matchId, "irraggiungibile", 0, null, now);
     return {
       state: "irraggiungibile",
@@ -142,12 +214,15 @@ export async function getNewsForMatch(
       language: null,
       updatedAt: now.toISOString(),
       items: [],
+      searchUnavailableReason: tavily.unavailableReason,
+      tavilyBudget: { used: await readTavilyUsage(now), limit: TAVILY_DAILY_LIMIT },
     };
   }
 
-  const { items, language, query } = outcome.result;
+  const language = merged[0]?.language ?? (rss.ok ? rss.result.language : "it");
+  const query = `${homeTeam} ${awayTeam}${leagueName ? ` ${leagueName}` : ""}`;
 
-  for (const item of items) {
+  for (const item of merged.slice(0, NEWS_MAX_ITEMS)) {
     await db
       .insert(newsItems)
       .values({
@@ -156,7 +231,7 @@ export async function getNewsForMatch(
         source: item.source,
         publishedAt: item.publishedAt,
         link: item.link,
-        language,
+        language: item.language,
         query,
         fetchedAt: now,
       })
@@ -173,6 +248,9 @@ export async function getNewsForMatch(
     language,
     updatedAt: now.toISOString(),
     items: stored,
+    searchUnavailableReason:
+      budgetLeft <= 0 ? TAVILY_BUDGET_MESSAGE : tavily.unavailableReason,
+    tavilyBudget: { used: await readTavilyUsage(now), limit: TAVILY_DAILY_LIMIT },
   };
 }
 
