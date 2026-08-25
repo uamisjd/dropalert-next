@@ -17,6 +17,7 @@ import { getCoverageHistory } from "@/lib/repo/coverage-history";
 import { buildCoverageView, type CoverageView } from "@/lib/cov/view";
 import { BacktestNote } from "@/components/BacktestNote";
 import { BacktestNoteR15 } from "@/components/BacktestNoteR15";
+import { BacktestNoteR2 } from "@/components/BacktestNoteR2";
 import { ClvSection } from "@/components/ClvSection";
 import { CoverageSummary } from "@/components/CoverageSummary";
 import { EmptyState } from "@/components/EmptyState";
@@ -183,6 +184,12 @@ export default async function Home({
           stessa disciplina — e il legame con suspicion-v2 dichiarato */}
       <div className="mt-5">
         <BacktestNoteR15 />
+      </div>
+
+      {/* validazione live del monitor su sé stesso (R2): CLV negativi
+          pubblicati come sono, hit rate dichiarato non-metrica */}
+      <div className="mt-5">
+        <BacktestNoteR2 />
       </div>
 
       <footer className="mt-6 border-t border-slate-200 pt-4 text-xs leading-relaxed text-slate-500">
