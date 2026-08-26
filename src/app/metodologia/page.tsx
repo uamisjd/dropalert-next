@@ -1,13 +1,16 @@
 /**
- * Metodologia (Sprint lancio).
+ * Metodologia (Sprint lancio, punti B ed E2).
  *
- * In questo punto (B) la pagina nasce perché il footer legale la linka e un
- * link che porta a un 404 è peggio di un link assente. Il contenuto completo
- * — accorpamento dei backtest R1/R1.5/R2 e limiti delle fonti — arriva al
- * punto E2: qui c'è già la sostanza essenziale, non un segnaposto vuoto.
+ * Qui vivono, in un posto solo, le tre verifiche storiche (R1, R1.5, R2),
+ * la spiegazione dell'indice e i limiti dichiarati delle fonti. In home
+ * resta un rimando: gli stessi tre blocchi ripetuti su due pagine erano la
+ * stessa informazione detta due volte.
  */
 import type { Metadata } from "next";
 import Link from "next/link";
+import { BacktestNote } from "@/components/BacktestNote";
+import { BacktestNoteR15 } from "@/components/BacktestNoteR15";
+import { BacktestNoteR2 } from "@/components/BacktestNoteR2";
 
 export const metadata: Metadata = {
   title: "Metodologia — DropAlert",
@@ -63,6 +66,22 @@ export default function MetodologiaPage() {
           della partita. Sotto le 30 osservazioni lo dichiariamo non
           concludente, e i valori negativi restano pubblicati come sono.
         </p>
+      </section>
+
+      <section className="mt-6">
+        <h2 className="mb-1.5 text-sm font-semibold text-slate-900">
+          Le verifiche storiche
+        </h2>
+        <p className="mb-3 text-sm leading-relaxed text-slate-700">
+          Tre verifiche, pubblicate con i loro campioni e con i risultati
+          scomodi lasciati dove sono: la prima su dati storici di mercato, la
+          seconda per segmenti, la terza sul monitor stesso.
+        </p>
+        <div className="space-y-4">
+          <BacktestNote />
+          <BacktestNoteR15 />
+          <BacktestNoteR2 />
+        </div>
       </section>
 
       <section className="mt-5">

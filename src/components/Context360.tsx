@@ -93,6 +93,14 @@ export function Context360({
   const detailFields = context?.detail?.fields ?? null;
   const sources = context?.sources ?? null;
 
+  /* deduplica: un link già mostrato sotto a un campo non torna nell'elenco */
+  const urlGiaCitati = new Set(
+    (detailFields ?? [])
+      .map((f) => f.fonteUrl)
+      .filter((u): u is string => u !== null),
+  );
+  const altreFonti = (sources ?? []).filter((s) => !urlGiaCitati.has(s.uri));
+
   return (
     <section
       aria-labelledby="contesto-360"
@@ -195,14 +203,16 @@ export function Context360({
         <WhyMoves fields={detailFields ?? []} profile={profile} />
       ) : null}
 
-      {/* Fonti consultate: i link del grounding, massimo tre */}
-      {ok && sources !== null && sources.length > 0 ? (
+      {/* Fonti consultate: solo quelle NON già citate da un campo qui sopra.
+          Ripetere lo stesso link a due centimetri di distanza non aggiunge
+          nulla e fa sembrare due fonti quella che è una sola. */}
+      {ok && altreFonti.length > 0 ? (
         <div className="mt-3">
           <h3 className="mb-1 text-xs font-semibold text-slate-700">
-            Fonti consultate
+            Altre fonti consultate
           </h3>
           <ul className="space-y-1">
-            {sources.map((s) => (
+            {altreFonti.map((s) => (
               <li key={s.uri} className="text-xs leading-relaxed">
                 <a
                   href={s.uri}
@@ -218,31 +228,15 @@ export function Context360({
         </div>
       ) : null}
 
-      {/* notizie RSS: l'unica parte con una fonte recuperata */}
+      {/* Le notizie NON si ripetono qui: hanno un blocco proprio poco sotto,
+          con testata, data e lingua. Qui resta solo il rimando. */}
       {news.length > 0 ? (
-        <div className="mt-3">
-          <h3 className="mb-1 text-xs font-semibold text-slate-700">
-            Notizie (RSS, fonte recuperata)
-          </h3>
-          <ul className="space-y-1">
-            {news.map((n) => (
-              <li key={`${n.feed}-${n.title}`} className="text-xs leading-relaxed">
-                {n.link !== null ? (
-                  <a
-                    href={n.link}
-                    target="_blank"
-                    rel="noopener noreferrer nofollow"
-                    className="text-slate-700 underline underline-offset-2 hover:text-slate-900"
-                  >
-                    {n.title}
-                  </a>
-                ) : (
-                  <span className="text-slate-700">{n.title}</span>
-                )}
-              </li>
-            ))}
-          </ul>
-        </div>
+        <p className="mt-3 text-[11px] leading-relaxed text-slate-500">
+          {news.length === 1
+            ? "1 notizia pubblica recuperata per questa partita"
+            : `${news.length} notizie pubbliche recuperate per questa partita`}
+          : sono elencate nel blocco «Notizie» qui sotto, con testata e data.
+        </p>
       ) : null}
 
       <p className="mt-3 border-t border-slate-100 pt-2 text-[11px] leading-relaxed text-slate-500">

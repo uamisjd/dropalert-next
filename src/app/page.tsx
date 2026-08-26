@@ -16,9 +16,6 @@ import {
 import { getCoverageHistory } from "@/lib/repo/coverage-history";
 import { DATA_REVALIDATE_SECONDS, cachedRead } from "@/lib/repo/cached";
 import { buildCoverageView, type CoverageView } from "@/lib/cov/view";
-import { BacktestNote } from "@/components/BacktestNote";
-import { BacktestNoteR15 } from "@/components/BacktestNoteR15";
-import { BacktestNoteR2 } from "@/components/BacktestNoteR2";
 import { ClvSection } from "@/components/ClvSection";
 import { CoverageSummary } from "@/components/CoverageSummary";
 import { EmptyState } from "@/components/EmptyState";
@@ -260,22 +257,34 @@ export default async function Home({
         <ClvSection clv={data.clv} />
       </div>
 
-      {/* verifica empirica sui dati storici: stessa zona metodologica del CLV */}
-      <div className="mt-5">
-        <BacktestNote />
-      </div>
-
-      {/* verdetti segmentati del backtest R1.5: accanto al primo blocco,
-          stessa disciplina — e il legame con suspicion-v2 dichiarato */}
-      <div className="mt-5">
-        <BacktestNoteR15 />
-      </div>
-
-      {/* validazione live del monitor su sé stesso (R2): CLV negativi
-          pubblicati come sono, hit rate dichiarato non-metrica */}
-      <div className="mt-5">
-        <BacktestNoteR2 />
-      </div>
+      {/* le tre verifiche storiche vivono in /metodologia: qui resta il
+          rimando, per non ripetere la stessa informazione su due pagine */}
+      <section
+        aria-labelledby="rimando-metodologia"
+        className="mt-5 rounded-lg border border-slate-200 bg-white p-4"
+      >
+        <h2
+          id="rimando-metodologia"
+          className="mb-1 text-sm font-semibold tracking-wide text-slate-700 uppercase"
+        >
+          Come si misura tutto questo
+        </h2>
+        <p className="text-xs leading-relaxed text-slate-600">
+          L&apos;indice di fiducia, il CLV come unica metrica di qualità e le
+          tre verifiche storiche (R1 su sette stagioni, R1.5 per segmenti, R2
+          sul monitor stesso) sono spiegati per esteso, con i loro campioni e
+          con i risultati negativi lasciati dove sono, nella pagina di
+          metodologia.
+        </p>
+        <p className="mt-2 text-xs">
+          <Link
+            href="/metodologia"
+            className="font-medium text-slate-700 underline underline-offset-2 hover:text-slate-900"
+          >
+            Leggi la metodologia →
+          </Link>
+        </p>
+      </section>
 
       <footer className="mt-6 border-t border-slate-200 pt-4 text-xs leading-relaxed text-slate-500">
         <p className="mb-2 font-medium text-slate-700">
