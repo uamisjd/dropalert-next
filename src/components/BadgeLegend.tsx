@@ -22,6 +22,11 @@ const ROWS: Array<{ badge: string; text: string; className: string }> = [
     className: "border-slate-200 bg-white text-slate-500",
   },
   {
+    badge: "Indice su base misurabile",
+    text: "Il numero principale è l'indice riportato sui soli punti ottenibili: i punti legati a dati non pubblicati non contano come zero. La riga sotto mostra grezzo, base e punti non osservabili.",
+    className: "border-slate-300 bg-white text-slate-700",
+  },
+  {
     badge: "Dati parziali",
     text: "Su questa partita esiste almeno un dato mancante dichiarato: il quadro è incompleto e non viene stimato.",
     className: "border-slate-300 bg-white text-slate-700",

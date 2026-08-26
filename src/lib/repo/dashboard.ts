@@ -37,6 +37,12 @@ import {
 } from "@/lib/drop/constants";
 import { SCORE_BUCKETS, scoreBucketOf, type ScoreBucketKey } from "@/lib/drop/novig";
 import { WIDE_DROP_THRESHOLD } from "@/lib/drop/constants";
+import {
+  scoreComponentsView,
+  scoreReachability,
+  type ComponentContext,
+  type RawScoreComponent,
+} from "@/lib/repo/score-view";
 import { getContextSummaries } from "@/lib/repo/context";
 import { getNewsCounts } from "@/lib/repo/news";
 
@@ -227,6 +233,22 @@ export interface DashboardSignal {
   /** true quando il calo della quota è ≥ 15% */
   wideDrop: boolean;
 
+  /* --- indice normalizzato (punto F) --- */
+  /**
+   * Indice riportato su base 100 usando SOLO i punti realmente ottenibili.
+   *
+   * L'indice grezzo (`confidenceScore`) resta quello di sempre e la logica
+   * che lo calcola non è stata toccata: qui si cambia soltanto come si
+   * LEGGE. Un 35,5 su 55 punti misurabili non è «poca fiducia», è 65 su
+   * base misurabile con 45 punti non osservabili — due storie diverse che
+   * il numero grezzo confondeva.
+   */
+  normalizedScore: number | null;
+  /** punti realmente ottenibili (100 meno quelli non osservabili) */
+  measurableMax: number | null;
+  /** punti non osservabili per dati mancanti */
+  gapMax: number | null;
+
   /* --- mini-grafico (UX-3) --- */
   /**
    * Punti realmente registrati della serie del segnale, per la sparkline:
@@ -340,6 +362,47 @@ export function downsample<T>(points: T[], max = SPARKLINE_MAX_POINTS): T[] {
     out.push(points[Math.round(i * step)]);
   }
   return out;
+}
+
+/**
+ * Normalizzazione dell'indice sulla base misurabile.
+ *
+ * Non ricalcola nulla: prende i componenti già scritti a registro dal motore,
+ * separa i punti non osservabili (GAP) da quelli misurati e riporta il
+ * punteggio ottenuto sulla scala di ciò che era davvero ottenibile.
+ * Senza scomposizione a registro restituisce `null` su tutto: meglio nessun
+ * numero che un numero costruito su una base ipotizzata.
+ */
+export function normalizedOf(
+  components: RawScoreComponent[],
+  rawScore: number | null,
+  ctx: ComponentContext,
+): {
+  normalizedScore: number | null;
+  measurableMax: number | null;
+  gapMax: number | null;
+} {
+  if (components.length === 0) {
+    return { normalizedScore: null, measurableMax: null, gapMax: null };
+  }
+  const views = scoreComponentsView(components, ctx);
+  const reach = scoreReachability(views);
+  if (reach.measurableMax <= 0) {
+    return {
+      normalizedScore: null,
+      measurableMax: reach.measurableMax,
+      gapMax: reach.gapMax,
+    };
+  }
+  const earned = rawScore ?? reach.earned;
+  return {
+    normalizedScore: round(
+      Math.max(0, Math.min(100, (earned / reach.measurableMax) * 100)),
+      0,
+    ),
+    measurableMax: reach.measurableMax,
+    gapMax: reach.gapMax,
+  };
 }
 
 function toIso(d: Date | string | null): string | null {
@@ -599,6 +662,7 @@ export async function getDashboardSignals(
     const s = r.signal;
     const explanation = (s.explanation ?? {}) as {
       summary?: string;
+      components?: RawScoreComponent[];
       suspicion?: {
         multiplier: number;
         reasons: Array<{ code: string; label: string; detail: string }>;
@@ -679,6 +743,12 @@ export async function getDashboardSignals(
       suspicion: explanation.suspicion ?? null,
       wideDropPct,
       wideDrop: wideDropPct !== null && wideDropPct >= WIDE_DROP_THRESHOLD * 100,
+      ...normalizedOf(explanation.components ?? [], num(s.confidenceScore), {
+        booksTotal: s.booksTotal,
+        sharpAvailable: s.sharpAvailable,
+        sharpConfirms: s.sharpConfirms,
+        pointCount: snap?.n ?? 0,
+      }),
       sparkline: downsample(
         sparkByKey.get(`${r.matchId}::${s.market}::${s.selection}`) ?? [],
       ),

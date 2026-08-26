@@ -310,9 +310,14 @@ export function SignalCard({
 
       {/* piè di card: indice e tracciabilità */}
       <footer className="flex flex-wrap items-center gap-1.5 border-t border-slate-100 pt-2.5">
-        <MetaPill title="Indice di fiducia 0–100 calcolato dal motore su ampiezza, conferme, persistenza e copertura dati.">
-          Indice {signal.confidenceScore ?? ND}/100 · {signal.confidenceLabel}
-          <Info term="indice" />
+        {/* numero principale: indice riportato sulla base misurabile.
+            Il grezzo e i punti non osservabili restano visibili sotto. */}
+        <MetaPill title="Indice di fiducia calcolato dal motore su ampiezza, conferme, persistenza e copertura dati.">
+          Indice{" "}
+          {signal.normalizedScore ?? signal.confidenceScore ?? ND}/100
+          {signal.normalizedScore !== null ? " su base misurabile" : ""} ·{" "}
+          {signal.confidenceLabel}
+          <Info term="indice-normalizzato" />
         </MetaPill>
         {signal.openGaps > 0 && (
           <MetaPill title="Informazioni mancanti dichiarate a registro per questa partita.">
@@ -320,6 +325,16 @@ export function SignalCard({
             <Info term="gap" />
           </MetaPill>
         )}
+        {/* riga secondaria: da dove viene la normalizzazione */}
+        {signal.normalizedScore !== null && signal.measurableMax !== null ? (
+          <MetaPill title="Punti realmente ottenibili: i punti legati a dati che la fonte non pubblica non entrano nel calcolo, invece di pesare come uno zero.">
+            {signal.confidenceScore ?? ND}/{signal.measurableMax} punti
+            misurabili
+            {signal.gapMax !== null && signal.gapMax > 0
+              ? ` · ${signal.gapMax} non osservabili (GAP)`
+              : ""}
+          </MetaPill>
+        ) : null}
         <MetaPill title={signal.freshnessReason}>
           Rilevato {signal.ageMinutes === null ? ND : fmtMinutes(signal.ageMinutes)} fa
         </MetaPill>

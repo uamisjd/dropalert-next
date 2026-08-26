@@ -5,7 +5,7 @@
  */
 import type { DashboardSignal } from "@/lib/repo/dashboard";
 import { buildSparkline, MIN_POINTS_FOR_SPARKLINE } from "../sparkline";
-import { downsample } from "@/lib/repo/dashboard";
+import { downsample, normalizedOf } from "@/lib/repo/dashboard";
 import {
   PLAIN_STRENGTH_LABELS,
   contextSnippet,
@@ -84,6 +84,9 @@ function sig(over: Partial<DashboardSignal> = {}): DashboardSignal {
     newsCount: null,
     newsEmpty: false,
     sparkline: [],
+    normalizedScore: null,
+    measurableMax: null,
+    gapMax: null,
     ...over,
   } as DashboardSignal;
 }
@@ -251,6 +254,43 @@ eq(
   "Fonti: 1 ok · 2 degradate (ultimo successo meno di 1 min fa)",
 );
 eq("nessuna fonte", sourcesLabel([], now), "Fonti: nessuna registrata");
+
+
+
+/* --- F: indice normalizzato sulla base misurabile --- */
+const ctxOk = { booksTotal: 6, sharpAvailable: true, sharpConfirms: true, pointCount: 10 };
+const ctxGap = { booksTotal: 1, sharpAvailable: false, sharpConfirms: null, pointCount: 10 };
+const comps = [
+  { key: "magnitude" as const, label: "Ampiezza", points: 20, maxPoints: 30, detail: "" },
+  { key: "coordination" as const, label: "Coordinazione", points: 0, maxPoints: 25, detail: "" },
+  { key: "sharp" as const, label: "Sharp", points: 0, maxPoints: 20, detail: "" },
+  { key: "persistence" as const, label: "Persistenza", points: 15.5, maxPoints: 25, detail: "" },
+];
+const norm = normalizedOf(comps, 35.5, ctxGap);
+eq("base misurabile esclude i GAP", norm.measurableMax, 55);
+eq("punti non osservabili dichiarati", norm.gapMax, 45);
+eq("35,5 su 55 diventa 65 su 100", norm.normalizedScore, 65);
+
+const pieno = normalizedOf(comps, 35.5, ctxOk);
+eq("senza GAP la base resta 100", pieno.measurableMax, 100);
+eq("senza GAP il numero non cambia", pieno.normalizedScore, 36);
+eq("senza GAP nulla è non osservabile", pieno.gapMax, 0);
+
+const vuoto = normalizedOf([], 35.5, ctxOk);
+eq("senza scomposizione non si normalizza", vuoto.normalizedScore, null);
+eq("senza scomposizione nessuna base inventata", vuoto.measurableMax, null);
+
+const tuttoGap = normalizedOf(
+  [
+    { key: "coordination" as const, label: "C", points: 0, maxPoints: 50, detail: "" },
+    { key: "sharp" as const, label: "S", points: 0, maxPoints: 50, detail: "" },
+  ],
+  0,
+  ctxGap,
+);
+eq("base misurabile nulla: nessun numero", tuttoGap.normalizedScore, null);
+eq("ma i punti non osservabili si dichiarano", tuttoGap.gapMax, 100);
+check("normalizzato mai oltre 100", (normalizedOf(comps, 90, ctxGap).normalizedScore ?? 0) <= 100);
 
 if (failures.length > 0) {
   console.error(`✗ ${failures.length} test falliti su ${passed + failures.length}`);
