@@ -17,6 +17,7 @@ const LINKS: Array<{ href: string; label: string }> = [
   { href: "/", label: "Home" },
   { href: "/ieri", label: "Ieri" },
   { href: "/domani", label: "Domani" },
+  { href: "/watchlist", label: "Preferite" },
   { href: "/metodologia", label: "Metodologia" },
   { href: "/gioco-responsabile", label: "Gioco responsabile" },
 ];

@@ -37,4 +37,5 @@ export const PUBLIC_PAGES = [
   "/metodologia",
   "/privacy",
   "/gioco-responsabile",
+  "/watchlist",
 ] as const;

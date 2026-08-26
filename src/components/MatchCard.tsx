@@ -10,12 +10,33 @@ import Link from "next/link";
 import type { MatchGroup } from "@/lib/view/plain";
 import { othersLabel } from "@/lib/view/plain";
 import { SignalCard } from "./SignalCard";
+import { WatchToggle } from "./WatchToggle";
 import { fmtPct, fmtPrice } from "./format";
 
-export function MatchCard({ group, now }: { group: MatchGroup; now: Date }) {
+export function MatchCard({
+  group,
+  now,
+  entryKey,
+}: {
+  group: MatchGroup;
+  now: Date;
+  /** identità della partita, per le preferite salvate nel browser */
+  entryKey: string;
+}) {
+  const p = group.primary;
   return (
     <div>
-      <SignalCard signal={group.primary} now={now} />
+      <SignalCard signal={p} now={now} />
+      {/* il pulsante sta fuori dalla card: il link la copre tutta */}
+      <div className="mt-1 flex justify-end">
+        <WatchToggle
+          entryKey={entryKey}
+          matchId={p.matchId}
+          homeTeam={p.homeTeam}
+          awayTeam={p.awayTeam}
+          kickoffAt={p.kickoffAt}
+        />
+      </div>
       {group.others.length > 0 ? (
         <details className="mt-1 rounded-b-lg border border-t-0 border-slate-200 bg-slate-50 px-3 py-1.5">
           <summary className="cursor-pointer text-xs font-medium text-slate-700 hover:text-slate-900">

@@ -28,7 +28,7 @@ import { fmtDateTime } from "@/components/format";
 import { GuideBanner } from "@/components/GuideBanner";
 import { BadgeLegend } from "@/components/BadgeLegend";
 import { MatchCard } from "@/components/MatchCard";
-import { groupByMatch } from "@/lib/view/plain";
+import { groupByMatch, matchIdentityKey } from "@/lib/view/plain";
 import {
   chipCounts,
   groupByDay,
@@ -244,7 +244,12 @@ export default async function Home({
                 </h3>
                 <div className="space-y-3">
                   {g.items.map((s) => (
-                    <MatchCard key={s.group.matchId} group={s.group} now={now} />
+                    <MatchCard
+                      key={s.group.matchId}
+                      group={s.group}
+                      now={now}
+                      entryKey={matchIdentityKey(s.group.primary)}
+                    />
                   ))}
                 </div>
               </div>
