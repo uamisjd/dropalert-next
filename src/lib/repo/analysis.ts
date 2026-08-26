@@ -33,7 +33,7 @@ import {
 } from "@/lib/context/pure";
 
 /** Bump = tutte le analisi in cache si rigenerano al primo accesso. */
-export const ANALYSIS_FORMAT_VERSION = 1;
+export const ANALYSIS_FORMAT_VERSION = 2;
 
 export interface AnalysisView {
   analysis: DeepAnalysis | null;

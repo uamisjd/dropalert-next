@@ -15,6 +15,7 @@ import {
   containsPick,
   fit,
   parseAnalysisProse,
+  sanitizeFase,
   schemaWithinWidth,
   type AnalysisFacts,
 } from "../analysis";
@@ -78,6 +79,26 @@ const doppia = buildHeadline({
   league: "Scotland: Challenge Cup",
 });
 check("competizione non ripetuta", (doppia.match(/Challenge Cup/g) ?? []).length === 1);
+
+/* --- A1: la fase è un sintagma, non una frase --- */
+eq("fase breve accettata", sanitizeFase("fase a gironi"), "fase a gironi");
+eq("inciso «Trattandosi dell'» rimosso",
+  sanitizeFase("Trattandosi dell'amichevole estiva, la posta in palio è bassa"), null);
+eq("frase con verbo respinta", sanitizeFase("È una partita valida per la salvezza"), null);
+eq("periodo tagliato alla prima interruzione",
+  sanitizeFase("semifinale playoff. Le due squadre arrivano bene"), "semifinale playoff");
+eq("«non noto» respinto", sanitizeFase("non noto"), null);
+eq("vuoto respinto", sanitizeFase("   "), null);
+eq("null resta null", sanitizeFase(null), null);
+eq("commento lungo respinto",
+  sanitizeFase("turno preliminare di una competizione che assegna un posto nella fase successiva del torneo continentale"), null);
+const rotta = buildHeadline({
+  ...facts,
+  fase: "Trattandosi dell'amichevole estiva, la posta in palio resta contenuta",
+});
+check("intestazione mai concatenata male", !rotta.includes("valevole per Trattandosi"));
+check("intestazione resta una frase corretta", rotta.startsWith("La sfida valevole per") || rotta.startsWith("La sfida tra"));
+check("nessun doppio spazio", !rotta.includes("  "));
 
 /* --- schemi: il vincolo è di codice --- */
 const albero = buildTreeSchema(facts);

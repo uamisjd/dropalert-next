@@ -118,9 +118,49 @@ const hourFmt = new Intl.DateTimeFormat("it-IT", {
  * Intestazione della sezione. Ogni pezzo compare solo se il dato esiste:
  * niente stadio inventato, niente fase dedotta.
  */
+/**
+ * Ripulisce la «fase» prima di infilarla nell'intestazione.
+ *
+ * Il campo di provenienza (`posta_in_palo`) è una frase libera scritta dal
+ * modello: a volte è davvero una fase («fase a gironi»), a volte è un
+ * periodo intero («Trattandosi dell'amichevole estiva, la posta è bassa»).
+ * Concatenarlo produceva «La sfida valevole per Trattandosi dell'…».
+ *
+ * Regola: si accetta solo un sintagma breve, senza verbo coniugato di
+ * apertura e senza punteggiatura di frase. Tutto il resto si omette — la
+ * frase resta corretta e il dato completo si legge nei campi del contesto.
+ */
+export function sanitizeFase(raw: string | null): string | null {
+  if (raw === null) return null;
+  let t = raw.trim().replace(/\s+/g, " ");
+  if (t === "" || t.toLowerCase() === "non noto") return null;
+
+  /* una frase intera non è una fase: si taglia alla prima interruzione */
+  t = t.split(/[.;:]/)[0].trim();
+  /* incisi introduttivi tipici del modello */
+  t = t.replace(
+    /^(trattandosi|essendo|poiché|siccome|dato che|visto che|in quanto)\b[^,]*,\s*/i,
+    "",
+  );
+  t = t.replace(/^(si tratta d[ei'][^,]*,\s*)/i, "");
+  t = t.replace(/^(la|il|lo|l')\s+(partita|sfida|gara)\b[^,]*,\s*/i, "");
+  t = t.trim().replace(/^[,–—-]\s*/, "");
+
+  if (t === "") return null;
+  /* nessun verbo coniugato, né in apertura né dentro: una fase è un
+     sintagma nominale, «la posta in palio è bassa» è un giudizio */
+  if (/(^|\s)(è|sono|era|erano|sarà|saranno|resta|restano|rappresenta|vale|valgono|si\s+gioca|arriva|arrivano)(\s|$)/i.test(t)) {
+    return null;
+  }
+  /* una fase è breve: oltre, è un commento */
+  const parole = t.split(" ").length;
+  if (parole > 9 || t.length > 70) return null;
+  return t;
+}
+
 export function buildHeadline(f: AnalysisFacts): string {
   const parts: string[] = ["La sfida"];
-  const fase = f.fase?.trim() ?? "";
+  const fase = sanitizeFase(f.fase) ?? "";
   const lega = f.league?.trim() ?? "";
   /* la fase recuperata spesso nomina già la competizione: ripeterla
      produrrebbe «fase a gironi della Coppa di Paese: Coppa». Si confronta
