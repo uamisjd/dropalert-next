@@ -17,6 +17,7 @@ import { NewsBlock } from "@/components/NewsBlock";
 import { getNewsForMatch } from "@/lib/repo/news";
 import { getContextForMatch } from "@/lib/repo/context";
 import { getDeepAnalysis } from "@/lib/repo/analysis";
+import { DATA_REVALIDATE_SECONDS, cachedRead } from "@/lib/repo/cached";
 import { DeepAnalysis360 } from "@/components/DeepAnalysis360";
 import { fetchTeamNews } from "@/lib/context/rss";
 import { SignalTimeline } from "@/components/SignalTimeline";
@@ -172,7 +173,14 @@ export default async function MatchDetailPage({
   if (!Number.isInteger(matchId) || matchId <= 0) notFound();
 
   const now = new Date();
-  const detail = await getMatchDetail(matchId, now);
+  /* stessa logica della home: la pagina è dinamica per via del parametro,
+     quindi si conserva la lettura invece della pagina */
+  const bucket = Math.floor(now.getTime() / (DATA_REVALIDATE_SECONDS * 1000));
+  const detail = await cachedRead(
+    (id: number, at: number) => getMatchDetail(id, new Date(at)),
+    ["match-detail", String(matchId), String(bucket)],
+    ["match-detail"],
+  )(matchId, bucket * DATA_REVALIDATE_SECONDS * 1000);
   if (!detail) notFound();
 
   /* Contesto 360°: cache 24h, una sola chiamata al modello per visita a

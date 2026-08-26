@@ -14,6 +14,7 @@ import {
   type SignalLevel,
 } from "@/lib/repo/dashboard";
 import { getCoverageHistory } from "@/lib/repo/coverage-history";
+import { DATA_REVALIDATE_SECONDS, cachedRead } from "@/lib/repo/cached";
 import { buildCoverageView, type CoverageView } from "@/lib/cov/view";
 import { BacktestNote } from "@/components/BacktestNote";
 import { BacktestNoteR15 } from "@/components/BacktestNoteR15";
@@ -78,7 +79,16 @@ export default async function Home({
   const sp = await searchParams;
   const filters = parseFilters(sp);
   const now = new Date();
-  const data = await getDashboardData(filters, now);
+  /* La pagina è dinamica (legge i filtri dalla query), quindi la CDN non la
+     conserva: la cache sta sulla lettura, con la stessa finestra dell'ISR.
+     L'istante è arrotondato al blocco di 5 minuti perché due visite vicine
+     condividano la stessa chiave invece di ricalcolare a ogni secondo. */
+  const bucket = Math.floor(now.getTime() / (DATA_REVALIDATE_SECONDS * 1000));
+  const data = await cachedRead(
+    (f: DashboardFilters, at: number) => getDashboardData(f, new Date(at)),
+    ["dashboard", JSON.stringify(filters), String(bucket)],
+    ["dashboard"],
+  )(filters, bucket * DATA_REVALIDATE_SECONDS * 1000);
 
   /* Sprint UX-1 — lettura temporale della lista.
      Il filtro per tempo è applicato qui, sopra alla lista già filtrata dai
@@ -105,7 +115,11 @@ export default async function Home({
      mostrare numeri al posto della misura mancante */
   let coverage: CoverageView | null = null;
   try {
-    const history = await getCoverageHistory(50, now);
+    const history = await cachedRead(
+      (at: number) => getCoverageHistory(50, new Date(at)),
+      ["coverage-history", String(bucket)],
+      ["coverage"],
+    )(bucket * DATA_REVALIDATE_SECONDS * 1000);
     coverage = buildCoverageView({
       latest: history.latest,
       latestRunId: history.latestRunId,
