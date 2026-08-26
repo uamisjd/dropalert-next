@@ -9,6 +9,7 @@ import { downsample } from "@/lib/repo/dashboard";
 import {
   PLAIN_STRENGTH_LABELS,
   contextSnippet,
+  matchIdentityKey,
   subjectOf,
   groupByMatch,
   movementHours,
@@ -187,7 +188,7 @@ check("frase: allontanamento", f4.includes("si sta allontanando da Beta"));
 const groups = groupByMatch([
   sig({ id: 1, matchId: 7, level: "reale", confidenceScore: 50 }),
   sig({ id: 2, matchId: 7, level: "forte", confidenceScore: 60 }),
-  sig({ id: 3, matchId: 8, level: "debole", confidenceScore: 90 }),
+  sig({ id: 3, matchId: 8, homeTeam: "Gamma", awayTeam: "Delta", level: "debole", confidenceScore: 90 }),
   sig({ id: 4, matchId: 7, level: "debole", confidenceScore: 10 }),
 ]);
 eq("due partite, due card", groups.length, 2);
@@ -195,6 +196,33 @@ eq("in vista il segnale più forte", groups[0].primary.id, 2);
 eq("gli altri restano disponibili", groups[0].others.length, 2);
 eq("ordine di arrivo conservato", groups[1].matchId, 8);
 eq("partita con un solo segnale non espande", groups[1].others.length, 0);
+/* --- A2: una card per coppia di squadre, anche con matchId diversi --- */
+const kick = "2026-08-25T19:00:00.000Z";
+eq(
+  "stessa sfida, stessa chiave malgrado FC e ordine",
+  matchIdentityKey({ homeTeam: "Bromley U21", awayTeam: "West Brom U21", kickoffAt: kick }),
+  matchIdentityKey({ homeTeam: "West Brom U21 FC", awayTeam: "Bromley U21", kickoffAt: kick }),
+);
+check(
+  "partite diverse restano distinte",
+  matchIdentityKey({ homeTeam: "Bromley U21", awayTeam: "West Brom U21", kickoffAt: kick }) !==
+    matchIdentityKey({ homeTeam: "Bromley U21", awayTeam: "Fulham U21", kickoffAt: kick }),
+);
+check(
+  "stessa coppia in giorni diversi resta distinta",
+  matchIdentityKey({ homeTeam: "Bromley U21", awayTeam: "West Brom U21", kickoffAt: kick }) !==
+    matchIdentityKey({ homeTeam: "Bromley U21", awayTeam: "West Brom U21", kickoffAt: "2026-09-01T19:00:00.000Z" }),
+);
+const dupe = groupByMatch([
+  sig({ id: 10, matchId: 101, homeTeam: "Bromley U21", awayTeam: "West Brom U21", kickoffAt: kick, level: "reale", confidenceScore: 40 }),
+  sig({ id: 11, matchId: 202, homeTeam: "Bromley U21", awayTeam: "West Brom U21", kickoffAt: kick, level: "forte", confidenceScore: 70 }),
+  sig({ id: 12, matchId: 303, homeTeam: "Alfa", awayTeam: "Beta", kickoffAt: kick, level: "forte", confidenceScore: 90 }),
+]);
+eq("il duplicato Bromley non si riproduce", dupe.length, 2);
+eq("in vista il segnale più forte del duplicato", dupe[0].primary.id, 11);
+eq("il link punta al match mostrato", dupe[0].matchId, 202);
+eq("l'altro segnale resta espandibile", dupe[0].others.length, 1);
+
 eq("accordo singolare", othersLabel(1), "altro 1 segnale su questa partita");
 eq("accordo plurale", othersLabel(3), "altri 3 segnali su questa partita");
 

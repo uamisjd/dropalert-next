@@ -224,23 +224,67 @@ function strongerFirst(a: DashboardSignal, b: DashboardSignal): number {
   return (b.confidenceScore ?? -1) - (a.confidenceScore ?? -1);
 }
 
+/** Normalizza un nome squadra per il confronto: niente accenti né rumore. */
+function normTeam(name: string): string {
+  return name
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\b(fc|cf|afc|sc|ac|as|ss|us|cd|ca|club|calcio|football)\b/g, "")
+    .replace(/[^a-z0-9]+/g, "")
+    .trim();
+}
+
+const romeDayFmt = new Intl.DateTimeFormat("en-CA", {
+  timeZone: "Europe/Rome",
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+});
+
+/**
+ * Chiave di identità di una partita, ai fini della lista.
+ *
+ * NON è il solo `matchId`: la stessa sfida può arrivare due volte
+ * dall'archivio con due id distinti (chiavi di fonte diverse per lo stesso
+ * incontro). Con la sola chiave numerica la home mostrava due card per
+ * «Bromley U21 – West Brom U21». L'identità qui è la coppia di squadre,
+ * ordinata e normalizzata, più il giorno civile italiano del calcio d'inizio:
+ * due righe che dicono la stessa partita finiscono nella stessa card.
+ */
+export function matchIdentityKey(signal: {
+  homeTeam: string;
+  awayTeam: string;
+  kickoffAt: string;
+}): string {
+  const pair = [normTeam(signal.homeTeam), normTeam(signal.awayTeam)]
+    .sort()
+    .join("|");
+  const d = new Date(signal.kickoffAt);
+  const day = Number.isFinite(d.getTime()) ? romeDayFmt.format(d) : "senza-data";
+  return `${pair}@${day}`;
+}
+
 /**
  * Raggruppa i segnali per partita conservando l'ordine di arrivo dei gruppi:
  * chi ordina la lista lo ha già fatto a monte, qui non si riordina nulla.
+ * Il `matchId` esposto è quello del segnale più forte, così il link porta
+ * al dettaglio effettivamente mostrato in card.
  */
 export function groupByMatch(signals: DashboardSignal[]): MatchGroup[] {
-  const byMatch = new Map<number, DashboardSignal[]>();
-  const order: number[] = [];
+  const byKey = new Map<string, DashboardSignal[]>();
+  const order: string[] = [];
   for (const s of signals) {
-    if (!byMatch.has(s.matchId)) {
-      byMatch.set(s.matchId, []);
-      order.push(s.matchId);
+    const k = matchIdentityKey(s);
+    if (!byKey.has(k)) {
+      byKey.set(k, []);
+      order.push(k);
     }
-    byMatch.get(s.matchId)!.push(s);
+    byKey.get(k)!.push(s);
   }
-  return order.map((matchId) => {
-    const list = [...byMatch.get(matchId)!].sort(strongerFirst);
-    return { matchId, primary: list[0], others: list.slice(1) };
+  return order.map((k) => {
+    const list = [...byKey.get(k)!].sort(strongerFirst);
+    return { matchId: list[0].matchId, primary: list[0], others: list.slice(1) };
   });
 }
 
