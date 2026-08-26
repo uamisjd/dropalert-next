@@ -265,14 +265,21 @@ export function groupByDay<T extends TimelineItem & { level?: string }>(
  * Striscia "Ultimi movimenti": segnali nati o cambiati nelle ultime 3 ore.
  * Si basa su `updatedAt`, che è l'unico istante realmente a registro; senza
  * quel dato l'elemento non entra nella striscia invece di essere indovinato.
+ *
+ * Una partita compare UNA volta sola, con il suo aggiornamento più recente:
+ * due segnali sullo stesso incontro (o due righe della stessa sfida arrivate
+ * con id diversi) sono lo stesso fatto detto due volte. La deduplica usa la
+ * stessa identità della lista principale — `dedupeKey`, che chi chiama
+ * fornisce — così striscia e card non possono divergere.
  */
 export function recentMovements<T extends TimelineItem>(
   items: T[],
   now: Date,
   hours = RECENT_WINDOW_HOURS,
+  dedupeKey?: (item: T) => string,
 ): T[] {
   const cutoff = now.getTime() - hours * 3600000;
-  return items
+  const ordinati = items
     .filter((i) => {
       if (!i.updatedAt) return false;
       const t = new Date(i.updatedAt).getTime();
@@ -282,4 +289,17 @@ export function recentMovements<T extends TimelineItem>(
       (a, b) =>
         new Date(b.updatedAt!).getTime() - new Date(a.updatedAt!).getTime(),
     );
+
+  if (dedupeKey === undefined) return ordinati;
+
+  /* l'ordine è già dal più recente: la prima occorrenza è quella da tenere */
+  const visti = new Set<string>();
+  const out: T[] = [];
+  for (const i of ordinati) {
+    const k = dedupeKey(i);
+    if (visti.has(k)) continue;
+    visti.add(k);
+    out.push(i);
+  }
+  return out;
 }

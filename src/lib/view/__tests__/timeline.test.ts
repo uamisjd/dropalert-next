@@ -14,6 +14,7 @@ import {
   matchesTimeChip,
   chipCounts,
   parseTimeChip,
+  RECENT_WINDOW_HOURS,
   recentMovements,
   romeDayDiff,
 } from "../timeline";
@@ -131,6 +132,33 @@ const recent = recentMovements(
 );
 eq("solo le ultime 3 ore", recent.length, 2);
 eq("più recente per primo", recent[0].updatedAt, iso(-0.5));
+
+/* --- regressione: nella striscia una partita compare una volta sola --- */
+const conDoppioni = [
+  { kickoffAt: iso(3), confidenceScore: 10, updatedAt: iso(-0.2), home: "Kyoto", away: "Maruyasu Okazaki" },
+  { kickoffAt: iso(3), confidenceScore: 90, updatedAt: iso(-1), home: "Kyoto", away: "Maruyasu Okazaki" },
+  { kickoffAt: iso(4), confidenceScore: 50, updatedAt: iso(-0.7), home: "Nacional", away: "Albion" },
+  { kickoffAt: iso(4), confidenceScore: 60, updatedAt: iso(-2), home: "Nacional", away: "Albion" },
+  { kickoffAt: iso(5), confidenceScore: 40, updatedAt: iso(-0.9), home: "Alfa", away: "Beta" },
+];
+const chiave = (i: { home: string; away: string }) =>
+  [i.home.toLowerCase(), i.away.toLowerCase()].sort().join("|");
+const deduplicata = recentMovements(conDoppioni, now, RECENT_WINDOW_HOURS, chiave);
+eq("tre partite distinte, non cinque righe", deduplicata.length, 3);
+eq("di ogni partita resta l'aggiornamento più recente", deduplicata[0].updatedAt, iso(-0.2));
+check(
+  "nessuna coppia ripetuta nella striscia",
+  new Set(deduplicata.map(chiave)).size === deduplicata.length,
+);
+check(
+  "Kyoto compare una volta sola",
+  deduplicata.filter((d) => d.home === "Kyoto").length === 1,
+);
+eq(
+  "senza chiave il comportamento resta quello di prima",
+  recentMovements(conDoppioni, now).length,
+  5,
+);
 
 if (failures.length > 0) {
   console.error(`✗ ${failures.length} test falliti su ${passed + failures.length}`);

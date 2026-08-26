@@ -70,17 +70,39 @@ export function ScoreBreakdown({ signal }: { signal: DetailSignal }) {
         Come è composto l&apos;indice
       </h4>
 
-      <div className="mb-3 flex flex-wrap items-baseline gap-x-3 gap-y-1 rounded border border-slate-200 bg-slate-50 px-3 py-2">
-        <span className="text-lg font-semibold tabular-nums text-slate-900">
-          {signal.confidenceScore ?? "n/d"}
-          <span className="text-sm font-normal text-slate-500">/100</span>
-        </span>
-        <span className="text-xs text-slate-600">
-          banda {signal.confidenceLabel.toLowerCase()}
-        </span>
-        <span className="text-xs text-slate-600">
-          copertura dati {fmtRate(signal.dataCoverage)}
-        </span>
+      {/* Numero principale: punti ottenuti sui punti REALMENTE ottenibili.
+          Il grezzo su 100 resta, ma come nota: contare come zero i punti che
+          nessuna fonte permette di misurare faceva sembrare debole un
+          movimento che era semplicemente poco osservabile. */}
+      <div className="mb-3 rounded border border-slate-200 bg-slate-50 px-3 py-2">
+        <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+          <span
+            className="text-2xl font-semibold tabular-nums text-slate-900"
+            title="Punti ottenuti sui punti effettivamente misurabili: i componenti che i dati disponibili non permettono di valutare non entrano nel denominatore, invece di pesare come uno zero."
+          >
+            {reachability.earned}
+            <span className="text-base font-normal text-slate-500">
+              /{reachability.measurableMax}
+            </span>
+          </span>
+          <span
+            className="text-xs font-medium text-slate-700"
+            title="La base è ciò che le fonti hanno reso osservabile per questa partita."
+          >
+            su base misurabile
+          </span>
+          <span className="text-xs text-slate-600">
+            banda {signal.confidenceLabel.toLowerCase()}
+          </span>
+        </div>
+        <p className="mt-1 text-[11px] leading-relaxed text-slate-500">
+          Indice grezzo{" "}
+          <span className="tabular-nums">
+            {signal.confidenceScore ?? "n/d"}/100
+          </span>{" "}
+          · {reachability.gapMax} punti su {reachability.totalMax} non
+          osservabili (GAP) · copertura dati {fmtRate(signal.dataCoverage)}.
+        </p>
       </div>
 
       {components.length === 0 ? (

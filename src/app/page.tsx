@@ -106,7 +106,12 @@ export default async function Home({
     visibleMatches.map((g) => ({ ...g.primary, group: g })),
     now,
   );
-  const recent = recentMovements(data.signals, now).slice(0, 8);
+  const recent = recentMovements(
+    data.signals,
+    now,
+    undefined,
+    matchIdentityKey,
+  ).slice(0, 8);
 
   /* budget della linea sharp: sola lettura dei contatori, non spende nulla */
   const sharpBudget = await getSharpBudget(now).catch(() => undefined);
