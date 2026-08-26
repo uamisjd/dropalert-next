@@ -8,6 +8,7 @@
 import type { DashboardStatus } from "@/lib/repo/dashboard";
 import { ND, fmtAgo, fmtDateTime, gapReasonLabel, sourceStatusLabel } from "./format";
 import { sourcesLabel } from "@/lib/view/plain";
+import type { SharpBudgetView } from "@/lib/repo/sharp";
 
 const BANNER_STYLES: Record<DashboardStatus["overall"], string> = {
   ok: "border-emerald-300 bg-emerald-50 text-emerald-900",
@@ -48,9 +49,12 @@ function Stat({
 export function StatusPanel({
   status,
   now,
+  sharpBudget,
 }: {
   status: DashboardStatus;
   now: Date;
+  /** budget della fonte sharp, quando la pagina lo conosce */
+  sharpBudget?: SharpBudgetView;
 }) {
   return (
     <section
@@ -171,6 +175,27 @@ export function StatusPanel({
           </ul>
         )}
       </div>
+
+      {/* budget della linea sharp: dichiarato accanto agli altri limiti */}
+      {sharpBudget !== undefined ? (
+        <div className="mb-3">
+          <h3 className="mb-1.5 text-xs font-semibold text-slate-700">
+            Budget linea sharp (The Odds API)
+          </h3>
+          <p className="rounded border border-slate-200 bg-white px-2.5 py-1.5 text-xs text-slate-700">
+            <span className="font-medium tabular-nums">
+              {sharpBudget.usedThisMonth}/{sharpBudget.monthlyCap}
+            </span>{" "}
+            crediti questo mese ·{" "}
+            <span className="font-medium tabular-nums">
+              {sharpBudget.usedToday}/{sharpBudget.allowanceToday}
+            </span>{" "}
+            oggi (tetto {sharpBudget.dailyHardCap} al giorno). La quota
+            giornaliera si ricalcola sui giorni che restano nel mese: i crediti
+            devono bastare fino all&apos;ultimo giorno.
+          </p>
+        </div>
+      ) : null}
 
       {/* buchi dichiarati */}
       <div className="mb-3">

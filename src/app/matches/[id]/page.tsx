@@ -18,6 +18,9 @@ import { getNewsForMatch } from "@/lib/repo/news";
 import { getContextForMatch } from "@/lib/repo/context";
 import { getDeepAnalysis } from "@/lib/repo/analysis";
 import { DATA_REVALIDATE_SECONDS, cachedRead } from "@/lib/repo/cached";
+import { getSharpLine } from "@/lib/repo/sharp";
+import { sportKeyFor } from "@/lib/providers/optional/sport-keys";
+import { SharpLineBlock } from "@/components/SharpLineBlock";
 import { DeepAnalysis360 } from "@/components/DeepAnalysis360";
 import { fetchTeamNews } from "@/lib/context/rss";
 import { SignalTimeline } from "@/components/SignalTimeline";
@@ -276,6 +279,26 @@ export default async function MatchDetailPage({
         ).catch(() => null)
       : null;
 
+  /* Linea sharp (The Odds API): solo segnali attivi, solo competizioni
+     coperte, una lettura al giorno per partita e budget con hard-stop.
+     Se una qualunque di queste condizioni non regge, non parte richiesta. */
+  const sharp =
+    lead !== null
+      ? await getSharpLine(
+          {
+            matchId,
+            sportKey: sportKeyFor(detail.match.league),
+            homeTeam: detail.match.homeTeam,
+            awayTeam: detail.match.awayTeam,
+            selection: lead.selection,
+            consensusOpening: leadSeries?.opening ?? null,
+            consensusCurrent: leadSeries?.current ?? null,
+            signalActive: lead.status === "active",
+          },
+          now,
+        ).catch(() => null)
+      : null;
+
   const { match } = detail;
   const hasResult = match.homeGoals !== null && match.awayGoals !== null;
 
@@ -361,6 +384,13 @@ export default async function MatchDetailPage({
           profile={profile}
         />
       </section>
+
+      {/* ---------------- linea sharp ---------------- */}
+      {sharp !== null ? (
+        <section aria-labelledby="linea-sharp-wrap" className="mb-5">
+          <SharpLineBlock view={sharp} />
+        </section>
+      ) : null}
 
       {/* ---------------- analisi 360 completa ---------------- */}
       {analysis !== null ? (

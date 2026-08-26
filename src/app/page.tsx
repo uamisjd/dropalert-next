@@ -14,6 +14,7 @@ import {
   type SignalLevel,
 } from "@/lib/repo/dashboard";
 import { getCoverageHistory } from "@/lib/repo/coverage-history";
+import { getSharpBudget } from "@/lib/repo/sharp";
 import { DATA_REVALIDATE_SECONDS, cachedRead } from "@/lib/repo/cached";
 import { buildCoverageView, type CoverageView } from "@/lib/cov/view";
 import { ClvSection } from "@/components/ClvSection";
@@ -107,6 +108,9 @@ export default async function Home({
   );
   const recent = recentMovements(data.signals, now).slice(0, 8);
 
+  /* budget della linea sharp: sola lettura dei contatori, non spende nulla */
+  const sharpBudget = await getSharpBudget(now).catch(() => undefined);
+
   /* la copertura è un'informazione accessoria alla dashboard: se non è
      leggibile si omette il riquadro, senza far cadere la pagina e senza
      mostrare numeri al posto della misura mancante */
@@ -177,7 +181,7 @@ export default async function Home({
       </div>
 
       <div className="mb-5">
-        <StatusPanel status={data.status} now={now} />
+        <StatusPanel status={data.status} now={now} sharpBudget={sharpBudget} />
       </div>
 
       {coverage !== null ? (
