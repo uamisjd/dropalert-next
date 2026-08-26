@@ -21,7 +21,9 @@ import {
   ANALYSIS_BUDGET_MESSAGE,
   ANALYSIS_CACHE_HOURS,
   assembleAnalysis,
+  isAnalysisStale,
   parseAnalysisProse,
+  withLiveValues,
   type AnalysisFacts,
   type DeepAnalysis,
 } from "@/lib/context/analysis";
@@ -33,7 +35,7 @@ import {
 } from "@/lib/context/pure";
 
 /** Bump = tutte le analisi in cache si rigenerano al primo accesso. */
-export const ANALYSIS_FORMAT_VERSION = 2;
+export const ANALYSIS_FORMAT_VERSION = 3;
 
 export interface AnalysisView {
   analysis: DeepAnalysis | null;
@@ -122,13 +124,34 @@ export async function getDeepAnalysis(
   const used = await readUsedToday(now);
   const usage = { used, limit: CONTEXT_DAILY_LIMIT };
 
+  const live = {
+    apertura: facts.movimento.apertura,
+    corrente: facts.movimento.corrente,
+  };
+
   const cached = await readCache(matchId, now).catch(() => null);
   if (cached !== null) {
-    return { analysis: cached, unavailableReason: null, usage };
+    /* deriva temporale: se i numeri veri si sono spostati oltre soglia (o è
+       passata più di un'ora) il racconto non descrive più questa partita e
+       si rigenera; se lo scarto è piccolo si reiniettano i valori vivi, così
+       testo e dati in pagina non si contraddicono mai */
+    if (!isAnalysisStale(cached.stamp, live, now)) {
+      return {
+        analysis: withLiveValues(cached, live),
+        unavailableReason: null,
+        usage,
+      };
+    }
   }
 
   if (isDailyBudgetExhausted(used)) {
-    return { analysis: null, unavailableReason: ANALYSIS_BUDGET_MESSAGE, usage };
+    /* budget finito: meglio l'analisi vecchia con i valori vivi reiniettati
+       che nessuna analisi — purché si dica che è quella di prima */
+    return {
+      analysis: cached === null ? null : withLiveValues(cached, live),
+      unavailableReason: ANALYSIS_BUDGET_MESSAGE,
+      usage,
+    };
   }
 
   const outcome = await generateDeepAnalysis(facts).catch(() => ({
@@ -155,7 +178,7 @@ export async function getDeepAnalysis(
   const analysis = assembleAnalysis(facts, outcome.prose, now);
   await writeCache(matchId, analysis, now).catch(() => undefined);
   return {
-    analysis,
+    analysis: withLiveValues(analysis, live),
     unavailableReason: null,
     usage: { used: used + 1, limit: CONTEXT_DAILY_LIMIT },
   };

@@ -15,8 +15,13 @@ import {
   containsPick,
   fit,
   parseAnalysisProse,
+  isAnalysisStale,
+  reinjectLiveValues,
   sanitizeFase,
   schemaWithinWidth,
+  withLiveValues,
+  STALE_SHIFT_PP,
+  STALE_AGE_HOURS,
   type AnalysisFacts,
 } from "../analysis";
 
@@ -173,6 +178,51 @@ check("nessun pick nel prodotto finito", !containsPick(
 ));
 eq("cache dichiarata a 24h", ANALYSIS_CACHE_HOURS, 24);
 
+/* --- A3: deriva temporale --- */
+eq("soglia di scostamento dichiarata", STALE_SHIFT_PP, 2);
+eq("soglia di età dichiarata", STALE_AGE_HOURS, 1);
+const stamp = { apertura: 8, corrente: 6.4, shiftPp: null, stampedAt: now.toISOString() };
+eq("senza fotografia si rigenera", isAnalysisStale(undefined, { corrente: 6.4 }, now), true);
+eq("numeri fermi e testo fresco: si tiene", isAnalysisStale(stamp, { corrente: 6.4 }, now), false);
+eq(
+  "scostamento piccolo: si tiene",
+  isAnalysisStale(stamp, { corrente: 6.3 }, now),
+  false,
+);
+eq(
+  "scostamento oltre 2pp: si rigenera",
+  isAnalysisStale(stamp, { corrente: 4.0 }, now),
+  true,
+);
+eq(
+  "oltre un'ora: si rigenera comunque",
+  isAnalysisStale(stamp, { corrente: 6.4 }, new Date(now.getTime() + 70 * 60000)),
+  true,
+);
+
+eq(
+  "valore vivo reiniettato al posto di quello vecchio",
+  reinjectLiveValues("La quota è scesa a 6.4 nelle ultime ore.", stamp, { apertura: 8, corrente: 6.3 }),
+  "La quota è scesa a 6,30 nelle ultime ore.",
+);
+eq(
+  "riconosce anche la grafia italiana",
+  reinjectLiveValues("da 8,00 a 6,40", stamp, { apertura: 7.5, corrente: 6.3 }),
+  "da 7,50 a 6,30",
+);
+eq(
+  "numeri estranei non toccati",
+  reinjectLiveValues("Le ultime 5 partite e i 3 punti.", stamp, { apertura: 8, corrente: 6.3 }),
+  "Le ultime 5 partite e i 3 punti.",
+);
+const conStamp = { ...assembleAnalysis(facts, prose, now) };
+check("la fotografia viene registrata", conStamp.stamp?.corrente === 2.17);
+const vivo = withLiveValues(
+  { ...conStamp, matrice: "Il crollo da 2.31 a 2.17 pesa." },
+  { apertura: 2.31, corrente: 2.05 },
+);
+check("testo e dati live non si contraddicono", vivo.matrice.includes("2,05") && !vivo.matrice.includes("2.17"));
+
 /* --- prompt --- */
 const prompt = buildAnalysisPrompt(facts);
 check("prompt vieta i preamboli", prompt.includes("Nessun preambolo"));
@@ -182,6 +232,7 @@ check("prompt passa i fatti con fonte", prompt.includes("[FONTE: https://a.it/x]
 check("prompt esclude i campi «non noto»", !prompt.includes("assenze_note: non noto"));
 check("prompt non chiede schemi al modello", !/schema\s*1|ascii/i.test(prompt));
 check("prompt passa il profilo del movimento", prompt.includes("2.31") && prompt.includes("4 bookmaker su 6"));
+check("prompt vieta i numeri esatti nel testo", prompt.includes("non citare quote, percentuali"));
 
 if (failures.length > 0) {
   console.error(`✗ ${failures.length} test falliti su ${passed + failures.length}`);

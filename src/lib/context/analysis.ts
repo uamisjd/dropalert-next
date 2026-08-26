@@ -303,12 +303,121 @@ export interface AnalysisProse {
   scenario: string;
 }
 
+/**
+ * Fotografia del movimento al momento della generazione.
+ *
+ * Serve a due cose: capire se il testo è invecchiato rispetto ai numeri veri
+ * e, quando è invecchiato di poco, rimettere al posto giusto i valori vivi
+ * invece di lasciare in pagina una quota di ieri.
+ */
+export interface MovementStamp {
+  apertura: number | null;
+  corrente: number | null;
+  shiftPp: number | null;
+  stampedAt: string;
+}
+
 export interface DeepAnalysis extends AnalysisProse {
   headline: string;
   schemaAlbero: string;
   schemaVettore: string;
   closing: string;
   generatedAt: string;
+  /** valori del movimento al momento in cui il testo è stato scritto */
+  stamp?: MovementStamp;
+}
+
+/* ------------------------------------------------------------------ */
+/* Deriva temporale                                                    */
+/* ------------------------------------------------------------------ */
+
+/** Oltre questo scostamento di probabilità implicita il testo va rifatto. */
+export const STALE_SHIFT_PP = 2;
+/** Oltre questa età il testo va rifatto comunque. */
+export const STALE_AGE_HOURS = 1;
+
+/** Probabilità implicita in punti percentuali, o null se la quota manca. */
+function impliedPp(price: number | null): number | null {
+  if (price === null || !Number.isFinite(price) || price <= 0) return null;
+  return (1 / price) * 100;
+}
+
+/**
+ * true se l'analisi in cache non regge più il confronto con i dati vivi:
+ * la quota si è mossa oltre due punti percentuali oppure è passata più di
+ * un'ora. In quel caso si rigenera invece di correggere a mano un racconto
+ * che parlava di un altro prezzo.
+ */
+export function isAnalysisStale(
+  stamp: MovementStamp | undefined,
+  live: { corrente: number | null },
+  now: Date,
+): boolean {
+  if (stamp === undefined) return true;
+  const t = new Date(stamp.stampedAt).getTime();
+  if (!Number.isFinite(t)) return true;
+  if ((now.getTime() - t) / 3_600_000 > STALE_AGE_HOURS) return true;
+
+  const before = impliedPp(stamp.corrente);
+  const after = impliedPp(live.corrente);
+  if (before === null || after === null) return before !== after;
+  return Math.abs(after - before) > STALE_SHIFT_PP;
+}
+
+function fmtOddIt(v: number): string {
+  return v.toFixed(2).replace(".", ",");
+}
+
+/**
+ * Rimette i valori vivi dentro il testo già scritto.
+ *
+ * Il modello, nonostante il divieto, può citare una quota: se quel numero è
+ * esattamente quello fotografato alla generazione e nel frattempo è cambiato
+ * di poco, lo si sostituisce con il valore corrente. Non è una riscrittura:
+ * è impedire che testo e dati in pagina si contraddicano.
+ */
+export function reinjectLiveValues(
+  text: string,
+  stamp: MovementStamp | undefined,
+  live: { apertura: number | null; corrente: number | null },
+): string {
+  if (stamp === undefined) return text;
+  let out = text;
+  const pairs: Array<[number | null, number | null]> = [
+    [stamp.corrente, live.corrente],
+    [stamp.apertura, live.apertura],
+  ];
+  for (const [old, fresh] of pairs) {
+    if (old === null || fresh === null || Math.abs(old - fresh) < 0.005) continue;
+    /* tutte le grafie con cui un numero può comparire: 6.4 / 6,4 / 6.40 */
+    const varianti = new Set([
+      old.toFixed(2),
+      old.toFixed(2).replace(".", ","),
+      String(Number(old.toFixed(2))),
+      String(Number(old.toFixed(2))).replace(".", ","),
+      old.toFixed(1),
+      old.toFixed(1).replace(".", ","),
+    ]);
+    for (const v of varianti) {
+      const esc = v.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      out = out.replace(new RegExp(`(?<![\\d,.])${esc}(?![\\d,.])`, "g"), fmtOddIt(fresh));
+    }
+  }
+  return out;
+}
+
+/** Applica la reiniezione a tutte le parti discorsive dell'analisi. */
+export function withLiveValues(
+  a: DeepAnalysis,
+  live: { apertura: number | null; corrente: number | null },
+): DeepAnalysis {
+  const fix = (t: string) => reinjectLiveValues(t, a.stamp, live);
+  return {
+    ...a,
+    matrice: fix(a.matrice),
+    scenario: fix(a.scenario),
+    punti: a.punti.map((p) => ({ ...p, testo: fix(p.testo), titolo: fix(p.titolo) })),
+  };
 }
 
 /** Prompt: solo prosa, nessuno schema, nessun saluto, nessun pick. */
@@ -354,6 +463,9 @@ export function buildAnalysisPrompt(f: AnalysisFacts): string {
     '- "scenario": 3-5 frasi di sintesi, formulate esplicitamente COME IPOTESI di lettura del mercato.',
     "",
     "DIVIETI ASSOLUTI, la risposta viene scartata se li violi:",
+    "- non citare quote, percentuali, punti percentuali, orari o conteggi esatti: il testo resta valido",
+    "  mentre i numeri cambiano, quindi parla di direzione e intensità («la quota è scesa nettamente»,",
+    "  «il movimento è durato alcune ore»), mai di valori precisi;",
     "- non scrivere mai esito consigliato, mercato gol, risultato esatto, over, under, pronostico, value bet;",
     "- non consigliare né suggerire alcuna giocata, in nessuna forma;",
     "- non affermare chi vincerà: descrivi come si muove il mercato, non come finirà la partita;",
@@ -412,5 +524,11 @@ export function assembleAnalysis(
     schemaVettore: buildVectorSchema(facts),
     closing: ANALYSIS_CLOSING,
     generatedAt: now.toISOString(),
+    stamp: {
+      apertura: facts.movimento.apertura,
+      corrente: facts.movimento.corrente,
+      shiftPp: null,
+      stampedAt: now.toISOString(),
+    },
   };
 }
