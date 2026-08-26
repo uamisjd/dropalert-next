@@ -14,8 +14,11 @@ import Link from "next/link";
 import { getYesterdayView, type YesterdayItem } from "@/lib/repo/yesterday";
 import { fmtDay, fmtPrice, fmtTime } from "@/components/format";
 
-export const dynamic = "force-dynamic";
-export const revalidate = 0;
+/* ISR: la lettura di ieri si rigenera al massimo ogni 5 minuti.
+   Il collector scrive su GitHub Actions e non dipende dal render, quindi una
+   pagina servita dalla cache di bordo non blocca né ritarda la raccolta. La
+   freschezza del dato resta dichiarata in pagina dal pannello «Stato dati». */
+export const revalidate = 300;
 
 export const metadata = {
   title: "Ieri — segnali ed esiti — DropAlert",

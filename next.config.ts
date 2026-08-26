@@ -10,6 +10,32 @@ const nextConfig: NextConfig = {
    * e i file di questo progetto ci finivano dentro andando persi. Il nome
    * della cartella è cambiato; l'indirizzo visibile no.
    */
+  /**
+   * Cache di bordo per le pagine di contenuto.
+   *
+   * La home legge i filtri dalla query string, quindi resta renderizzata a
+   * richiesta: senza un'intestazione esplicita finirebbe con `no-store` e
+   * ogni visita ripagherebbe l'interrogazione al database. Con `s-maxage`
+   * la CDN serve la stessa risposta per cinque minuti e nel frattempo la
+   * rinfresca in background (`stale-while-revalidate`), mentre il browser
+   * non conserva nulla (`max-age=0`): la freschezza resta quella dichiarata
+   * dal pannello «Stato dati», non quella di una copia locale invisibile.
+   *
+   * Le scritture non passano di qui: il collector gira su GitHub Actions.
+   */
+  async headers() {
+    const edgeCache = [
+      {
+        key: "Cache-Control",
+        value: "public, max-age=0, s-maxage=300, stale-while-revalidate=600",
+      },
+    ];
+    return [
+      { source: "/", headers: edgeCache },
+      { source: "/matches/:id", headers: edgeCache },
+    ];
+  },
+
   async rewrites() {
     return [
       { source: "/api/coverage", destination: "/api/cov" },

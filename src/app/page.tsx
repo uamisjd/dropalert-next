@@ -38,8 +38,11 @@ import {
   recentMovements,
 } from "@/lib/view/timeline";
 
-export const dynamic = "force-dynamic";
-export const revalidate = 0;
+/* ISR: la dashboard si rigenera al massimo ogni 5 minuti.
+   Il collector scrive su GitHub Actions e non dipende dal render, quindi una
+   pagina servita dalla cache di bordo non blocca né ritarda la raccolta. La
+   freschezza del dato resta dichiarata in pagina dal pannello «Stato dati». */
+export const revalidate = 300;
 
 const VALID_LEVELS: SignalLevel[] = ["forte", "reale", "debole", "nessuno"];
 
