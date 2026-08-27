@@ -32,8 +32,10 @@ interface Envelope {
   fixtures: CalendarFixture[];
 }
 
+/* v2: la chiave cambia perché è cambiata la finestra interrogata, e le
+   letture vecchie (fatte con l'estremo sbagliato) non vanno riusate */
 function cacheKey(from: string, to: string): string {
-  return `calendar:football-data:${from}:${to}`;
+  return `calendar:football-data:v2:${from}:${to}`;
 }
 
 async function readCache(
@@ -84,8 +86,11 @@ export async function getCalendar(
   daysAhead: number,
   now: Date = new Date(),
 ): Promise<CalendarView> {
+  /* `dateTo` di football-data è ESCLUSIVO: chiedendo 27→27 la risposta è
+     vuota, mentre 27→28 restituisce le partite del 27. Verificato sul campo
+     il 27/08/2026. Quindi l'estremo superiore va spostato di un giorno. */
   const from = romeDayIso(now, 0);
-  const to = romeDayIso(now, Math.max(0, daysAhead));
+  const to = romeDayIso(now, Math.max(0, daysAhead) + 1);
   const key = cacheKey(from, to);
 
   const cached = await readCache(key, now).catch(() => null);
