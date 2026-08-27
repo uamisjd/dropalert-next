@@ -18,12 +18,24 @@
 /**
  * Cron del workflow `.github/workflows/collect.yml`.
  *
- * Non è un «ogni 45» scritto col passo sul campo minuti: quel campo si
- * azzera a ogni ora e produrrebbe 45 e 15 minuti alternati. Due voci
- * esplicite a distanza reale di 45 e 75 minuti sono il compromesso più
- * onesto possibile — per questo l'intervallo si dichiara «circa».
+ * Quattro occasioni all'ora, in UTC. Non sono quattro raccolte: il gate
+ * interno `COLLECT_INTERVAL_MINUTES` (45) resta l'autorità sulla spaziatura
+ * e un giro troppo ravvicinato esce senza toccare la fonte. Le occasioni in
+ * più servono contro i SALTI dello scheduler di GitHub, che è best-effort:
+ * il 27/08/2026 la raccolta è rimasta ferma quasi nove ore con il workflow
+ * regolarmente attivo.
  */
 export const ACTIONS_CRON = "7,52 * * * *";
+
+/**
+ * Dove gira la raccolta, e perché lì.
+ *
+ * Dichiarato in pagina perché «da qualche parte nel cloud» non è una
+ * risposta: chi legge un dato fermo deve sapere quale macchina avrebbe
+ * dovuto aggiornarlo.
+ */
+export const RUNNER_NOTE =
+  "La raccolta gira su GitHub Actions (runner esterno, indipendente da chi apre il sito) e scrive direttamente sul database. Una seconda gamba su cron Vercel, una volta al giorno, funge da rete di sicurezza quando lo scheduler di Actions salta i turni: non raddoppia il traffico, perché la spaziatura minima resta decisa dal codice.";
 
 /** Intervallo nominale fra due giri del cron, in minuti. */
 export const ACTIONS_INTERVAL_MINUTES = 45;

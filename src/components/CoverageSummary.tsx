@@ -13,6 +13,7 @@ import {
   type CoverageView,
 } from "@/lib/cov/view";
 import { fmtAgo, fmtDateTime } from "./format";
+import { RUNNER_NOTE } from "@/lib/cov/actions";
 
 export function CoverageSummary({ view }: { view: CoverageView }) {
   return (
@@ -99,7 +100,7 @@ export function CoverageSummary({ view }: { view: CoverageView }) {
       {view.actions !== null ? (
         <>
           <p className="mt-1 text-[11px] leading-relaxed text-slate-500">
-            {view.actions.label}{" "}
+            {view.actions.label} {RUNNER_NOTE}{" "}
             {view.actions.lastRun !== null ? (
               <>
                 Ultimo giro schedulato:{" "}

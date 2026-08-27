@@ -15,6 +15,7 @@ import {
 } from "../view";
 import {
   ACTIONS_CRON,
+  RUNNER_NOTE,
   ACTIONS_INTERVAL_MINUTES,
   ACTIONS_STALLED_AFTER_MINUTES,
   buildActionsView,
@@ -440,6 +441,14 @@ function main(): void {
     assert(acts !== null, "la riga Actions deve esserci");
     assert(acts.label.includes("GitHub Actions"), acts.label);
     assert(acts.label.includes(ACTIONS_CRON), acts.label);
+    /* il valore dichiarato in pagina deve coincidere con il cron REALE del
+       workflow: una pagina che promette più giri di quelli programmati è
+       peggio di una pagina che non li promette */
+    assertEqual(ACTIONS_CRON, "7,52 * * * *");
+    assert(
+      RUNNER_NOTE.includes("GitHub Actions") && RUNNER_NOTE.includes("Vercel"),
+      "il pannello dichiara dove gira la raccolta e la rete di sicurezza",
+    );
     assert(
       acts.label.includes(`ogni ${ACTIONS_INTERVAL_MINUTES} minuti`),
       acts.label,
