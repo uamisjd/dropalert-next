@@ -13,6 +13,7 @@ import {
   decide,
   matchKey,
   monthKey,
+  readOddsApiKey,
   sharpVerdict,
 } from "../odds-api-budget";
 import { sportKeyFor } from "../sport-keys";
@@ -167,3 +168,13 @@ if (failures.length > 0) {
   process.exit(1);
 }
 console.log(`✓ ${passed} test superati (budget Odds API)`);
+
+/* --- lettura della chiave: i nomi realmente usati in produzione --- */
+eq("nome canonico", readOddsApiKey({ THE_ODDS_API_KEY: "abc" }), "abc");
+eq("nome alternativo storico", readOddsApiKey({ ODDS_API_KEY: "abc" }), "abc");
+eq("nome usato su Vercel", readOddsApiKey({ theoddsapiKey: "abc" }), "abc");
+eq("nome tutto maiuscolo", readOddsApiKey({ THEODDSAPIKEY: "abc" }), "abc");
+eq("nessuna chiave", readOddsApiKey({}), null);
+eq("chiave vuota non vale", readOddsApiKey({ theoddsapiKey: "   " }), null);
+eq("spazi rimossi", readOddsApiKey({ theoddsapiKey: " abc " }), "abc");
+console.log("✓ chiave Odds API riconosciuta con i nomi in uso");

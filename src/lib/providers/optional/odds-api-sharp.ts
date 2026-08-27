@@ -12,7 +12,12 @@
  * quelle di BetExplorer; questa fonte serve solo a dire se una linea sharp
  * conferma, smentisce o non è osservabile.
  */
-import { SHARP_BOOKS, sharpVerdict, type SharpVerdict } from "./odds-api-budget";
+import {
+  SHARP_BOOKS,
+  readOddsApiKey,
+  sharpVerdict,
+  type SharpVerdict,
+} from "./odds-api-budget";
 
 const ENDPOINT = "https://api.the-odds-api.com/v4/sports";
 const TIMEOUT_MS = 8_000;
@@ -146,7 +151,7 @@ export async function fetchSharpLine(
   },
   options: { fetchImpl?: typeof fetch; apiKey?: string; now?: Date } = {},
 ): Promise<SharpFetch> {
-  const apiKey = options.apiKey ?? process.env.THE_ODDS_API_KEY ?? process.env.ODDS_API_KEY;
+  const apiKey = options.apiKey ?? readOddsApiKey() ?? undefined;
   const now = options.now ?? new Date();
   if (apiKey === undefined || apiKey.trim() === "") {
     return { ok: false, reason: "chiave non configurata", creditsUsed: 0 };

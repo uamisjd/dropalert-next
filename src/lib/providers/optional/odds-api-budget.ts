@@ -150,6 +150,29 @@ export function decide(
 /* Lettura della linea sharp                                           */
 /* ------------------------------------------------------------------ */
 
+/**
+ * Legge la chiave di The Odds API accettando i nomi realmente usati.
+ *
+ * Su Vercel la variabile è stata creata come `theoddsapiKey`; il codice
+ * cercava solo `THE_ODDS_API_KEY` e la fonte restava spenta senza dirlo in
+ * modo evidente. Invece di imporre un rinomino si accettano entrambe le
+ * grafie: la chiave è la stessa, cambia solo l'etichetta.
+ */
+export function readOddsApiKey(
+  env: Record<string, string | undefined> = process.env,
+): string | null {
+  const candidati = [
+    env.THE_ODDS_API_KEY,
+    env.ODDS_API_KEY,
+    env.theoddsapiKey,
+    env.THEODDSAPIKEY,
+  ];
+  for (const c of candidati) {
+    if (typeof c === "string" && c.trim() !== "") return c.trim();
+  }
+  return null;
+}
+
 /** Bookmaker considerati «sharp», in ordine di preferenza. */
 export const SHARP_BOOKS = ["pinnacle", "betfair_ex_eu", "smarkets"] as const;
 

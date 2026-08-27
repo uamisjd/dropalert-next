@@ -22,6 +22,7 @@ import {
   decide,
   matchKey,
   monthKey,
+  readOddsApiKey,
   type BudgetDecision,
 } from "@/lib/providers/optional/odds-api-budget";
 import {
@@ -93,8 +94,7 @@ async function writeSnapshot(
 }
 
 function hasKey(): boolean {
-  const k = process.env.THE_ODDS_API_KEY ?? process.env.ODDS_API_KEY ?? "";
-  return k.trim() !== "";
+  return readOddsApiKey() !== null;
 }
 
 async function budgetView(now: Date): Promise<SharpBudgetView> {
