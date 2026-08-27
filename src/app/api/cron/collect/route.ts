@@ -11,6 +11,16 @@
  * `COLLECT_INTERVAL_MINUTES` decide se c'è davvero qualcosa da fare. Se
  * l'ultimo giro è recente questa rotta esce senza toccare la fonte.
  *
+ * CADENZA, limite dichiarato: il piano Hobby di Vercel accetta SOLO cron
+ * giornalieri — una schedule più fitta fa fallire il deploy con «Hobby
+ * accounts are limited to daily Cron Jobs», ed è esattamente ciò che è
+ * successo provando una schedule ogni due ore il 27/08/2026: il deploy è stato
+ * rifiutato e la produzione ha continuato a servire la versione precedente.
+ * Quindi qui la rete di sicurezza è una sola rete al giorno (05:17 UTC, con
+ * la precisione oraria che Hobby garantisce). Per una copertura più fitta
+ * servirebbe uno scheduler esterno che chiami questa stessa rotta con
+ * `x-jobs-token`: la rotta è già pronta, non cambia una riga.
+ *
  * Autorizzazione: header `x-jobs-token` (come gli altri job) oppure
  * l'header `Authorization: Bearer $CRON_SECRET` che Vercel invia ai suoi
  * cron. Senza nessuno dei due, in produzione non si esegue.
