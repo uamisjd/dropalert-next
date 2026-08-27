@@ -23,6 +23,7 @@ import {
   thresholdReached,
   type WatchEntry,
 } from "@/lib/view/watchlist";
+import { PushControls } from "@/components/PushControls";
 
 interface LiveRow {
   matchId: number;
@@ -211,6 +212,8 @@ export default function WatchlistPage() {
           ))}
         </ul>
       )}
+
+      <PushControls />
 
       <p className="mt-6 text-[11px] leading-relaxed text-slate-500">
         La soglia personale non cambia il punteggio, non filtra la lista
