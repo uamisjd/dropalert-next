@@ -65,14 +65,35 @@ export async function generateMetadata({
   if (detail === null) return {};
 
   const m = detail.match;
-  const titolo = `${m.homeTeam} – ${m.awayTeam}${m.league ? ` — ${m.league}` : ""}`;
-
   const lead = detail.signals[0] ?? null;
   const serie = lead
     ? detail.series.find(
         (x) => x.market === lead.market && x.selection === lead.selection,
       ) ?? null
     : null;
+
+  /* Titolo social: chi gioca e QUANTO si è mossa la quota, perché è
+     l'informazione che distingue un link dall'altro. Senza movimento
+     misurabile resta la sola presentazione: nessun numero inventato. */
+  const partita = `${m.homeTeam} – ${m.awayTeam}`;
+  let sintesiMovimento = "";
+  if (
+    lead !== null &&
+    serie?.opening !== null &&
+    serie?.opening !== undefined &&
+    serie?.current !== null &&
+    serie?.current !== undefined &&
+    serie.opening > 0
+  ) {
+    const variazione = (serie.current / serie.opening - 1) * 100;
+    const segno = variazione < 0 ? "−" : "+";
+    const ore =
+      lead.sustainedMinutes > 0
+        ? ` in ${Math.max(1, Math.round(lead.sustainedMinutes / 60))}h`
+        : "";
+    sintesiMovimento = `: quota ${serie.current.toFixed(2)} ${segno}${Math.abs(variazione).toFixed(0)}%${ore}`;
+  }
+  const titolo = `${partita}${sintesiMovimento} | DropAlert`;
 
   const pezzi: string[] = [];
   if (
@@ -90,6 +111,9 @@ export async function generateMetadata({
     pezzi.push(
       `La quota di ${lead.selectionLabel.toLowerCase()} ${verso} da ${serie.opening.toFixed(2)} a ${serie.current.toFixed(2)}${pp}.`,
     );
+  }
+  if (m.league !== null && m.league.trim() !== "") {
+    pezzi.push(`Competizione: ${m.league}.`);
   }
   pezzi.push(
     "Osservatorio statistico sui movimenti delle quote: non è un pronostico.",
@@ -109,9 +133,18 @@ export async function generateMetadata({
       title: titolo,
       description: descrizione,
       url,
+      images: [
+        {
+          url: `${SITE_URL}/og-cover.png`,
+          width: 1200,
+          height: 630,
+          alt: "DropAlert — osservatorio sui movimenti delle quote",
+        },
+      ],
     },
     twitter: {
-      card: "summary",
+      card: "summary_large_image",
+      images: [`${SITE_URL}/og-cover.png`],
       title: titolo,
       description: descrizione,
     },

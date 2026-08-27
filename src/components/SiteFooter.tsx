@@ -56,6 +56,18 @@ export function SiteFooter() {
             Privacy
           </Link>
           <Link
+            href="/performance"
+            className="text-slate-600 underline underline-offset-2 hover:text-slate-900"
+          >
+            Performance
+          </Link>
+          <Link
+            href="/feed/rss.xml"
+            className="text-slate-600 underline underline-offset-2 hover:text-slate-900"
+          >
+            Feed RSS
+          </Link>
+          <Link
             href="/metodologia"
             className="text-slate-600 underline underline-offset-2 hover:text-slate-900"
           >

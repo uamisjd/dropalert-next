@@ -303,12 +303,18 @@ export default async function Home({
           con i risultati negativi lasciati dove sono, nella pagina di
           metodologia.
         </p>
-        <p className="mt-2 text-xs">
+        <p className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs">
           <Link
             href="/metodologia"
             className="font-medium text-slate-700 underline underline-offset-2 hover:text-slate-900"
           >
             Leggi la metodologia →
+          </Link>
+          <Link
+            href="/performance"
+            className="font-medium text-slate-700 underline underline-offset-2 hover:text-slate-900"
+          >
+            Evoluzione del CLV nel tempo →
           </Link>
         </p>
       </section>

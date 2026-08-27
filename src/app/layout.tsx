@@ -33,11 +33,20 @@ export const metadata: Metadata = {
     title: SITE_TITLE,
     description: SITE_DESCRIPTION,
     url: SITE_URL,
+    images: [
+      {
+        url: `${SITE_URL}/og-cover.png`,
+        width: 1200,
+        height: 630,
+        alt: "DropAlert — osservatorio sui movimenti delle quote",
+      },
+    ],
   },
   twitter: {
     card: "summary_large_image",
     title: SITE_TITLE,
     description: SITE_DESCRIPTION,
+    images: [`${SITE_URL}/og-cover.png`],
   },
   robots: {
     index: true,

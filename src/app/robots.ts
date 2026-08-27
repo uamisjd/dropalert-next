@@ -17,6 +17,7 @@ export default function robots(): MetadataRoute.Robots {
       {
         userAgent: "*",
         allow: "/",
+        /* i feed restano leggibili: sono contenuto pubblico, non servizio */
         disallow: ["/api/", "/cov"],
       },
     ],
