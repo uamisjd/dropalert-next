@@ -550,9 +550,15 @@ void main();
       "Bosnia AND Herzegovina: Premijer Liga",
       "Bosnia & Herzegovina: Premijer Liga",
     ],
+    /* la fonte usa entrambe le grafie nello stesso archivio */
+    ["Bosnia and Herzegovina: Prva Liga - FBiH", "Bosnia & Herzegovina: Prva Liga - FBiH"],
+    ["Trinidad and Tobago", "Trinidad & Tobago"],
     ["Serie A", "Serie A"],
     /* «AND» in testa non è una congiunzione fra due nomi: si lascia stare */
     ["AND Group", "AND Group"],
+    /* congiunzione dentro una frase comune: non si tocca */
+    ["Rock and roll", "Rock and roll"],
+    ["Cup and league", "Cup and league"],
     [null, null],
   ];
   for (const [input, atteso] of fixCases) {

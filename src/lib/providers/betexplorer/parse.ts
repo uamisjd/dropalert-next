@@ -530,15 +530,15 @@ export function humanizeSlug(slug: string): string {
  */
 export function normalizeDisplayName(name: string | null): string | null {
   if (name === null) return null;
-  let out = name;
-  for (const [word, replacement] of Object.entries(SLUG_WORD_OVERRIDES)) {
-    if (replacement === word) continue;
-    const upper = word.toUpperCase();
-    if (upper === word) continue;
-    out = out.replace(
-      new RegExp(`(?<=\\S )${upper}(?= \\S)`, "g"),
-      replacement,
-    );
-  }
-  return out;
+  /* «AND» fra due nomi propri è una congiunzione resa come sigla: si
+     sostituisce con la e commerciale. Vale sia scritta tutta maiuscola
+     («Bosnia AND Herzegovina») sia minuscola («Bosnia and Herzegovina»),
+     perché la fonte usa entrambe le grafie nello stesso archivio.
+     Il confronto richiede una parola con iniziale maiuscola su ENTRAMBI i
+     lati: così «Rock and roll» o un «and» dentro una frase non vengono
+     toccati, e nessun nome viene riscritto per somiglianza. */
+  return name.replace(
+    /(?<=\p{Lu}[\p{L}.'-]* )(AND|and)(?= \p{Lu})/gu,
+    "&",
+  );
 }
