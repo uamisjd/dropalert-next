@@ -19,6 +19,7 @@ import {
 } from "@/lib/cov/view";
 import type { RateLimitNotice } from "@/lib/repo/source-rate-limit";
 import { fmtAgo, fmtDateTime } from "./format";
+import { RUNNER_NOTE } from "@/lib/cov/actions";
 
 const KIND_STYLES: Record<ReasonKind, string> = {
   fuori_perimetro: "text-slate-500",
@@ -324,6 +325,11 @@ export function CoveragePanel({
           <>
             <p className="mt-1 text-[11px] leading-relaxed text-slate-600">
               {view.actions.label}
+            </p>
+            {/* dove gira davvero il cron: «da qualche parte nel cloud» non è
+                una risposta accettabile quando un dato è fermo */}
+            <p className="mt-1 text-[11px] leading-relaxed text-slate-500">
+              {RUNNER_NOTE}
             </p>
             <p className="mt-1 text-[11px] leading-relaxed text-slate-600">
               {view.actions.lastRunLine}
