@@ -18,8 +18,20 @@ on:
     # alternati). Due voci esplicite a distanza reale di 45 e 75 minuti sono
     # il compromesso più onesto possibile con un cron orario; il gate interno
     # a COLLECT_INTERVAL_MINUTES resta l'autorità sulla spaziatura minima.
-    - cron: "7,52 * * * *"
-      timezone: Europe/Rome
+    # QUATTRO occasioni all'ora (UTC), non due. Motivo misurato: il
+    # 27/08/2026 la raccolta è rimasta ferma quasi nove ore con il workflow
+    # ATTIVO e nessun run in coda; i minuti reali dei run erano 02, 30, 09,
+    # 54, 05, 28... mai 7 o 52. Lo scheduler di GitHub è best-effort: ritarda
+    # e, quando è congestionato, SALTA il turno. Con due sole occasioni
+    # bastano due salti per aprire un buco di ore.
+    #
+    # Non è più traffico verso la fonte: il gate qui sotto esce prima di
+    # installare, e COLLECT_INTERVAL_MINUTES (45) resta l'unica autorità
+    # sulla spaziatura. Sui repository pubblici i minuti non sono a consumo.
+    #
+    # `timezone:` NON è supportata nei cron dei workflow: veniva ignorata ed
+    # è stata rimossa per non lasciare una dichiarazione che non fa nulla.
+    - cron: "7,22,37,52 * * * *"
   workflow_dispatch:
     inputs:
       force:
@@ -51,19 +63,52 @@ jobs:
       BETEXPLORER_ENABLED: "true"
 
     steps:
+      # GATE PRE-INSTALL: legge da Neon quando è avvenuta l'ultima raccolta e,
+      # se è recente, esce qui — nessun checkout, nessun `npm ci`, nessuna
+      # richiesta alla fonte. Un trigger inutile costa pochi secondi invece di
+      # un minuto pieno di runner. `psql` è preinstallato su ubuntu-latest.
+      - name: Serve raccogliere?
+        id: gate
+        run: |
+          if [ -z "$DATABASE_URL" ]; then echo "run=true" >> "$GITHUB_OUTPUT"; exit 0; fi
+          LAST_AT="$(psql "$DATABASE_URL" -At -c \
+            "select value->>'at' from system_state where key = 'scheduler:last_cycle' limit 1" \
+            2>/dev/null || true)"
+          if [ -z "$LAST_AT" ]; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+            echo "Nessun giro a registro: si procede."
+            exit 0
+          fi
+          LAST_EPOCH="$(date -u -d "$LAST_AT" +%s 2>/dev/null || echo "")"
+          if [ -z "$LAST_EPOCH" ]; then echo "run=true" >> "$GITHUB_OUTPUT"; exit 0; fi
+          AGE_MIN=$(( ( $(date -u +%s) - LAST_EPOCH ) / 60 ))
+          # soglia 40 < COLLECT_INTERVAL_MINUTES (45): questo controllo non
+          # può mai scartare un giro che il codice avrebbe invece eseguito
+          if [ "$AGE_MIN" -lt 40 ] && [ "${{ inputs.force }}" != "true" ]; then
+            echo "run=false" >> "$GITHUB_OUTPUT"
+            echo "Ultimo giro ${AGE_MIN} min fa: niente da fare, si esce senza installare."
+          else
+            echo "run=true" >> "$GITHUB_OUTPUT"
+            echo "Ultimo giro ${AGE_MIN} min fa: si procede."
+          fi
+
       - name: Codice
+        if: steps.gate.outputs.run == 'true'
         uses: actions/checkout@v4
 
       - name: Node
+        if: steps.gate.outputs.run == 'true'
         uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
 
       - name: Dipendenze
+        if: steps.gate.outputs.run == 'true'
         run: npm ci --include=dev
 
       - name: Verifica configurazione database
+        if: steps.gate.outputs.run == 'true'
         run: |
           if [ -z "$DATABASE_URL" ]; then
             echo "::error::DATABASE_URL non configurato fra i secrets del repository."
@@ -72,9 +117,11 @@ jobs:
           fi
 
       - name: Migrazioni
+        if: steps.gate.outputs.run == 'true'
         run: npx drizzle-kit migrate
 
       - name: Giro di osservazione
+        if: steps.gate.outputs.run == 'true'
         run: |
           # --scheduled marca meta.trigger="scheduled": è l'unico valore che
           # entra nella profondità della serie (N/10). Senza, il giro sarebbe
