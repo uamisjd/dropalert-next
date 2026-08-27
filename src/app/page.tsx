@@ -15,6 +15,9 @@ import {
 } from "@/lib/repo/dashboard";
 import { getCoverageHistory } from "@/lib/repo/coverage-history";
 import { getSharpBudget } from "@/lib/repo/sharp";
+import { getCalendar } from "@/lib/repo/calendar";
+import { withoutTracked } from "@/lib/calendar/football-data";
+import { UpcomingFixtures } from "@/components/UpcomingFixtures";
 import { DATA_REVALIDATE_SECONDS, cachedRead } from "@/lib/repo/cached";
 import { buildCoverageView, type CoverageView } from "@/lib/cov/view";
 import { ClvSection } from "@/components/ClvSection";
@@ -114,6 +117,15 @@ export default async function Home({
     matchIdentityKey,
   ).slice(0, 8);
 
+  /* calendario di oggi: radar delle partite senza quote, mai una giocata */
+  const calendario = await getCalendar(0, now).catch(() => null);
+  const inArrivoOggi =
+    calendario === null
+      ? []
+      : withoutTracked(calendario.fixtures, data.signals).filter(
+          (f) => romeDayDiff(now, f.kickoffAt) === 0,
+        );
+
   /* budget della linea sharp: sola lettura dei contatori, non spende nulla */
   const sharpBudget = await getSharpBudget(now).catch(() => undefined);
 
@@ -185,6 +197,17 @@ export default async function Home({
       <div className="mb-5">
         <RecentStrip signals={recent} now={now} />
       </div>
+
+      {/* ciò che sta arrivando: partite in calendario ancora senza quote */}
+      {inArrivoOggi.length > 0 ? (
+        <div className="mb-5">
+          <UpcomingFixtures
+            fixtures={inArrivoOggi}
+            now={now}
+            title="Oggi — quote in arrivo"
+          />
+        </div>
+      ) : null}
 
       <div className="mb-5">
         <StatusPanel

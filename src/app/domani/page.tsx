@@ -13,6 +13,10 @@
 import Link from "next/link";
 import { getTomorrowView, type TomorrowMatch } from "@/lib/repo/tomorrow";
 import { fmtDay, fmtPrice, fmtTime } from "@/components/format";
+import { getCalendar } from "@/lib/repo/calendar";
+import { withoutTracked } from "@/lib/calendar/football-data";
+import { romeDayDiff } from "@/lib/view/timeline";
+import { UpcomingFixtures } from "@/components/UpcomingFixtures";
 
 /* ISR: il programma di domani si rigenera al massimo ogni 5 minuti.
    Il collector scrive su GitHub Actions e non dipende dal render, quindi una
@@ -97,6 +101,10 @@ export default async function TomorrowPage() {
   let view = null;
   let failure: string | null = null;
 
+  /* calendario di domani: le partite che il monitor non ha ancora visto.
+     Il radar completa l'archivio, non lo sostituisce. */
+  const calendario = await getCalendar(1, now).catch(() => null);
+
   try {
     view = await getTomorrowView(now);
   } catch (error) {
@@ -128,10 +136,39 @@ export default async function TomorrowPage() {
           <span className="font-medium text-slate-800">
             Non è un calendario completo
           </span>
-          : l&apos;elenco nasce dai movimenti esposti dalla fonte, non dal
-          calendario delle competizioni.
+          : l&apos;elenco nasce dai movimenti esposti dalla fonte. Le partite
+          delle competizioni coperte dal calendario compaiono qui sotto anche
+          senza quote, con l&apos;etichetta «quote in arrivo».
         </p>
       </header>
+
+      {/* radar: partite di domani non ancora coperte dall'archivio */}
+      {(() => {
+        const noti = (view?.matches ?? []).map((i) => ({
+          homeTeam: i.homeTeam,
+          awayTeam: i.awayTeam,
+          kickoffAt: i.kickoffAt,
+        }));
+        const inArrivo =
+          calendario === null
+            ? []
+            : withoutTracked(calendario.fixtures, noti).filter(
+                (f) => romeDayDiff(now, f.kickoffAt) === 1,
+              );
+        if (inArrivo.length === 0 && calendario?.unavailableReason == null) {
+          return null;
+        }
+        return (
+          <div className="mb-5">
+            <UpcomingFixtures
+              fixtures={inArrivo}
+              now={now}
+              unavailableReason={calendario?.unavailableReason ?? null}
+              title="Domani — quote in arrivo"
+            />
+          </div>
+        );
+      })()}
 
       {failure !== null ? (
         <div className="rounded-lg border border-orange-300 bg-orange-50 p-4 text-sm text-orange-900">
