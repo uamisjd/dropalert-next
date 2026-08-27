@@ -11,6 +11,11 @@
 import type { DetailSignal } from "@/lib/repo/match-detail";
 import type { ScoreComponentView } from "@/lib/repo/score-view";
 import { fmtRate } from "./format";
+import {
+  NORMALIZED_BAND_NOTE,
+  normalizedBandOf,
+} from "@/lib/repo/dashboard";
+import { CONFIDENCE_LABELS_IT } from "@/lib/drop/constants";
 
 function ComponentRow({ c }: { c: ScoreComponentView }) {
   return (
@@ -64,6 +69,16 @@ export function ScoreBreakdown({ signal }: { signal: DetailSignal }) {
   const { components, reachability } = signal;
   const gaps = components.filter((c) => c.isGap);
 
+  /* la fascia si legge sulla stessa scala del numero grande: un 48,76 su 55
+     è l'89% del misurabile, e chiamarlo «bassa» contraddiceva l'hero */
+  const percentuale =
+    reachability.measurableMax > 0
+      ? Math.round((reachability.earned / reachability.measurableMax) * 100)
+      : null;
+  const normalizedBand = normalizedBandOf(percentuale);
+  const normalizedLabel =
+    normalizedBand === null ? null : CONFIDENCE_LABELS_IT[normalizedBand];
+
   return (
     <div>
       <h4 className="mb-2 text-xs font-semibold tracking-wide text-slate-700 uppercase">
@@ -91,12 +106,16 @@ export function ScoreBreakdown({ signal }: { signal: DetailSignal }) {
           >
             su base misurabile
           </span>
-          <span className="text-xs text-slate-600">
-            banda {signal.confidenceLabel.toLowerCase()}
+          <span
+            className="text-xs text-slate-600"
+            title={NORMALIZED_BAND_NOTE}
+          >
+            banda {(normalizedLabel ?? signal.confidenceLabel).toLowerCase()}
           </span>
         </div>
         <p className="mt-1 text-[11px] leading-relaxed text-slate-500">
-          Indice grezzo{" "}
+          Fascia calcolata su base misurabile ({percentuale ?? "n/d"}%).{" "}
+          {NORMALIZED_BAND_NOTE} Indice grezzo{" "}
           <span className="tabular-nums">
             {signal.confidenceScore ?? "n/d"}/100
           </span>{" "}

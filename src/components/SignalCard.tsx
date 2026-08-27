@@ -316,7 +316,7 @@ export function SignalCard({
           Indice{" "}
           {signal.normalizedScore ?? signal.confidenceScore ?? ND}/100
           {signal.normalizedScore !== null ? " su base misurabile" : ""} ·{" "}
-          {signal.confidenceLabel}
+          {signal.normalizedLabel ?? signal.confidenceLabel}
           <Info term="indice-normalizzato" />
         </MetaPill>
         {signal.openGaps > 0 && (

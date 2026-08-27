@@ -69,11 +69,24 @@ export function ClvSection({ clv }: { clv: ClvMaturity }) {
             </div>
           </div>
 
+          <p className="mb-2 text-[11px] leading-relaxed text-slate-500">
+            Le fasce di questa tabella sono sull&apos;indice grezzo su 100: è la
+            scala con cui i CLV sono stati registrati nello storico e
+            ricalcolarla a posteriori cambierebbe i dati già pubblicati. Sulle
+            card la fascia è invece letta su base misurabile — alta da 78, media
+            da 60 — e la differenza è dichiarata proprio per non confonderle.
+          </p>
+
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs">
               <thead>
                 <tr className="border-b border-slate-200 text-slate-500">
-                  <th className="py-1.5 pr-3 font-medium">Fascia di indice</th>
+                  <th
+                    className="py-1.5 pr-3 font-medium"
+                    title="Fasce dell'indice grezzo su 100, la scala con cui i CLV sono stati registrati nello storico. La fascia mostrata sulle card è invece letta su base misurabile: sono due scale diverse e qui è dichiarato quale si sta usando."
+                  >
+                    Fascia di indice (grezzo /100)
+                  </th>
                   <th className="py-1.5 pr-3 font-medium">n</th>
                   <th className="py-1.5 pr-3 font-medium">CLV medio</th>
                   <th className="py-1.5 font-medium">Batte la chiusura</th>

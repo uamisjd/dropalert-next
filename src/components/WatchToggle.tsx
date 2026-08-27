@@ -4,7 +4,7 @@
  * Interruttore «Segui» sulla card (Sprint lancio, punto H).
  *
  * Scrive nel localStorage e non parla col server: la preferita resta su
- * questo dispositivo, e la pagina /watchlist lo dichiara.
+ * questo dispositivo, e la pagina /preferite lo dichiara.
  *
  * Il pulsante sta FUORI dal link che copre la card: dev'essere cliccabile
  * senza aprire il dettaglio, quindi vive in un livello sopra.
@@ -104,7 +104,7 @@ export function WatchToggle({
         title={
           following
             ? "Rimuovi dalle preferite (salvate solo su questo browser)"
-            : "Segui questa partita: la trovi in /watchlist, salvata solo su questo browser"
+            : "Segui questa partita: la trovi in /preferite, salvata solo su questo browser"
         }
         className={`rounded border px-2 py-0.5 text-[11px] font-medium transition-colors ${
           following

@@ -29,6 +29,7 @@ import {
 } from "@/db/schema";
 import { num, round } from "@/lib/drop/math";
 import {
+  CONFIDENCE_BANDS,
   CONFIDENCE_LABELS_IT,
   MAGNITUDE_LABELS_IT,
   MARKET_LABELS_IT,
@@ -248,6 +249,9 @@ export interface DashboardSignal {
   measurableMax: number | null;
   /** punti non osservabili per dati mancanti */
   gapMax: number | null;
+  /** banda letta sulla scala normalizzata; la banda del motore resta intatta */
+  normalizedBand: ConfidenceBand | null;
+  normalizedLabel: string | null;
 
   /* --- mini-grafico (UX-3) --- */
   /**
@@ -365,6 +369,29 @@ export function downsample<T>(points: T[], max = SPARKLINE_MAX_POINTS): T[] {
 }
 
 /**
+ * Banda LETTA sulla scala normalizzata.
+ *
+ * Il motore continua a calcolare la sua banda sul punteggio grezzo su 100 e
+ * quella logica non si tocca: è la stessa che alimenta storico, v2 e CLV.
+ * Qui si risponde a un'altra domanda — «rispetto a ciò che era misurabile,
+ * quanto è alto questo indice?» — e la risposta usa le stesse tre soglie del
+ * motore applicate alla percentuale sulla base misurabile. Senza di questa,
+ * un 48,76 su 55 (l'89% del misurabile) restava etichettato «bassa» perché
+ * confrontato con una scala che comprendeva punti non osservabili.
+ */
+export function normalizedBandOf(
+  normalizedScore: number | null,
+): ConfidenceBand | null {
+  if (normalizedScore === null) return null;
+  if (normalizedScore >= CONFIDENCE_BANDS.high) return "high";
+  if (normalizedScore >= CONFIDENCE_BANDS.medium) return "medium";
+  return "low";
+}
+
+/** Le soglie, dichiarate una volta sola per legenda e tooltip. */
+export const NORMALIZED_BAND_NOTE = `Sulla base misurabile: alta da ${CONFIDENCE_BANDS.high}, media da ${CONFIDENCE_BANDS.medium}, altrimenti bassa.`;
+
+/**
  * Normalizzazione dell'indice sulla base misurabile.
  *
  * Non ricalcola nulla: prende i componenti già scritti a registro dal motore,
@@ -381,27 +408,39 @@ export function normalizedOf(
   normalizedScore: number | null;
   measurableMax: number | null;
   gapMax: number | null;
+  normalizedBand: ConfidenceBand | null;
+  normalizedLabel: string | null;
 } {
-  if (components.length === 0) {
-    return { normalizedScore: null, measurableMax: null, gapMax: null };
-  }
+  const vuoto = {
+    normalizedScore: null,
+    measurableMax: null,
+    gapMax: null,
+    normalizedBand: null,
+    normalizedLabel: null,
+  };
+  if (components.length === 0) return vuoto;
   const views = scoreComponentsView(components, ctx);
   const reach = scoreReachability(views);
   if (reach.measurableMax <= 0) {
     return {
-      normalizedScore: null,
+      ...vuoto,
       measurableMax: reach.measurableMax,
       gapMax: reach.gapMax,
     };
   }
   const earned = rawScore ?? reach.earned;
+  const normalizedScore = round(
+    Math.max(0, Math.min(100, (earned / reach.measurableMax) * 100)),
+    0,
+  );
+  const normalizedBand = normalizedBandOf(normalizedScore);
   return {
-    normalizedScore: round(
-      Math.max(0, Math.min(100, (earned / reach.measurableMax) * 100)),
-      0,
-    ),
+    normalizedScore,
     measurableMax: reach.measurableMax,
     gapMax: reach.gapMax,
+    normalizedBand,
+    normalizedLabel:
+      normalizedBand === null ? null : CONFIDENCE_LABELS_IT[normalizedBand],
   };
 }
 

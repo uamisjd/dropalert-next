@@ -23,7 +23,7 @@ const ROWS: Array<{ badge: string; text: string; className: string }> = [
   },
   {
     badge: "Indice su base misurabile",
-    text: "Il numero principale è l'indice riportato sui soli punti ottenibili: i punti legati a dati non pubblicati non contano come zero. La riga sotto mostra grezzo, base e punti non osservabili.",
+    text: "Il numero principale è l'indice riportato sui soli punti ottenibili: i punti legati a dati non pubblicati non contano come zero. Anche la fascia si legge su questa scala — alta da 78, media da 60, altrimenti bassa — e la riga sotto mostra grezzo, base e punti non osservabili.",
     className: "border-slate-300 bg-white text-slate-700",
   },
   {

@@ -1,5 +1,5 @@
 /**
- * Pagina /watchlist (Sprint lancio, punto H).
+ * Pagina /preferite (Sprint lancio, punto H; URL italiano dallo sprint FIX-1).
  *
  * Le preferite stanno nel browser, quindi la pagina è un client component:
  * il server non sa e non deve sapere che cosa segui. I dati vivi di ciascuna

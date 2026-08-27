@@ -36,6 +36,16 @@ const nextConfig: NextConfig = {
     ];
   },
 
+  /**
+   * La pagina delle preferite è nata come `/watchlist` e la navigazione la
+   * chiamava «Preferite»: chi provava `/preferite` trovava un 404. L'URL
+   * canonico è ora quello italiano, e il vecchio indirizzo reindirizza in
+   * permanenza invece di sparire.
+   */
+  async redirects() {
+    return [{ source: "/watchlist", destination: "/preferite", permanent: true }];
+  },
+
   async rewrites() {
     return [
       { source: "/api/coverage", destination: "/api/cov" },

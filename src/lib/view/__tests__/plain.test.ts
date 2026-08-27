@@ -5,7 +5,12 @@
  */
 import type { DashboardSignal } from "@/lib/repo/dashboard";
 import { buildSparkline, MIN_POINTS_FOR_SPARKLINE } from "../sparkline";
-import { downsample, normalizedOf } from "@/lib/repo/dashboard";
+import {
+  NORMALIZED_BAND_NOTE,
+  downsample,
+  normalizedBandOf,
+  normalizedOf,
+} from "@/lib/repo/dashboard";
 import {
   PLAIN_STRENGTH_LABELS,
   contextSnippet,
@@ -87,6 +92,8 @@ function sig(over: Partial<DashboardSignal> = {}): DashboardSignal {
     normalizedScore: null,
     measurableMax: null,
     gapMax: null,
+    normalizedBand: null,
+    normalizedLabel: null,
     ...over,
   } as DashboardSignal;
 }
@@ -291,6 +298,26 @@ const tuttoGap = normalizedOf(
 eq("base misurabile nulla: nessun numero", tuttoGap.normalizedScore, null);
 eq("ma i punti non osservabili si dichiarano", tuttoGap.gapMax, 100);
 check("normalizzato mai oltre 100", (normalizedOf(comps, 90, ctxGap).normalizedScore ?? 0) <= 100);
+
+/* --- FIX-1/2: la banda si legge sulla scala normalizzata --- */
+eq("89% è banda alta", normalizedBandOf(89), "high");
+eq("soglia alta esatta", normalizedBandOf(78), "high");
+eq("appena sotto è media", normalizedBandOf(77), "medium");
+eq("soglia media esatta", normalizedBandOf(60), "medium");
+eq("sotto la media è bassa", normalizedBandOf(59), "low");
+eq("senza indice nessuna banda", normalizedBandOf(null), null);
+check("le soglie sono dichiarate", NORMALIZED_BAND_NOTE.includes("78") && NORMALIZED_BAND_NOTE.includes("60"));
+
+/* il caso dell'audit: 48,76 su 55 misurabili non può essere «bassa» */
+const caso = normalizedOf(comps, 48.76, ctxGap);
+eq("48,76 su 55 vale 89", caso.normalizedScore, 89);
+eq("e la fascia diventa alta", caso.normalizedBand, "high");
+eq("etichetta coerente con l'hero", caso.normalizedLabel, "Alta");
+check(
+  "la banda del motore sul grezzo resta un'altra cosa",
+  caso.normalizedBand !== null && 48.76 < 60,
+);
+
 
 if (failures.length > 0) {
   console.error(`✗ ${failures.length} test falliti su ${passed + failures.length}`);
