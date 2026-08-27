@@ -165,13 +165,17 @@ export default function PrivacyPage() {
 
       <Section title="Contatti">
         <p>
-          Per qualunque richiesta relativa a questa informativa puoi scrivere
-          all&apos;indirizzo{" "}
+          Non esiste una casella di posta dedicata: dichiararne una che nessuno
+          legge sarebbe peggio che non averla. Per qualunque richiesta relativa
+          a questa informativa il contatto è il repository pubblico del
+          progetto, aprendo una segnalazione su{" "}
           <a
-            href="mailto:privacy@dropalert.app"
+            href="https://github.com/uamisjd/dropalert-next/issues"
+            target="_blank"
+            rel="noopener noreferrer"
             className="underline underline-offset-2"
           >
-            privacy@dropalert.app
+            github.com/uamisjd/dropalert-next
           </a>
           .
         </p>

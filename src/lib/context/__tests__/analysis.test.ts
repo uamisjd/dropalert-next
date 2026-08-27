@@ -114,6 +114,26 @@ check("schema 2 entro 32 colonne", schemaWithinWidth(vettore));
 check("schema 1 ha i due rami squadra", albero.includes("Cove Rangers FC") && albero.includes("Dundee"));
 check("schema 2 converge a destra", vettore.includes("-->"));
 check("schema 2 ha rami che confluiscono", vettore.includes("\\") && vettore.includes("/"));
+
+/* --- micro-fix: newline reali e indentazione conservata --- */
+for (const [nome, schema] of [["albero", albero], ["vettore", vettore]] as const) {
+  check(`schema ${nome}: nessun \\n testuale`, !schema.includes("\\n"));
+  check(`schema ${nome}: righe vere`, schema.split("\n").length >= 3);
+}
+check(
+  "schema 1 conserva l'indentazione dei rami",
+  albero.split("\n").some((l) => l.startsWith("    +--")),
+);
+check(
+  "schema 2 conserva l'indentazione della convergenza",
+  vettore.split("\n").some((l) => /^\s{5,}[\\/]/.test(l)),
+);
+check(
+  "nessuna riga con spazi iniziali persi",
+  buildTreeSchema({ ...facts, homeTeam: "Nome Molto Lungo Da Tagliare Assai" })
+    .split("\n")
+    .some((l) => l.startsWith("    +--")),
+);
 check("nomi lunghi accorciati, mai sfondati", schemaWithinWidth(buildTreeSchema({
   ...facts,
   homeTeam: "Associazione Sportiva Dilettantistica Nome Lunghissimo",

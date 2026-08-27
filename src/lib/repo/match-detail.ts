@@ -185,6 +185,33 @@ export interface MatchDetail {
 /* Etichette                                                           */
 /* ------------------------------------------------------------------ */
 
+/**
+ * Etichetta dello stato partita, corretta rispetto all'orologio.
+ *
+ * La fonte lascia lo stato a `scheduled` anche a partita iniziata: mostrare
+ * «In programma» dopo il fischio d'inizio è semplicemente falso. Quando il
+ * kickoff è passato e il risultato non c'è ancora, lo si dice per quello che
+ * è — giocata, referto in arrivo — senza inventare né lo stato né l'esito.
+ */
+export function matchStatusLabelOf(
+  status: string,
+  kickoffAt: Date | string,
+  hasResult: boolean,
+  now: Date,
+): string {
+  const base = MATCH_STATUS_LABELS[status] ?? status;
+  if (hasResult) return MATCH_STATUS_LABELS.finished;
+  if (status === "postponed" || status === "cancelled") return base;
+
+  const k = kickoffAt instanceof Date ? kickoffAt : new Date(kickoffAt);
+  if (!Number.isFinite(k.getTime())) return base;
+  if (k.getTime() > now.getTime()) {
+    /* prima del fischio d'inizio «In programma» è l'unica cosa vera */
+    return status === "scheduled" ? MATCH_STATUS_LABELS.scheduled : base;
+  }
+  return "Giocata · risultato in arrivo";
+}
+
 export const MATCH_STATUS_LABELS: Record<string, string> = {
   scheduled: "In programma",
   live: "In corso",
@@ -549,7 +576,12 @@ export async function getMatchDetail(
       country: normalizeDisplayName(row.leagueCountry),
       kickoffAt: toIsoReq(m.kickoffAt),
       status: m.status as MatchStatus,
-      statusLabel: MATCH_STATUS_LABELS[m.status] ?? m.status,
+      statusLabel: matchStatusLabelOf(
+        m.status,
+        m.kickoffAt,
+        m.homeGoals !== null && m.awayGoals !== null,
+        now,
+      ),
       homeGoals: m.homeGoals,
       awayGoals: m.awayGoals,
       settledAt: toIso(m.settledAt),

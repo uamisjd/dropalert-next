@@ -7,6 +7,7 @@
  * «in attesa», e che il conteggio non possa promuovere una manciata di
  * esiti a tendenza.
  */
+import { matchStatusLabelOf } from "@/lib/repo/match-detail";
 import {
   SECONDARY_SOURCE_NAME,
   SECONDARY_SOURCE_NOTE,
@@ -322,4 +323,31 @@ main();
     process.exitCode = 1;
   }
   console.log("✓ fonte secondaria: risultato solo se combacia, altrimenti non pubblicato");
+}
+
+/* --- micro-fix: lo stato non può dire «In programma» a partita iniziata --- */
+{
+  const now = new Date("2026-08-26T20:00:00Z");
+  const prima = new Date("2026-08-26T21:00:00Z");
+  const dopo = new Date("2026-08-26T18:00:00Z");
+
+  const casi: Array<[string, string, string]> = [
+    ["prima del kickoff resta in programma", matchStatusLabelOf("scheduled", prima, false, now), "In programma"],
+    ["dopo il kickoff senza risultato", matchStatusLabelOf("scheduled", dopo, false, now), "Giocata · risultato in arrivo"],
+    ["con risultato è conclusa", matchStatusLabelOf("scheduled", dopo, true, now), "Conclusa"],
+    ["rinviata resta rinviata", matchStatusLabelOf("postponed", dopo, false, now), "Rinviata"],
+    ["annullata resta annullata", matchStatusLabelOf("cancelled", dopo, false, now), "Annullata"],
+    ["in corso resta in corso", matchStatusLabelOf("live", dopo, false, now), "Giocata · risultato in arrivo"],
+  ];
+  for (const [nome, got, atteso] of casi) {
+    if (got !== atteso) {
+      console.error(`✗ ${nome}: "${got}", atteso "${atteso}"`);
+      process.exitCode = 1;
+    }
+  }
+  if (matchStatusLabelOf("scheduled", dopo, false, now) === "In programma") {
+    console.error("✗ «In programma» dopo il fischio d'inizio");
+    process.exitCode = 1;
+  }
+  console.log("✓ stato partita: «In programma» solo prima del calcio d'inizio");
 }

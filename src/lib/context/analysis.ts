@@ -211,6 +211,17 @@ export function fit(text: string, width: number): string {
   return `${t.slice(0, width - 1)}.`;
 }
 
+/**
+ * Tronca una riga GIÀ composta senza toccarne gli spazi iniziali.
+ *
+ * `fit` normalizza gli spazi — giusto per un'etichetta, sbagliato per una
+ * riga di schema: applicandolo alle righe finite i rami dello schema 2
+ * perdevano l'indentazione e non convergevano più verso destra.
+ */
+function clampLine(line: string, width: number): string {
+  return line.length <= width ? line : line.slice(0, width);
+}
+
 function padTo(text: string, width: number): string {
   return text.length >= width ? text.slice(0, width) : text.padEnd(width, " ");
 }
@@ -237,20 +248,20 @@ export function buildTreeSchema(f: AnalysisFacts): string {
       : "prezzi non noti";
 
   const lines = [
-    fit("CONFRONTO", W),
+    "CONFRONTO",
     "|",
     `+-- ${fit(f.homeTeam, W - 4)}`,
-    `|   +-- casa`,
+    "|   +-- casa",
     `+-- ${fit(f.awayTeam, W - 4)}`,
-    `|   +-- trasferta`,
+    "|   +-- trasferta",
     "|",
-    `+-- ${fit("movimento", W - 4)}`,
+    "+-- movimento",
     `    +-- ${fit(verso, W - 8)}`,
     `    +-- ${fit(prezzo, W - 8)}`,
     `    +-- ${fit(conferme, W - 8)}`,
     `    +-- ${fit(durata, W - 8)}`,
   ];
-  return lines.map((l) => fit(l, W)).join("\n");
+  return lines.map((l) => clampLine(l, W)).join("\n");
 }
 
 /**
@@ -283,8 +294,8 @@ export function buildVectorSchema(f: AnalysisFacts): string {
     `${" ".repeat(LEFT)} /`,
     `${padTo(fit(ampiezza, LEFT), LEFT)}/`,
   ];
-  return [fit("INCROCIO VETTORIALE", W), ...rows]
-    .map((l) => fit(l, W))
+  return [clampLine("INCROCIO VETTORIALE", W), ...rows]
+    .map((l) => clampLine(l, W))
     .join("\n");
 }
 
