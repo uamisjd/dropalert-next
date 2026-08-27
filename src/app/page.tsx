@@ -31,11 +31,11 @@ import { MatchCard } from "@/components/MatchCard";
 import { groupByMatch, matchIdentityKey } from "@/lib/view/plain";
 import {
   chipCounts,
-  dayBucketOf,
   groupByDay,
   matchesTimeChip,
   parseTimeChip,
   recentMovements,
+  romeDayDiff,
 } from "@/lib/view/timeline";
 
 /* ISR: la dashboard si rigenera al massimo ogni 5 minuti.
@@ -192,8 +192,11 @@ export default async function Home({
           now={now}
           sharpBudget={sharpBudget}
           withSignals={
+            /* «oggi» qui è la SOLA giornata civile corrente: `dayBucketOf`
+               mette in «oggi» anche ciò che è già passato, e il conteggio
+               finiva per superare le partite in calendario. */
             groupByMatch(
-              data.signals.filter((s) => dayBucketOf(s.kickoffAt, now) === "oggi"),
+              data.signals.filter((s) => romeDayDiff(now, s.kickoffAt) === 0),
             ).length
           }
         />
