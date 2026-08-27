@@ -1,0 +1,141 @@
+# Giro di osservazione schedulato — vedi docs/SCHEDULING.md
+#
+# Limiti dichiarati di GitHub Actions, non aggirabili:
+#   - intervallo minimo reale 5 minuti ("* * * * *" non viene mai eseguito);
+#   - nessuna garanzia di puntualità, ritardi di decine di minuti nelle ore di punta;
+#   - sui repository PUBBLICI le schedule vengono disattivate dopo 60 giorni
+#     senza attività: serve un commit periodico o `gh workflow enable`;
+#   - parte solo dall'ultimo commit del branch di default.
+#
+# Il minuto 0 è volutamente evitato: è l'istante più congestionato.
+
+name: Osservazione DropAlert
+
+on:
+  schedule:
+    # Ogni 45 minuti. Attenzione: "*/45 * * * *" NON dà 45 minuti — il campo
+    # si azzera a ogni ora, producendo :00 e :45 (quindi 45 e 15 minuti
+    # alternati). Due voci esplicite a distanza reale di 45 e 75 minuti sono
+    # il compromesso più onesto possibile con un cron orario; il gate interno
+    # a COLLECT_INTERVAL_MINUTES resta l'autorità sulla spaziatura minima.
+    # QUATTRO occasioni all'ora (UTC), non due. Motivo misurato: il
+    # 27/08/2026 la raccolta è rimasta ferma quasi nove ore con il workflow
+    # ATTIVO e nessun run in coda; i minuti reali dei run erano 02, 30, 09,
+    # 54, 05, 28... mai 7 o 52. Lo scheduler di GitHub è best-effort: ritarda
+    # e, quando è congestionato, SALTA il turno. Con due sole occasioni
+    # bastano due salti per aprire un buco di ore.
+    #
+    # Non è più traffico verso la fonte: il gate qui sotto esce prima di
+    # installare, e COLLECT_INTERVAL_MINUTES (45) resta l'unica autorità
+    # sulla spaziatura. Sui repository pubblici i minuti non sono a consumo.
+    #
+    # `timezone:` NON è supportata nei cron dei workflow: veniva ignorata ed
+    # è stata rimossa per non lasciare una dichiarazione che non fa nulla.
+    - cron: "7,22,37,52 * * * *"
+  workflow_dispatch:
+    inputs:
+      force:
+        description: "Ignora l'intervallo minimo fra due raccolte"
+        type: boolean
+        default: false
+
+# Un giro alla volta. Se il precedente è ancora in corso, questo aspetta
+# invece di raddoppiare il traffico verso la fonte.
+concurrency:
+  group: dropalert-collect
+  cancel-in-progress: false
+
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      # NODE_ENV NON è "production" a livello di job: con quel valore
+      # `npm ci` salta le devDependencies, e drizzle-kit/tsx (che servono a
+      # migrare ed eseguire il giro) non verrebbero installati.
+      # Intervallo applicato dal codice, non dal cron: un retry o una
+      # esecuzione manuale ravvicinata non producono traffico aggiuntivo.
+      COLLECT_INTERVAL_MINUTES: ${{ vars.COLLECT_INTERVAL_MINUTES || '45' }}
+      COLLECT_HORIZON_HOURS: ${{ vars.COLLECT_HORIZON_HOURS || '72' }}
+      COLLECT_MAX_FIXTURES: ${{ vars.COLLECT_MAX_FIXTURES || '25' }}
+      BETEXPLORER_ENABLED: "true"
+
+    steps:
+      # GATE PRE-INSTALL: legge da Neon quando è avvenuta l'ultima raccolta e,
+      # se è recente, esce qui — nessun checkout, nessun `npm ci`, nessuna
+      # richiesta alla fonte. Un trigger inutile costa pochi secondi invece di
+      # un minuto pieno di runner. `psql` è preinstallato su ubuntu-latest.
+      - name: Serve raccogliere?
+        id: gate
+        run: |
+          if [ -z "$DATABASE_URL" ]; then echo "run=true" >> "$GITHUB_OUTPUT"; exit 0; fi
+          LAST_AT="$(psql "$DATABASE_URL" -At -c \
+            "select value->>'at' from system_state where key = 'scheduler:last_cycle' limit 1" \
+            2>/dev/null || true)"
+          if [ -z "$LAST_AT" ]; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+            echo "Nessun giro a registro: si procede."
+            exit 0
+          fi
+          LAST_EPOCH="$(date -u -d "$LAST_AT" +%s 2>/dev/null || echo "")"
+          if [ -z "$LAST_EPOCH" ]; then echo "run=true" >> "$GITHUB_OUTPUT"; exit 0; fi
+          AGE_MIN=$(( ( $(date -u +%s) - LAST_EPOCH ) / 60 ))
+          # soglia 40 < COLLECT_INTERVAL_MINUTES (45): questo controllo non
+          # può mai scartare un giro che il codice avrebbe invece eseguito
+          if [ "$AGE_MIN" -lt 40 ] && [ "${{ inputs.force }}" != "true" ]; then
+            echo "run=false" >> "$GITHUB_OUTPUT"
+            echo "Ultimo giro ${AGE_MIN} min fa: niente da fare, si esce senza installare."
+          else
+            echo "run=true" >> "$GITHUB_OUTPUT"
+            echo "Ultimo giro ${AGE_MIN} min fa: si procede."
+          fi
+
+      - name: Codice
+        if: steps.gate.outputs.run == 'true'
+        uses: actions/checkout@v4
+
+      - name: Node
+        if: steps.gate.outputs.run == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Dipendenze
+        if: steps.gate.outputs.run == 'true'
+        run: npm ci --include=dev
+
+      - name: Verifica configurazione database
+        if: steps.gate.outputs.run == 'true'
+        run: |
+          if [ -z "$DATABASE_URL" ]; then
+            echo "::error::DATABASE_URL non configurato fra i secrets del repository."
+            echo "Il giro non parte: preferibile un fallimento visibile a una raccolta silenziosamente scartata."
+            exit 1
+          fi
+
+      - name: Migrazioni
+        if: steps.gate.outputs.run == 'true'
+        run: npx drizzle-kit migrate
+
+      - name: Giro di osservazione
+        if: steps.gate.outputs.run == 'true'
+        run: |
+          # --scheduled marca meta.trigger="scheduled": è l'unico valore che
+          # entra nella profondità della serie (N/10). Senza, il giro sarebbe
+          # contato come manuale e la serie non avanzerebbe mai.
+          if [ "${{ inputs.force }}" = "true" ]; then
+            npm run job:collect -- --scheduled --force
+          else
+            npm run job:collect -- --scheduled
+          fi
+
+# Perché il cron sta qui e non su Vercel: il piano Hobby consente una sola
+# esecuzione cron al giorno, incompatibile con un intervallo di 45 minuti.
+# Vercel serve le pagine, GitHub Actions esegue la raccolta e scrive su Neon.
+#
+# Alternativa a costo zero se il repository diventa privato e i 2.000
+# minuti/mese del piano Free si stringono: COLLECT_INTERVAL_MINUTES a 60 e
+# cron "7 * * * *". Si perde risoluzione sul movimento, non correttezza.
