@@ -24,6 +24,7 @@ import {
 } from "@/db/schema";
 import { num } from "@/lib/drop/math";
 import { MARKET_LABELS_IT, SELECTION_LABELS_IT } from "@/lib/drop/constants";
+import { normalizeDisplayName } from "@/lib/providers/betexplorer/parse";
 
 /** Ultima quota osservata su una selezione, con l'istante della lettura. */
 export interface TomorrowOdds {
@@ -191,8 +192,8 @@ export async function getTomorrowView(
       id: r.id,
       homeTeam: teamName.get(r.homeTeamId) ?? "—",
       awayTeam: teamName.get(r.awayTeamId) ?? "—",
-      league: r.leagueName,
-      country: r.leagueCountry,
+      league: normalizeDisplayName(r.leagueName),
+      country: normalizeDisplayName(r.leagueCountry),
       kickoffAt: r.kickoffAt.toISOString(),
       status: r.status,
       snapshotCount: countByMatch.get(r.id) ?? 0,

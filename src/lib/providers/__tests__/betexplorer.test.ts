@@ -543,7 +543,15 @@ void main();
   const fixCases: Array<[string | null, string | null]> = [
     ["Bosnia AND Herzegovina", "Bosnia & Herzegovina"],
     ["Trinidad AND Tobago", "Trinidad & Tobago"],
+    ["Antigua AND Barbuda", "Antigua & Barbuda"],
+    ["Saint Kitts AND Nevis", "Saint Kitts & Nevis"],
+    /* il caso reale visto in produzione: paese + competizione sulla stessa riga */
+    [
+      "Bosnia AND Herzegovina: Premijer Liga",
+      "Bosnia & Herzegovina: Premijer Liga",
+    ],
     ["Serie A", "Serie A"],
+    /* «AND» in testa non è una congiunzione fra due nomi: si lascia stare */
     ["AND Group", "AND Group"],
     [null, null],
   ];

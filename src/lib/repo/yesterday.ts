@@ -29,6 +29,7 @@ import {
   SELECTION_LABELS_IT,
 } from "@/lib/drop/constants";
 import { fetchSecondaryResult } from "@/lib/settle/secondary-source";
+import { normalizeDisplayName } from "@/lib/providers/betexplorer/parse";
 import {
   MIN_OUTCOMES_FOR_TREND,
   OUTCOME_DISCLAIMER,
@@ -183,8 +184,8 @@ export async function getYesterdayView(
       matchId: r.matchId,
       homeTeam: teamName.get(r.homeTeamId) ?? "—",
       awayTeam: teamName.get(r.awayTeamId) ?? "—",
-      league: r.leagueName,
-      country: r.leagueCountry,
+      league: normalizeDisplayName(r.leagueName),
+      country: normalizeDisplayName(r.leagueCountry),
       kickoffAt: r.kickoffAt.toISOString(),
       status: s.status as SignalStatus,
       market: s.market as MarketType,
