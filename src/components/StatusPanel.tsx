@@ -50,11 +50,15 @@ export function StatusPanel({
   status,
   now,
   sharpBudget,
+  withSignals,
 }: {
   status: DashboardStatus;
   now: Date;
   /** budget della fonte sharp, quando la pagina lo conosce */
   sharpBudget?: SharpBudgetView;
+  /** quante partite di oggi hanno almeno un segnale: toglie l'ambiguità
+      fra «partite in calendario» e «partite in lista» */
+  withSignals?: number;
 }) {
   return (
     <section
@@ -87,8 +91,12 @@ export function StatusPanel({
       <div className="mb-3 grid grid-cols-1 gap-2 sm:grid-cols-3">
         <Stat
           label="Partite oggi"
-          value={status.matchesToday}
-          hint="Partite con calcio d'inizio nella giornata italiana corrente."
+          value={
+            withSignals === undefined
+              ? String(status.matchesToday)
+              : `${status.matchesToday} · di cui ${withSignals} con segnali`
+          }
+          hint="A sinistra le partite con calcio d'inizio nella giornata italiana corrente; a destra quante di queste hanno almeno un movimento rilevato, cioè quante compaiono nella lista."
         />
         <Stat
           label="Partite monitorate"

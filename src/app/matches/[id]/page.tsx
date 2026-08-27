@@ -8,6 +8,8 @@
  */
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import type { Metadata } from "next";
+import { SITE_NAME, SITE_URL } from "@/lib/site";
 import { getMatchDetail, type MarketSeries } from "@/lib/repo/match-detail";
 import { FreshnessBadge, MagnitudeBadge, MetaPill, SignalLevelBadge } from "@/components/Badges";
 import { OddsChart } from "@/components/OddsChart";
@@ -41,6 +43,80 @@ import {
    pagina servita dalla cache di bordo non blocca né ritarda la raccolta. La
    freschezza del dato resta dichiarata in pagina dal pannello «Stato dati». */
 export const revalidate = 300;
+
+/**
+ * Anteprima social della singola partita (FIX-2).
+ *
+ * Titolo e descrizione dicono la stessa cosa della pagina: chi gioca, dove, e
+ * come si è mosso il mercato. Se il movimento non è misurabile la descrizione
+ * lo omette invece di inventarlo, e resta la sola presentazione della partita.
+ * Il canonical punta all'indirizzo del match, non alla home.
+ */
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}): Promise<Metadata> {
+  const { id } = await params;
+  const matchId = Number.parseInt(id, 10);
+  if (!Number.isInteger(matchId) || matchId <= 0) return {};
+
+  const detail = await getMatchDetail(matchId, new Date()).catch(() => null);
+  if (detail === null) return {};
+
+  const m = detail.match;
+  const titolo = `${m.homeTeam} – ${m.awayTeam}${m.league ? ` — ${m.league}` : ""}`;
+
+  const lead = detail.signals[0] ?? null;
+  const serie = lead
+    ? detail.series.find(
+        (x) => x.market === lead.market && x.selection === lead.selection,
+      ) ?? null
+    : null;
+
+  const pezzi: string[] = [];
+  if (
+    lead !== null &&
+    serie?.opening !== null &&
+    serie?.opening !== undefined &&
+    serie?.current !== null &&
+    serie?.current !== undefined
+  ) {
+    const verso = serie.current < serie.opening ? "è scesa" : "è salita";
+    const pp =
+      serie.shiftPp !== null && serie.shiftPp !== undefined
+        ? ` (${serie.shiftPp > 0 ? "+" : "−"}${Math.abs(serie.shiftPp).toFixed(2)} pp)`
+        : "";
+    pezzi.push(
+      `La quota di ${lead.selectionLabel.toLowerCase()} ${verso} da ${serie.opening.toFixed(2)} a ${serie.current.toFixed(2)}${pp}.`,
+    );
+  }
+  pezzi.push(
+    "Osservatorio statistico sui movimenti delle quote: non è un pronostico.",
+  );
+
+  const url = `${SITE_URL}/matches/${matchId}`;
+  const descrizione = pezzi.join(" ");
+
+  return {
+    title: titolo,
+    description: descrizione,
+    alternates: { canonical: url },
+    openGraph: {
+      type: "article",
+      locale: "it_IT",
+      siteName: SITE_NAME,
+      title: titolo,
+      description: descrizione,
+      url,
+    },
+    twitter: {
+      card: "summary",
+      title: titolo,
+      description: descrizione,
+    },
+  };
+}
 
 /* ------------------------------------------------------------------ */
 

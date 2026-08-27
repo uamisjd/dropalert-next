@@ -40,6 +40,7 @@ import {
 } from "../betexplorer/index";
 import { impliedProbabilityOf } from "../betexplorer/ingest";
 import { outcomeOf } from "../types";
+import { normalizeDisplayName } from "../betexplorer/parse";
 
 /* ------------------------------------------------------------------ */
 /* Mini runner                                                         */
@@ -520,3 +521,38 @@ async function main(): Promise<void> {
 }
 
 void main();
+
+/* --- FIX-2/3: nomi leggibili, congiunzioni non sono sigle --- */
+{
+  const cases: Array<[string, string]> = [
+    ["bosnia-and-herzegovina", "Bosnia & Herzegovina"],
+    ["trinidad-and-tobago", "Trinidad & Tobago"],
+    ["antigua-and-barbuda", "Antigua & Barbuda"],
+    ["usa", "USA"],
+    ["npl-tasmania", "NPL Tasmania"],
+    ["republic-of-ireland", "Republic of Ireland"],
+    ["and-more", "And More"],
+  ];
+  for (const [slug, atteso] of cases) {
+    const got = humanizeSlug(slug);
+    if (got !== atteso) {
+      console.error(`✗ humanizeSlug("${slug}") = "${got}", atteso "${atteso}"`);
+      process.exitCode = 1;
+    }
+  }
+  const fixCases: Array<[string | null, string | null]> = [
+    ["Bosnia AND Herzegovina", "Bosnia & Herzegovina"],
+    ["Trinidad AND Tobago", "Trinidad & Tobago"],
+    ["Serie A", "Serie A"],
+    ["AND Group", "AND Group"],
+    [null, null],
+  ];
+  for (const [input, atteso] of fixCases) {
+    const got = normalizeDisplayName(input);
+    if (got !== atteso) {
+      console.error(`✗ normalizeDisplayName(${String(input)}) = "${got}", atteso "${atteso}"`);
+      process.exitCode = 1;
+    }
+  }
+  console.log("✓ nomi leggibili: congiunzioni non trattate come sigle");
+}

@@ -31,6 +31,7 @@ import { MatchCard } from "@/components/MatchCard";
 import { groupByMatch, matchIdentityKey } from "@/lib/view/plain";
 import {
   chipCounts,
+  dayBucketOf,
   groupByDay,
   matchesTimeChip,
   parseTimeChip,
@@ -186,7 +187,16 @@ export default async function Home({
       </div>
 
       <div className="mb-5">
-        <StatusPanel status={data.status} now={now} sharpBudget={sharpBudget} />
+        <StatusPanel
+          status={data.status}
+          now={now}
+          sharpBudget={sharpBudget}
+          withSignals={
+            groupByMatch(
+              data.signals.filter((s) => dayBucketOf(s.kickoffAt, now) === "oggi"),
+            ).length
+          }
+        />
       </div>
 
       {coverage !== null ? (

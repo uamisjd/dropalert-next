@@ -8,6 +8,11 @@
  * esiti a tendenza.
  */
 import {
+  SECONDARY_SOURCE_NAME,
+  SECONDARY_SOURCE_NOTE,
+  pickMatchingEvent,
+} from "../secondary-source";
+import {
   MIN_OUTCOMES_FOR_TREND,
   OUTCOME_DISCLAIMER,
   OUTCOME_LABELS_IT,
@@ -263,3 +268,58 @@ function main(): void {
 }
 
 main();
+
+/* --- FIX-2/2: fonte secondaria dei risultati --- */
+{
+  const kick = new Date("2026-08-25T19:00:00Z");
+  const eventi = [
+    {
+      strHomeTeam: "Cove Rangers FC",
+      strAwayTeam: "Dundee United B",
+      intHomeScore: "2",
+      intAwayScore: "1",
+      dateEvent: "2026-08-25",
+    },
+    {
+      strHomeTeam: "Alfa",
+      strAwayTeam: "Beta",
+      intHomeScore: null,
+      intAwayScore: null,
+      dateEvent: "2026-08-25",
+    },
+  ];
+
+  const casi: Array<[string, unknown, boolean]> = [
+    ["partita trovata", pickMatchingEvent(eventi, "Cove Rangers", "Dundee United B", kick), true],
+    ["punteggio assente non diventa 0-0", pickMatchingEvent(eventi, "Alfa", "Beta", kick), false],
+    ["altra partita non si forza", pickMatchingEvent(eventi, "Roma", "Lazio", kick), false],
+    [
+      "stessa coppia in un altro giorno esclusa",
+      pickMatchingEvent(eventi, "Cove Rangers", "Dundee United B", new Date("2026-09-10T19:00:00Z")),
+      false,
+    ],
+    ["elenco vuoto", pickMatchingEvent([], "Cove Rangers", "Dundee United B", kick), false],
+    ["payload non lista", pickMatchingEvent(null, "Cove Rangers", "Dundee United B", kick), false],
+  ];
+  for (const [nome, got, atteso] of casi) {
+    const ok = (got !== null) === atteso;
+    if (!ok) {
+      console.error(`✗ ${nome}: ottenuto ${JSON.stringify(got)}`);
+      process.exitCode = 1;
+    }
+  }
+  const trovato = pickMatchingEvent(eventi, "Cove Rangers", "Dundee United B", kick);
+  if (trovato?.homeGoals !== 2 || trovato?.awayGoals !== 1) {
+    console.error("✗ punteggio letto male dalla fonte secondaria");
+    process.exitCode = 1;
+  }
+  if (trovato?.source !== SECONDARY_SOURCE_NAME) {
+    console.error("✗ la fonte non viaggia col dato");
+    process.exitCode = 1;
+  }
+  if (!SECONDARY_SOURCE_NOTE.includes(SECONDARY_SOURCE_NAME)) {
+    console.error("✗ la nota non dichiara la fonte");
+    process.exitCode = 1;
+  }
+  console.log("✓ fonte secondaria: risultato solo se combacia, altrimenti non pubblicato");
+}

@@ -41,6 +41,7 @@ import {
   type SignalLevel,
 } from "./dashboard";
 import { describeDepth, seriesStats, type SeriesPoint } from "./series";
+import { normalizeDisplayName } from "@/lib/providers/betexplorer/parse";
 import {
   scoreComponentsView,
   scoreReachability,
@@ -544,8 +545,8 @@ export async function getMatchDetail(
       key: m.key,
       homeTeam: teamName.get(m.homeTeamId) ?? "—",
       awayTeam: teamName.get(m.awayTeamId) ?? "—",
-      league: row.leagueName,
-      country: row.leagueCountry,
+      league: normalizeDisplayName(row.leagueName),
+      country: normalizeDisplayName(row.leagueCountry),
       kickoffAt: toIsoReq(m.kickoffAt),
       status: m.status as MatchStatus,
       statusLabel: MATCH_STATUS_LABELS[m.status] ?? m.status,

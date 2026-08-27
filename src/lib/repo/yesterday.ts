@@ -28,6 +28,7 @@ import {
   MARKET_LABELS_IT,
   SELECTION_LABELS_IT,
 } from "@/lib/drop/constants";
+import { fetchSecondaryResult } from "@/lib/settle/secondary-source";
 import {
   MIN_OUTCOMES_FOR_TREND,
   OUTCOME_DISCLAIMER,
@@ -78,6 +79,8 @@ export interface YesterdayItem {
   resultOverdue: boolean;
   /** motivo registrato dal collector (data_gaps), se la fonte ha dichiarato l'assenza */
   resultNote: string | null;
+  /** nome della fonte quando il risultato NON viene dalla fonte primaria */
+  resultSource: string | null;
 }
 
 export interface YesterdayView {
@@ -198,6 +201,7 @@ export async function getYesterdayView(
       verdictLabel: OUTCOME_LABELS_IT[verdict],
       resultOverdue: false,
       resultNote: null,
+      resultSource: null,
     };
   });
 
@@ -224,6 +228,51 @@ export async function getYesterdayView(
     if (item.verdict !== "in_attesa") continue;
     item.resultOverdue = isResultOverdue(item.kickoffAt, now);
     item.resultNote = notesByMatch.get(item.matchId) ?? null;
+  }
+
+  /* Fonte secondaria: si interroga SOLO per le partite il cui risultato
+     manca davvero e la cui attesa è già scaduta. Il punteggio trovato non
+     viene scritto in archivio (i dati restano della fonte primaria): serve a
+     mostrare l'esito dichiarando da dove viene. Se nemmeno lei lo ha, resta
+     «non pubblicato» — nessun esito inventato. */
+  const daColmare = items.filter(
+    (i) => i.verdict === "in_attesa" && i.resultOverdue,
+  );
+  if (daColmare.length > 0) {
+    const perMatch = new Map<number, Awaited<ReturnType<typeof fetchSecondaryResult>>>();
+    /* una richiesta per partita, al massimo sei per pagina: la fonte è
+       gratuita e va trattata con cortesia */
+    for (const item of daColmare.slice(0, 6)) {
+      if (perMatch.has(item.matchId)) continue;
+      perMatch.set(
+        item.matchId,
+        await fetchSecondaryResult({
+          homeTeam: item.homeTeam,
+          awayTeam: item.awayTeam,
+          kickoffAt: new Date(item.kickoffAt),
+        }).catch(
+          (): Awaited<ReturnType<typeof fetchSecondaryResult>> => ({
+            ok: false,
+            reason: "irraggiungibile",
+          }),
+        ),
+      );
+    }
+    for (const item of items) {
+      const esito = perMatch.get(item.matchId);
+      if (esito === undefined || !esito.ok) continue;
+      item.homeGoals = esito.result.homeGoals;
+      item.awayGoals = esito.result.awayGoals;
+      item.resultSource = esito.result.source;
+      item.verdict = outcomeOf({
+        market: item.market as SettleMarket,
+        selection: item.selection as SettleSelection,
+        homeGoals: item.homeGoals,
+        awayGoals: item.awayGoals,
+      });
+      item.verdictLabel = OUTCOME_LABELS_IT[item.verdict];
+      item.resultOverdue = false;
+    }
   }
 
   const tally = tallyOutcomes(items.map((i) => i.verdict));

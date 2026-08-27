@@ -46,6 +46,7 @@ import {
 } from "@/lib/repo/score-view";
 import { getContextSummaries } from "@/lib/repo/context";
 import { getNewsCounts } from "@/lib/repo/news";
+import { normalizeDisplayName } from "@/lib/providers/betexplorer/parse";
 
 /* ------------------------------------------------------------------ */
 /* Soglie di lettura                                                   */
@@ -744,8 +745,8 @@ export async function getDashboardSignals(
       status,
       homeTeam: teamName.get(r.homeTeamId) ?? "—",
       awayTeam: teamName.get(r.awayTeamId) ?? "—",
-      league: r.leagueName,
-      country: r.leagueCountry,
+      league: normalizeDisplayName(r.leagueName),
+      country: normalizeDisplayName(r.leagueCountry),
       kickoffAt: toIso(r.kickoffAt)!,
       market: s.market,
       marketLabel: MARKET_LABELS_IT[s.market] ?? s.market,

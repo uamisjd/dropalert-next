@@ -87,6 +87,14 @@ function SignalRow({ item }: { item: YesterdayItem }) {
         {item.confidenceScore !== null
           ? ` (${item.confidenceScore.toFixed(0)}/100)`
           : ""}
+        {item.resultSource !== null ? (
+          <span
+            className="ml-1.5 text-[11px] text-slate-500"
+            title="La fonte primaria non ha pubblicato il punteggio: questo esito arriva da una fonte pubblica secondaria, dichiarata qui accanto."
+          >
+            (da fonte secondaria: {item.resultSource})
+          </span>
+        ) : null}
         {item.verdict === "in_attesa" && item.resultOverdue
           ? " — risultato non pubblicato dalla fonte: il collector verifica a ogni giro e lo dichiarerà appena arriva."
           : item.verdict === "in_attesa"

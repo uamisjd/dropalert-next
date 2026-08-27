@@ -479,11 +479,66 @@ export function teamKeyFor(nameRaw: string): string {
   return `be-${slugify(nameRaw)}`;
 }
 
+/**
+ * Parole che nello slug restano minuscole o hanno una resa propria.
+ *
+ * La regola «parole corte tutte maiuscole» serve alle sigle (FC, NPL, MFL,
+ * USA), ma trasformava «bosnia-and-herzegovina» in «Bosnia AND Herzegovina».
+ * Qui si dichiara l'eccezione invece di indovinarla: le congiunzioni e le
+ * preposizioni non sono sigle.
+ */
+const SLUG_WORD_OVERRIDES: Record<string, string> = {
+  and: "&",
+  of: "of",
+  the: "the",
+  de: "de",
+  del: "del",
+  du: "du",
+  da: "da",
+  di: "di",
+  la: "La",
+  le: "Le",
+  el: "El",
+  al: "Al",
+  и: "e",
+};
+
 /** Nome leggibile di un campionato, quando l'intestazione non è disponibile. */
 export function humanizeSlug(slug: string): string {
-  return slug
-    .split("-")
-    .filter(Boolean)
-    .map((w) => (w.length <= 3 ? w.toUpperCase() : w[0].toUpperCase() + w.slice(1)))
+  const words = slug.split("-").filter(Boolean);
+  return words
+    .map((w, i) => {
+      const lower = w.toLowerCase();
+      const override = SLUG_WORD_OVERRIDES[lower];
+      if (override !== undefined) {
+        /* una parola d'unione non apre mai un nome: se capita in testa
+           si tratta come parola normale, non come congiunzione */
+        if (i === 0) return w[0].toUpperCase() + w.slice(1);
+        return override;
+      }
+      return w.length <= 3 ? w.toUpperCase() : w[0].toUpperCase() + w.slice(1);
+    })
     .join(" ");
+}
+
+/**
+ * Ripulisce un nome già in archivio, scritto prima di questa regola.
+ *
+ * Serve alla lettura: le righe salvate ieri non si riscrivono (i dati non si
+ * toccano), ma non c'è motivo di mostrare «Bosnia AND Herzegovina» a chi
+ * legge oggi. Interviene solo su parole d'unione rese come sigle.
+ */
+export function normalizeDisplayName(name: string | null): string | null {
+  if (name === null) return null;
+  let out = name;
+  for (const [word, replacement] of Object.entries(SLUG_WORD_OVERRIDES)) {
+    if (replacement === word) continue;
+    const upper = word.toUpperCase();
+    if (upper === word) continue;
+    out = out.replace(
+      new RegExp(`(?<=\\S )${upper}(?= \\S)`, "g"),
+      replacement,
+    );
+  }
+  return out;
 }
