@@ -21,9 +21,16 @@
  * servirebbe uno scheduler esterno che chiami questa stessa rotta con
  * `x-jobs-token`: la rotta è già pronta, non cambia una riga.
  *
- * Autorizzazione: header `x-jobs-token` (come gli altri job) oppure
- * l'header `Authorization: Bearer $CRON_SECRET` che Vercel invia ai suoi
- * cron. Senza nessuno dei due, in produzione non si esegue.
+ * Autorizzazione, tre forme accettate:
+ *  - header `x-jobs-token` (come gli altri job del progetto);
+ *  - header `Authorization: Bearer $CRON_SECRET`, che Vercel invia ai suoi cron;
+ *  - parametro `?token=` nell'URL, per gli scheduler gratuiti che non
+ *    permettono di impostare intestazioni personalizzate.
+ *
+ * Il parametro in query è meno elegante dell'header e finisce nei log del
+ * servizio che chiama: è ammesso perché il segreto protegge una rotta che
+ * non espone dati e al massimo fa partire una raccolta già limitata dal
+ * gate. Se un giorno lo scheduler dovesse cambiare, resta l'header.
  */
 import { NextResponse } from "next/server";
 import { runCycle } from "@/lib/pipeline/scheduler";
@@ -36,6 +43,9 @@ function authorized(request: Request): boolean {
   const jobs = process.env.JOBS_TOKEN;
   if (jobs !== undefined && jobs.trim() !== "") {
     if (request.headers.get("x-jobs-token") === jobs) return true;
+    /* stesso segreto, passato in query da chi non può mandare header */
+    const fromQuery = new URL(request.url).searchParams.get("token");
+    if (fromQuery !== null && fromQuery === jobs) return true;
   }
   const cron = process.env.CRON_SECRET;
   if (cron !== undefined && cron.trim() !== "") {
