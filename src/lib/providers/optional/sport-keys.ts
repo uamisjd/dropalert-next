@@ -29,6 +29,18 @@ const MAP: Array<{ match: RegExp; sportKey: string }> = [
 const EXCLUDE = /\b(women|femminile|u1[5-9]|u2[0-3]|b\b|ii\b|riserve|reserves|youth|primavera)\b/i;
 
 /**
+ * Competizioni che CONTENGONO il nome di un campionato coperto ma non sono
+ * quel campionato: «England: Premier League Cup» è un torneo di squadre
+ * riserve, non la Premier League, e la fonte non lo espone. Senza questo
+ * controllo il confronto per sottostringa spendeva un credito su una
+ * competizione che non avrebbe mai restituito una linea sharp.
+ *
+ * Le coppe UEFA restano coperte perché hanno una chiave propria: qui si
+ * escludono solo i tornei che si travestono da campionato.
+ */
+const COPPA_TRAVESTITA = /\b(cup|coppa|trophy|shield|playoff|play-off|qualifying)\b/i;
+
+/**
  * Chiave sport della competizione, o `null` se non è coperta.
  * `null` significa: non spendere un credito per questa partita.
  */
@@ -37,7 +49,12 @@ export function sportKeyFor(league: string | null): string | null {
   const name = league.trim();
   if (name === "" || EXCLUDE.test(name)) return null;
   for (const row of MAP) {
-    if (row.match.test(name)) return row.sportKey;
+    if (!row.match.test(name)) continue;
+    /* le coppe UEFA hanno una voce dedicata e vanno bene così; per tutte le
+       altre, se il nome dice «cup» non è il campionato che abbiamo mappato */
+    const isUefa = row.sportKey.startsWith("soccer_uefa");
+    if (!isUefa && COPPA_TRAVESTITA.test(name)) return null;
+    return row.sportKey;
   }
   return null;
 }

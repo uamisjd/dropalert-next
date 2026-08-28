@@ -127,6 +127,13 @@ eq("lega minore non mappata", sportKeyFor("Scotland: Challenge Cup"), null);
 eq("femminile esclusa", sportKeyFor("Germany: Bundesliga Women"), null);
 eq("riserve escluse", sportKeyFor("Italy: Serie A Primavera"), null);
 eq("nessuna lega: nessun credito", sportKeyFor(null), null);
+/* trovato in produzione: una coppa di riserve che cita il nome del
+   campionato non deve consumare un credito */
+eq("coppa travestita da campionato", sportKeyFor("England: Premier League Cup"), null);
+eq("coppa italiana non è la Serie A", sportKeyFor("Italy: Serie A Cup Women"), null);
+eq("il campionato vero resta coperto", sportKeyFor("England: Premier League"), "soccer_epl");
+eq("le coppe UEFA restano coperte", sportKeyFor("Europe: UEFA Champions League"), "soccer_uefa_champs_league");
+eq("Europa League coperta", sportKeyFor("Europe: UEFA Europa League"), "soccer_uefa_europa_league");
 
 /* --- estrazione del prezzo sharp --- */
 const payload = [
