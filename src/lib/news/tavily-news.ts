@@ -21,35 +21,35 @@ import {
   parseTavilyResults,
   type TavilyResult,
 } from "@/lib/context/tavily";
+import { localQueries, JUNK_DOMAINS } from "@/lib/context/locale-search";
 import type { NewsFeedItem } from "./source";
 
 export const TAVILY_NEWS_SOURCE_LABEL =
-  "ricerca web Tavily (italiano, poi internazionale), integrata dai feed RSS pubblici di Gazzetta e BBC";
+  "ricerca web Tavily nella lingua del paese in cui si gioca, mirata alle testate nazionali e ai canali ufficiali delle società (aggregatori di quote esclusi), integrata dai feed RSS di Gazzetta e BBC";
 
-/** Prima query: le due squadre e la competizione, in italiano. */
-export function newsQueryPrimary(
+/**
+ * Le query delle notizie, NELLA LINGUA DEL PAESE in cui si gioca.
+ *
+ * Prima si cercava in italiano e poi in inglese: per una partita paraguaiana
+ * significava trovare aggregatori di quote e nient'altro. Ora l'ordine è
+ * quello del valore informativo — assenze e formazioni sulle testate
+ * nazionali, poi i canali ufficiali della società, poi logistica e crisi.
+ */
+export function newsQueriesFor(
   homeTeam: string,
   awayTeam: string,
+  country: string | null,
   league: string | null,
-): string {
-  const l = league === null || league.trim() === "" ? "" : ` ${league.trim()}`;
-  return `${homeTeam} ${awayTeam}${l}`;
+): Array<{ query: string; scopo: string; lang: string }> {
+  return localQueries(homeTeam, awayTeam, country, league);
 }
 
-/** Seconda query: ciò che muove davvero una quota alla vigilia. */
-export function newsQuerySecondary(
-  homeTeam: string,
-  awayTeam: string,
-): string {
-  return `${homeTeam} ${awayTeam} infortuni squalifiche formazioni notizie`;
-}
-
-/** Le stesse due domande in inglese, quando l'italiano non trova nulla. */
+/** Ripiego in inglese quando il paese non ha un profilo dichiarato. */
 export function newsQueryEnglish(
   homeTeam: string,
   awayTeam: string,
 ): string {
-  return `${homeTeam} ${awayTeam} injuries suspensions lineup news`;
+  return `${homeTeam} ${awayTeam} injuries suspensions lineup team news`;
 }
 
 /**
@@ -227,6 +227,8 @@ export async function searchNewsForMatch(
     budgetLeft: number;
     fetchImpl?: typeof fetch;
     apiKey?: string;
+    /** paese: decide lingua, parole chiave e testate nazionali */
+    country?: string | null;
   },
 ): Promise<TavilyNewsOutcome> {
   const apiKey = options.apiKey ?? process.env.TAVILY_API_KEY;
@@ -246,10 +248,17 @@ export async function searchNewsForMatch(
   }
 
   const doFetch = options.fetchImpl ?? fetch;
+  const country = options.country ?? null;
+  const locali = newsQueriesFor(homeTeam, awayTeam, country, league);
+  /* ordine di valore: assenze/formazioni sulle testate nazionali, poi i
+     canali ufficiali (dove nelle serie minori escono i convocati), poi
+     logistica. L'inglese resta solo come ultima spiaggia. */
   const plan: Array<{ query: string; language: "it" | "en" }> = [
-    { query: newsQueryPrimary(homeTeam, awayTeam, league), language: "it" },
-    { query: newsQuerySecondary(homeTeam, awayTeam), language: "it" },
-    { query: newsQueryEnglish(homeTeam, awayTeam), language: "en" },
+    ...locali.slice(0, 3).map((q) => ({
+      query: q.query,
+      language: (q.lang === "it" ? "it" : "en") as "it" | "en",
+    })),
+    { query: newsQueryEnglish(homeTeam, awayTeam), language: "en" as const },
   ];
 
   const out: Array<NewsFeedItem & { language: "it" | "en"; snippet: string }> = [];
@@ -259,8 +268,8 @@ export async function searchNewsForMatch(
 
   for (const step of plan) {
     if (used >= maxQueries) break;
-    /* la query inglese ha senso solo se l'italiano è rimasto a mani vuote */
-    if (step.language === "en" && out.length > 0) break;
+    /* una volta trovato qualcosa non si spende un altro credito */
+    if (out.length > 0) break;
 
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), TAVILY_TIMEOUT_MS);
@@ -271,9 +280,14 @@ export async function searchNewsForMatch(
         body: JSON.stringify({
           api_key: apiKey,
           query: step.query,
-          max_results: 5,
-          search_depth: "basic",
+          max_results: 6,
+          /* estratti più lunghi: su un comunicato di assenze la differenza
+             è fra leggere il titolo e leggere i nomi dei giocatori */
+          search_depth: "advanced",
           topic: "news",
+          /* finestra stretta: una notizia di formazioni vale se è di oggi */
+          days: 4,
+          exclude_domains: JUNK_DOMAINS,
         }),
         signal: controller.signal,
       });

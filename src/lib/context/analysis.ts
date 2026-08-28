@@ -221,9 +221,35 @@ export const COERENZA_LABELS: Record<CoerenzaValue, string> = {
   "non spiegato": "Il movimento resta senza causa pubblica",
 };
 
+/**
+ * Natura del movimento: la domanda operativa che segue la coerenza.
+ *
+ * «reale» = esiste una notizia pesante e documentata che giustifica il
+ * crollo (assenze gravi, crisi societaria, campo cambiato).
+ * «speculativo» = nessuna causa pubblica, profilo compatibile con liquidità
+ * o con una trappola: il movimento c'è ma non ha spiegazione visibile.
+ * «incerto» = elementi contrastanti, o troppo pochi per dire.
+ *
+ * Non è un consiglio: è una classificazione di ciò che sappiamo, e va letta
+ * insieme al fatto che «speculativo» NON significa «da evitare» né il
+ * contrario. Significa solo: nessuno ha scritto perché.
+ */
+export const NATURA_VALUES = ["reale", "speculativo", "incerto"] as const;
+export type NaturaValue = (typeof NATURA_VALUES)[number];
+
+export const NATURA_LABELS: Record<NaturaValue, string> = {
+  reale: "Drop reale: una notizia documentata lo giustifica",
+  speculativo: "Drop speculativo: nessuna causa pubblica, solo movimento di mercato",
+  incerto: "Natura incerta: elementi insufficienti o contrastanti",
+};
+
 export interface AnalysisProse {
   /** verdetto di coerenza fra i fatti recuperati e il movimento osservato */
   coerenza: CoerenzaValue;
+  /** natura del movimento: reale, speculativo o incerto */
+  natura: NaturaValue;
+  /** perché quella natura, in una frase */
+  naturaMotivo: string;
   /** perché quel verdetto, in una frase */
   coerenzaMotivo: string;
   matrice: string;
@@ -418,11 +444,23 @@ export function buildAnalysisPrompt(f: AnalysisFacts): string {
     "  compatibile con informazione non ancora pubblica — ma resta un'ipotesi.",
     '- "coerenzaMotivo": UNA frase che spiega quel verdetto, citando il fatto decisivo',
     "  (o dichiarando che manca). Massimo 240 caratteri.",
+    '- "natura": esattamente una fra "reale", "speculativo", "incerto".',
+    "  «reale» SOLO se una notizia documentata giustifica il crollo: assenze pesanti,",
+    "  formazione rimaneggiata o squadra B, crisi societaria (stipendi non pagati,",
+    "  spogliatoio spaccato, dimissioni), campo cambiato o squalificato, porte chiuse.",
+    "  «speculativo» se nessuna causa pubblica regge il movimento: resta compatibile",
+    "  con liquidità di mercato o con una trappola, e va detto senza giri di parole.",
+    "  «incerto» se gli elementi sono contrastanti o troppo pochi.",
+    '- "naturaMotivo": UNA frase sul perché di quella natura. Massimo 240 caratteri.',
     '- "matrice": UNA frase d\'impatto che condensa la tensione del confronto. Max 220 caratteri.',
     '- "punti": esattamente TRE oggetti {"titolo","testo","tag"}, nell\'ordine:',
-    "  (a) fattore campo e precedenti, sul piano psicologico e ambientale;",
-    "  (b) asimmetria di rendimento e di impianto tattico fra le due squadre;",
-    "  (c) posta in palio, calendario e freschezza: chi ha più da perdere e chi arriva stanco.",
+    "  (a) INDISCREZIONI E FORMAZIONI: assenze pesanti, squalifiche, turnover massiccio,",
+    "      schieramento di riserve o U19, spogliatoio in crisi, stipendi non pagati.",
+    "      Se le fonti non ne parlano, dillo apertamente invece di riempire con altro;",
+    "  (b) LOGISTICA E AMBIENTE: stadio squalificato o cambiato, campo neutro, porte",
+    "      chiuse, campo impraticabile, viaggio lungo, fattore campo reale;",
+    "  (c) POSTA IN PALIO E FRESCHEZZA: chi ha più da perdere in classifica, calendario",
+    "      congestionato, chi arriva stanco.",
     "  Ogni punto deve CHIUDERE collegandosi al movimento: se quel fattore lo sostiene,",
     "  lo contraddice o non c'entra. Un punto che non tocca il movimento è inutile.",
     '  "titolo": d\'impatto, max 60 caratteri. "testo": 3-5 frasi, max 700 caratteri.',
@@ -480,6 +518,12 @@ export function parseAnalysisProse(payload: unknown): AnalysisProse | null {
   if (coerenza === undefined) return null;
   const coerenzaMotivo = cleanStr(p.coerenzaMotivo, 300);
   if (coerenzaMotivo === null) return null;
+
+  const naturaRaw = cleanStr(p.natura, 40);
+  const natura = NATURA_VALUES.find((v) => v === (naturaRaw ?? "").toLowerCase());
+  if (natura === undefined) return null;
+  const naturaMotivo = cleanStr(p.naturaMotivo, 300);
+  if (naturaMotivo === null) return null;
   /* «cosa manca» può essere assente: in quel caso lo si dichiara, non si
      inventa un buco che il modello non ha saputo nominare */
   const cosaManca = cleanStr(p.cosaManca, 300) ?? "Non dichiarato.";
@@ -500,12 +544,22 @@ export function parseAnalysisProse(payload: unknown): AnalysisProse | null {
     matrice,
     scenario,
     coerenzaMotivo,
+    naturaMotivo,
     cosaManca,
     ...punti.map((x) => `${x.titolo} ${x.testo}`),
   ].join(" ");
   if (containsPick(tutto)) return null;
 
-  return { coerenza, coerenzaMotivo, matrice, punti, cosaManca, scenario };
+  return {
+    coerenza,
+    coerenzaMotivo,
+    natura,
+    naturaMotivo,
+    matrice,
+    punti,
+    cosaManca,
+    scenario,
+  };
 }
 
 /** Assembla l'analisi completa: prosa validata + schemi disegnati qui. */

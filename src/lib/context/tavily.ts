@@ -16,6 +16,12 @@
  * nasce dalle altre fonti (Wikipedia, feed) o dal modello — mai inventato.
  */
 
+import {
+  JUNK_DOMAINS,
+  localQueries,
+  statsQuery,
+} from "./locale-search";
+
 /**
  * Tetto giornaliero dichiarato, CONDIVISO fra Contesto 360° e Notizie:
  * un solo contatore per un solo piano gratuito.
@@ -121,6 +127,8 @@ export async function searchForMatch(
     budgetLeft: number;
     fetchImpl?: typeof fetch;
     apiKey?: string;
+    /** paese della competizione: decide lingua, parole e testate */
+    country?: string | null;
   },
 ): Promise<TavilyOutcome> {
   const apiKey = options.apiKey ?? process.env.TAVILY_API_KEY;
@@ -132,9 +140,16 @@ export async function searchForMatch(
   }
 
   const doFetch = options.fetchImpl ?? fetch;
+  const country = options.country ?? null;
+
+  /* Le due query del contesto, in ordine di valore: prima quella che può
+     spiegare un movimento (assenze e formazioni nella lingua del posto e
+     sulle testate nazionali), poi quella statistica. Prima si cercava in
+     italiano ovunque, e per il Paraguay tornavano solo aggregatori. */
+  const locali = localQueries(homeTeam, awayTeam, country, league);
   const queries = [
-    primaryQuery(homeTeam, awayTeam, league),
-    fallbackQueryTavily(homeTeam, awayTeam, league),
+    locali[0].query,
+    statsQuery(homeTeam, awayTeam, league, country),
   ];
 
   const all: TavilyResult[] = [];
@@ -152,8 +167,13 @@ export async function searchForMatch(
         body: JSON.stringify({
           api_key: apiKey,
           query,
-          max_results: 3,
-          search_depth: "basic",
+          max_results: 5,
+          /* «advanced» restituisce estratti più lunghi: su una notizia di
+             assenze la differenza è fra leggere il titolo e leggere i nomi */
+          search_depth: "advanced",
+          /* gli aggregatori di quote non pubblicano notizie: escluderli
+             libera posti per le testate che invece le scrivono */
+          exclude_domains: JUNK_DOMAINS,
         }),
         signal: controller.signal,
       });
@@ -167,7 +187,9 @@ export async function searchForMatch(
       const results = parseTavilyResults(payload);
       used += 1;
       all.push(...results);
-      if (results.length > 0) break; /* trovato: la seconda non serve */
+      /* la prima query è quella buona: se ha trovato, la seconda (statistica)
+         non vale un altro credito */
+      if (results.length > 0) break;
     } catch {
       if (used === 0 && all.length === 0) {
         return { ok: false, reason: "errore", queriesUsed: used };

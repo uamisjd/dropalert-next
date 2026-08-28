@@ -303,6 +303,7 @@ export async function getContextForMatch(
   const tavilyBudgetLeft = Math.max(0, TAVILY_DAILY_LIMIT - tavilyUsed);
   const retrieval = await retrieveSources(homeTeam, awayTeam, {
     league: info.leagueName,
+    country: info.country,
     tavilyBudgetLeft,
   }).catch(
     (): Awaited<ReturnType<typeof retrieveSources>> => ({

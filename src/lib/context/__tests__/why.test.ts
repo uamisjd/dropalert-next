@@ -30,8 +30,7 @@ import {
   teamTokens,
   domainOf,
   newsQueryEnglish,
-  newsQueryPrimary,
-  newsQuerySecondary,
+  newsQueriesFor,
   toNewsItems,
 } from "@/lib/news/tavily-news";
 import { CONTEXT_FIELD_KEYS, CONTEXT_RETRIEVAL_VERSION } from "../pure";
@@ -130,9 +129,17 @@ check("chiusura anche nel caso vuoto", vuota.paragraph.endsWith(WHY_CLOSING));
 eq("nessun driver", vuota.drivers.length, 0);
 
 /* --- notizie Tavily --- */
-eq("query primaria con lega", newsQueryPrimary("Alfa", "Beta", "Serie X"), "Alfa Beta Serie X");
-eq("query primaria senza lega", newsQueryPrimary("Alfa", "Beta", null), "Alfa Beta");
-check("query secondaria mirata", newsQuerySecondary("Alfa", "Beta").includes("infortuni squalifiche formazioni"));
+/* le query ora nascono nella lingua del paese: per il Paraguay in spagnolo
+   e sulle testate locali, non in italiano su aggregatori di quote */
+const qPy = newsQueriesFor("General Caballero", "Dep. Capiata", "Paraguay", "Paraguay: Division Intermedia");
+eq("quattro domande per partita", qPy.length, 4);
+eq("lingua del paese", qPy[0].lang, "es");
+check("cerca le assenze in spagnolo", qPy[0].query.includes("bajas") && qPy[0].query.includes("lesionados"));
+check("mira alle testate nazionali", qPy[0].query.includes("abc.com.py"));
+check("una query sui canali ufficiali", qPy[1].query.includes("site:x.com") || qPy[1].query.includes("twitter.com"));
+check("una query su campo e logistica", qPy[2].query.includes("estadio"));
+const qSe = newsQueriesFor("Uppsala", "Eskilstuna", "Sweden", null);
+check("svedese per la Svezia", qSe[0].query.includes("skador") && qSe[0].lang === "sv");
 check("query inglese di fallback", newsQueryEnglish("Alfa", "Beta").includes("injuries suspensions lineup"));
 eq("dominio estratto", domainOf("https://www.corriere.it/sport/x"), "corriere.it");
 eq("dominio assente", domainOf("non-un-url"), null);

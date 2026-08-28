@@ -212,17 +212,19 @@ export async function getNewsForMatch(
   }
 
   /* 1. fonte principale: ricerca Tavily, entro il budget condiviso */
-  const [{ name: leagueName } = { name: null }] = await db
-    .select({ name: leagues.name })
-    .from(matches)
-    .leftJoin(leagues, eq(leagues.id, matches.leagueId))
-    .where(eq(matches.id, matchId))
-    .limit(1);
+  const [{ name: leagueName, country: leagueCountry } = { name: null, country: null }] =
+    await db
+      .select({ name: leagues.name, country: leagues.country })
+      .from(matches)
+      .leftJoin(leagues, eq(leagues.id, matches.leagueId))
+      .where(eq(matches.id, matchId))
+      .limit(1);
 
   const usedToday = await readTavilyUsage(now);
   const budgetLeft = Math.max(0, TAVILY_DAILY_LIMIT - usedToday);
   const tavily = await searchNewsForMatch(homeTeam, awayTeam, leagueName, {
     budgetLeft,
+    country: leagueCountry,
   }).catch(() => ({
     items: [],
     queriesUsed: 0,

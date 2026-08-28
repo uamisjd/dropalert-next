@@ -9,7 +9,12 @@
  * disegno che ripete non informa — occupa spazio e basta.
  */
 import type { AnalysisView } from "@/lib/repo/analysis";
-import { COERENZA_LABELS, type CoerenzaValue } from "@/lib/context/analysis";
+import {
+  COERENZA_LABELS,
+  NATURA_LABELS,
+  type CoerenzaValue,
+  type NaturaValue,
+} from "@/lib/context/analysis";
 
 /* Il verdetto non è un voto: è una dichiarazione su quanto sappiamo. Grigi
    e basta — un semaforo verde/rosso suggerirebbe un giudizio di merito. */
@@ -17,6 +22,14 @@ const COERENZA_STYLES: Record<CoerenzaValue, string> = {
   spiegato: "border-slate-700 bg-slate-800 text-slate-100",
   parziale: "border-slate-400 bg-slate-100 text-slate-900",
   "non spiegato": "border-dashed border-slate-400 bg-white text-slate-700",
+};
+
+/* stessa disciplina: scala di grigi, nessun semaforo. «Speculativo» non è
+   un allarme rosso e «reale» non è un via libera verde. */
+const NATURA_STYLES: Record<NaturaValue, string> = {
+  reale: "border-slate-700 bg-slate-800 text-slate-100",
+  speculativo: "border-dashed border-slate-400 bg-white text-slate-700",
+  incerto: "border-slate-300 bg-slate-100 text-slate-700",
 };
 
 export function DeepAnalysis360({ view }: { view: AnalysisView }) {
@@ -55,6 +68,21 @@ export function DeepAnalysis360({ view }: { view: AnalysisView }) {
             <p className="mt-1.5 text-xs leading-relaxed text-slate-700">
               {a.coerenzaMotivo}
             </p>
+
+            {/* la domanda operativa: il crollo ha una causa documentata
+                oppure è solo movimento di mercato? */}
+            <div className="mt-2 border-t border-slate-200 pt-2">
+              <span
+                className={`rounded border px-2 py-0.5 text-xs font-semibold ${
+                  NATURA_STYLES[a.natura]
+                }`}
+              >
+                {NATURA_LABELS[a.natura]}
+              </span>
+              <p className="mt-1.5 text-xs leading-relaxed text-slate-700">
+                {a.naturaMotivo}
+              </p>
+            </div>
           </div>
 
           <div>

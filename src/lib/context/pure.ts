@@ -84,7 +84,7 @@ export const MAX_CONTEXT_SOURCES = 3;
  * le righe con versione diversa si rigenerano al primo render. Serve a non
  * mostrare contesti nati con fonti vecchie (es. pre-Tavily).
  */
-export const CONTEXT_RETRIEVAL_VERSION = 5;
+export const CONTEXT_RETRIEVAL_VERSION = 6;
 
 function cleanUrl(value: unknown): string | null {
   if (typeof value !== "string") return null;

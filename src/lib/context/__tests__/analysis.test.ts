@@ -9,6 +9,8 @@ import {
   ANALYSIS_CLOSING,
   COERENZA_LABELS,
   COERENZA_VALUES,
+  NATURA_LABELS,
+  NATURA_VALUES,
   assembleAnalysis,
   buildAnalysisPrompt,
   buildHeadline,
@@ -115,6 +117,8 @@ check("testo descrittivo ammesso", !containsPick("Il mercato ha riprezzato l'esi
 /* --- parsing della prosa --- */
 const buona = {
   coerenza: "parziale",
+  natura: "speculativo",
+  naturaMotivo: "Nessuna fonte riporta assenze, crisi societarie o cambi di campo: il movimento resta senza causa documentata.",
   coerenzaMotivo: "Il divario di categoria è documentato, ma nessuna fonte spiega perché il mercato si sia mosso ora.",
   cosaManca: "Le formazioni ufficiali: senza quelle non si distingue un turnover programmato da un'assenza dell'ultima ora.",
   matrice: "Un fortino che non concede sconti contro una squadra B in rodaggio: il mercato lo ha sentito prima del fischio.",
@@ -175,6 +179,18 @@ eq(
   parseAnalysisProse({ ...buona, cosaManca: undefined })!.cosaManca,
   "Non dichiarato.",
 );
+/* --- natura del drop: reale vs speculativo --- */
+eq("natura conservata", prose.natura, "speculativo");
+eq("tre nature possibili", NATURA_VALUES.length, 3);
+check("ogni natura ha un'etichetta parlante",
+  NATURA_VALUES.every((v) => (NATURA_LABELS[v] ?? "").length > 15));
+eq("natura ignota: respinta", parseAnalysisProse({ ...buona, natura: "fortissimo" }), null);
+eq("natura mancante: respinta", parseAnalysisProse({ ...buona, natura: undefined }), null);
+eq("motivo della natura mancante: respinta", parseAnalysisProse({ ...buona, naturaMotivo: "" }), null);
+eq("drop reale accettato", parseAnalysisProse({ ...buona, natura: "reale" })!.natura, "reale");
+eq("pick dentro il motivo della natura: respinta",
+  parseAnalysisProse({ ...buona, naturaMotivo: "Da giocare l'over 2.5." }), null);
+
 eq("pick dentro il motivo: respinta",
   parseAnalysisProse({ ...buona, coerenzaMotivo: "Da giocare l'over 2.5." }), null);
 eq("pick dentro «cosa manca»: respinta",
@@ -231,6 +247,11 @@ check("prompt vieta i preamboli", prompt.includes("Nessun preambolo"));
 check("prompt vieta la fase di raccolta visibile", prompt.includes("nessuna descrizione di come raccogli"));
 check("prompt elenca i divieti", prompt.includes("esito consigliato") && prompt.includes("value bet"));
 check("prompt chiede il verdetto di coerenza", prompt.includes('"coerenza"') && prompt.includes("non spiegato"));
+check("prompt chiede la natura del drop", prompt.includes('"natura"') && prompt.includes("speculativo"));
+check("prompt elenca le cause di un drop reale",
+  prompt.includes("stipendi non pagati") && prompt.includes("squalificato"));
+check("prompt chiede indiscrezioni e formazioni", prompt.includes("INDISCREZIONI E FORMAZIONI"));
+check("prompt chiede logistica e ambiente", prompt.includes("LOGISTICA E AMBIENTE"));
 check("prompt chiede di dichiarare cosa manca", prompt.includes('"cosaManca"'));
 check("prompt impone di collegare ogni punto al movimento", prompt.includes("CHIUDERE collegandosi al movimento"));
 check("prompt traduce il profilo in parole, non in numeri", /PRECOCE|TARDIVO|FLASH|SOSTENUTO/.test(prompt));

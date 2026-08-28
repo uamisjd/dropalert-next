@@ -106,7 +106,13 @@ function toDocs(results: TavilyResult[]): RetrievedDoc[] {
 export async function retrieveSources(
   homeTeam: string,
   awayTeam: string,
-  options: { fetchImpl?: typeof fetch; league?: string | null; tavilyBudgetLeft?: number } = {},
+  options: {
+    fetchImpl?: typeof fetch;
+    league?: string | null;
+    /** paese: decide lingua, parole chiave e testate della ricerca */
+    country?: string | null;
+    tavilyBudgetLeft?: number;
+  } = {},
 ): Promise<RetrievalReport> {
   const doFetch = options.fetchImpl ?? fetch;
   const budgetLeft =
@@ -124,7 +130,7 @@ export async function retrieveSources(
     homeTeam,
     awayTeam,
     options.league ?? null,
-    { budgetLeft, fetchImpl: doFetch },
+    { budgetLeft, fetchImpl: doFetch, country: options.country ?? null },
   ).catch(() => ({ ok: false as const, reason: "errore" as const, queriesUsed: 0 }));
 
   if (tavily.ok && tavily.results.length > 0) {
