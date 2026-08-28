@@ -36,8 +36,13 @@ import { NextResponse } from "next/server";
 import { runCycle } from "@/lib/pipeline/scheduler";
 
 export const dynamic = "force-dynamic";
-/* la raccolta può superare i pochi secondi di default */
-export const maxDuration = 60;
+/**
+ * Tetto di durata, misurato sul campo: con 60 secondi la chiamata è andata
+ * in `FUNCTION_INVOCATION_TIMEOUT` (28/08/2026). Un giro completo — raccolta,
+ * analisi, chiusure — impiega di più, e il piano Hobby concede fino a 300
+ * secondi: tanto vale dichiararli, invece di far fallire il giro a metà.
+ */
+export const maxDuration = 300;
 
 function authorized(request: Request): boolean {
   const jobs = process.env.JOBS_TOKEN;
