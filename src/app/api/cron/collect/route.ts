@@ -33,6 +33,8 @@
  * gate. Se un giorno lo scheduler dovesse cambiare, resta l'header.
  */
 import { NextResponse } from "next/server";
+import { db } from "@/db/client";
+import { systemState } from "@/db/schema";
 import {
   readLastCycle,
   readSchedulerConfig,
@@ -66,6 +68,27 @@ function authorized(request: Request): boolean {
   return process.env.NODE_ENV !== "production";
 }
 
+/**
+ * Traccia dell'ultima bussata dello scheduler esterno.
+ *
+ * Senza questa riga una raccolta ferma è ambigua: non si distingue «lo
+ * scheduler non chiama» da «chiama, ma il gate dice di no». Costa un upsert
+ * su una riga sola e rende la seconda gamba osservabile invece che sperata.
+ */
+export const EXTERNAL_PING_KEY = "cron:external:last_ping";
+
+async function tracePing(skipped: boolean, now: Date): Promise<void> {
+  const value = { at: now.toISOString(), skipped };
+  await db
+    .insert(systemState)
+    .values({ key: EXTERNAL_PING_KEY, value, updatedAt: now })
+    .onConflictDoUpdate({
+      target: systemState.key,
+      set: { value, updatedAt: now },
+    })
+    .catch(() => undefined);
+}
+
 export async function GET(request: Request) {
   if (!authorized(request)) {
     return NextResponse.json(
@@ -88,6 +111,7 @@ export async function GET(request: Request) {
       false,
     );
     if (!gate.run) {
+      await tracePing(true, new Date());
       return NextResponse.json({
         ok: true,
         runner: "vercel-cron",
@@ -99,6 +123,7 @@ export async function GET(request: Request) {
 
     /* stesso ciclo di Actions: raccolta, analisi, chiusura. `force` mai:
        la spaziatura minima resta l'autorità, anche quando il cron insiste */
+    await tracePing(false, new Date());
     const result = await runCycle({
       force: false,
       /* «scheduled» è ciò che fa avanzare la profondità della serie: un giro
