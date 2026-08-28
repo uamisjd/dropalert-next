@@ -33,7 +33,12 @@
  * gate. Se un giorno lo scheduler dovesse cambiare, resta l'header.
  */
 import { NextResponse } from "next/server";
-import { runCycle } from "@/lib/pipeline/scheduler";
+import {
+  readLastCycle,
+  readSchedulerConfig,
+  runCycle,
+  shouldRunNow,
+} from "@/lib/pipeline/scheduler";
 
 export const dynamic = "force-dynamic";
 /**
@@ -69,6 +74,29 @@ export async function GET(request: Request) {
     );
   }
   try {
+    /* USCITA ANTICIPATA, questione di budget non di eleganza: `runCycle`
+       rispetta il gate sulla raccolta ma prosegue comunque con analisi e
+       chiusure, e misurato in produzione costa oltre 200 secondi anche
+       quando non raccoglie nulla. Con uno scheduler esterno che bussa ogni
+       quarto d'ora quel lavoro inutile divorerebbe le 4 CPU-ore mensili del
+       piano. Qui si legge soltanto l'istante dell'ultimo giro e, se è
+       recente, si risponde in pochi millisecondi. */
+    const gate = shouldRunNow(
+      await readLastCycle().then((l) => (l ? new Date(l.at) : null)),
+      new Date(),
+      readSchedulerConfig().intervalMinutes,
+      false,
+    );
+    if (!gate.run) {
+      return NextResponse.json({
+        ok: true,
+        runner: "vercel-cron",
+        skipped: true,
+        reason: gate.reason,
+        waitedMinutes: gate.waitedMinutes,
+      });
+    }
+
     /* stesso ciclo di Actions: raccolta, analisi, chiusura. `force` mai:
        la spaziatura minima resta l'autorità, anche quando il cron insiste */
     const result = await runCycle({
