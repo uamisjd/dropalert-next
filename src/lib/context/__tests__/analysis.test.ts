@@ -1,24 +1,22 @@
 /**
- * Test dell'«Analisi 360° completa»: schemi, intestazione, divieto di pick.
+ * Test dell'«Analisi 360° completa»: verdetto di coerenza col movimento,
+ * intestazione, divieto di pick e deriva temporale.
  * Funzioni pure, nessuna rete e nessun database.
  * Eseguire con: npm run test:analysis
  */
 import {
   ANALYSIS_CACHE_HOURS,
   ANALYSIS_CLOSING,
-  SCHEMA_MAX_COLS,
+  COERENZA_LABELS,
+  COERENZA_VALUES,
   assembleAnalysis,
   buildAnalysisPrompt,
   buildHeadline,
-  buildTreeSchema,
-  buildVectorSchema,
   containsPick,
-  fit,
   parseAnalysisProse,
   isAnalysisStale,
   reinjectLiveValues,
   sanitizeFase,
-  schemaWithinWidth,
   withLiveValues,
   STALE_SHIFT_PP,
   STALE_AGE_HOURS,
@@ -105,47 +103,6 @@ check("intestazione mai concatenata male", !rotta.includes("valevole per Trattan
 check("intestazione resta una frase corretta", rotta.startsWith("La sfida valevole per") || rotta.startsWith("La sfida tra"));
 check("nessun doppio spazio", !rotta.includes("  "));
 
-/* --- schemi: il vincolo è di codice --- */
-const albero = buildTreeSchema(facts);
-const vettore = buildVectorSchema(facts);
-eq("larghezza massima dichiarata", SCHEMA_MAX_COLS, 32);
-check("schema 1 entro 32 colonne", schemaWithinWidth(albero));
-check("schema 2 entro 32 colonne", schemaWithinWidth(vettore));
-check("schema 1 ha i due rami squadra", albero.includes("Cove Rangers FC") && albero.includes("Dundee"));
-check("schema 2 converge a destra", vettore.includes("-->"));
-check("schema 2 ha rami che confluiscono", vettore.includes("\\") && vettore.includes("/"));
-
-/* --- micro-fix: newline reali e indentazione conservata --- */
-for (const [nome, schema] of [["albero", albero], ["vettore", vettore]] as const) {
-  check(`schema ${nome}: nessun \\n testuale`, !schema.includes("\\n"));
-  check(`schema ${nome}: righe vere`, schema.split("\n").length >= 3);
-}
-check(
-  "schema 1 conserva l'indentazione dei rami",
-  albero.split("\n").some((l) => l.startsWith("    +--")),
-);
-check(
-  "schema 2 conserva l'indentazione della convergenza",
-  vettore.split("\n").some((l) => /^\s{5,}[\\/]/.test(l)),
-);
-check(
-  "nessuna riga con spazi iniziali persi",
-  buildTreeSchema({ ...facts, homeTeam: "Nome Molto Lungo Da Tagliare Assai" })
-    .split("\n")
-    .some((l) => l.startsWith("    +--")),
-);
-check("nomi lunghi accorciati, mai sfondati", schemaWithinWidth(buildTreeSchema({
-  ...facts,
-  homeTeam: "Associazione Sportiva Dilettantistica Nome Lunghissimo",
-  awayTeam: "Altra Squadra Dal Nome Interminabile United",
-})));
-check("prezzi non noti non rompono lo schema", schemaWithinWidth(buildTreeSchema({
-  ...facts,
-  movimento: { ...facts.movimento, apertura: null, corrente: null, scesa: null },
-})));
-eq("fit accorcia con punto", fit("abcdefghij", 5), "abcd.");
-eq("fit non tocca ciò che entra", fit("abc", 5), "abc");
-
 /* --- divieto di pick --- */
 check("esito consigliato vietato", containsPick("L'esito consigliato è la vittoria interna"));
 check("mercato gol vietato", containsPick("occhio al mercato gol"));
@@ -157,6 +114,9 @@ check("testo descrittivo ammesso", !containsPick("Il mercato ha riprezzato l'esi
 
 /* --- parsing della prosa --- */
 const buona = {
+  coerenza: "parziale",
+  coerenzaMotivo: "Il divario di categoria è documentato, ma nessuna fonte spiega perché il mercato si sia mosso ora.",
+  cosaManca: "Le formazioni ufficiali: senza quelle non si distingue un turnover programmato da un'assenza dell'ultima ora.",
   matrice: "Un fortino che non concede sconti contro una squadra B in rodaggio: il mercato lo ha sentito prima del fischio.",
   punti: [
     { titolo: "Il fortino di Balmoral", testo: "In casa il Cove Rangers concede poco. Il precedente pesa sul piano psicologico.", tag: "fonte" },
@@ -191,12 +151,34 @@ eq(
 /* --- assemblaggio --- */
 const full = assembleAnalysis(facts, prose, now);
 eq("chiusura fissa", full.closing, ANALYSIS_CLOSING);
-check("entrambi gli schemi presenti", full.schemaAlbero.length > 0 && full.schemaVettore.length > 0);
-check("entrambi entro il limite", schemaWithinWidth(full.schemaAlbero) && schemaWithinWidth(full.schemaVettore));
+check("gli schemi ASCII non esistono più", !("schemaAlbero" in full) && !("schemaVettore" in full));
 check("nessun pick nel prodotto finito", !containsPick(
   [full.headline, full.matrice, full.scenario, ...full.punti.map((p) => `${p.titolo} ${p.testo}`)].join(" "),
 ));
 eq("cache dichiarata a 24h", ANALYSIS_CACHE_HOURS, 24);
+
+/* --- il verdetto di coerenza: è il punto della sezione --- */
+eq("verdetto conservato", prose.coerenza, "parziale");
+eq("tre verdetti possibili, non una scala", COERENZA_VALUES.length, 3);
+check("ogni verdetto ha un'etichetta in italiano",
+  COERENZA_VALUES.every((v) => (COERENZA_LABELS[v] ?? "").length > 10));
+eq("verdetto ignoto: respinta", parseAnalysisProse({ ...buona, coerenza: "molto probabile" }), null);
+eq("verdetto mancante: respinta", parseAnalysisProse({ ...buona, coerenza: undefined }), null);
+eq("motivo mancante: respinta", parseAnalysisProse({ ...buona, coerenzaMotivo: "" }), null);
+eq(
+  "«non spiegato» è un esito valido, non un errore",
+  parseAnalysisProse({ ...buona, coerenza: "non spiegato" })!.coerenza,
+  "non spiegato",
+);
+eq(
+  "«cosa manca» assente si dichiara, non si inventa",
+  parseAnalysisProse({ ...buona, cosaManca: undefined })!.cosaManca,
+  "Non dichiarato.",
+);
+eq("pick dentro il motivo: respinta",
+  parseAnalysisProse({ ...buona, coerenzaMotivo: "Da giocare l'over 2.5." }), null);
+eq("pick dentro «cosa manca»: respinta",
+  parseAnalysisProse({ ...buona, cosaManca: "Il nostro pronostico." }), null);
 
 /* --- A3: deriva temporale --- */
 eq("soglia di scostamento dichiarata", STALE_SHIFT_PP, 2);
@@ -248,10 +230,16 @@ const prompt = buildAnalysisPrompt(facts);
 check("prompt vieta i preamboli", prompt.includes("Nessun preambolo"));
 check("prompt vieta la fase di raccolta visibile", prompt.includes("nessuna descrizione di come raccogli"));
 check("prompt elenca i divieti", prompt.includes("esito consigliato") && prompt.includes("value bet"));
+check("prompt chiede il verdetto di coerenza", prompt.includes('"coerenza"') && prompt.includes("non spiegato"));
+check("prompt chiede di dichiarare cosa manca", prompt.includes('"cosaManca"'));
+check("prompt impone di collegare ogni punto al movimento", prompt.includes("CHIUDERE collegandosi al movimento"));
+check("prompt traduce il profilo in parole, non in numeri", /PRECOCE|TARDIVO|FLASH|SOSTENUTO/.test(prompt));
+check("prompt vieta di completare i fatti a memoria", prompt.includes("non completarli con ciò che credi di sapere"));
 check("prompt passa i fatti con fonte", prompt.includes("[FONTE: https://a.it/x]"));
 check("prompt esclude i campi «non noto»", !prompt.includes("assenze_note: non noto"));
 check("prompt non chiede schemi al modello", !/schema\s*1|ascii/i.test(prompt));
-check("prompt passa il profilo del movimento", prompt.includes("2.31") && prompt.includes("4 bookmaker su 6"));
+check("prompt passa il profilo senza numeri di quota", !prompt.includes("2.31") && prompt.includes("4 bookmaker su 6"));
+check("prompt dice la direzione a parole", prompt.includes("quota in DISCESA"));
 check("prompt vieta i numeri esatti nel testo", prompt.includes("non citare quote, percentuali"));
 
 if (failures.length > 0) {

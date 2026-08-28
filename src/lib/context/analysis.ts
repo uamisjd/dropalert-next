@@ -2,9 +2,6 @@
  * «Analisi 360° completa» — parte pura (Sprint analisi on-demand).
  *
  * Divisione del lavoro, dichiarata:
- *  - i due SCHEMI sono disegnati QUI, in TypeScript, dai dati già noti:
- *    così la larghezza massima di 32 colonne è una proprietà verificabile
- *    del codice e non una speranza riposta nel modello;
  *  - le PARTI DISCORSIVE (matrice dei fattori, tre punti, scenario) arrivano
  *    dal modello, che lavora solo sui fatti già recuperati (campi del
  *    Contesto 360° con fonte, documenti Tavily, profilo del movimento);
@@ -13,9 +10,6 @@
  *
  * Niente qui dentro entra nel punteggio.
  */
-
-/** Larghezza massima di una riga di schema: vincolo mobile, non estetico. */
-export const SCHEMA_MAX_COLS = 32;
 
 /** Chiusura fissa, identica ovunque compaia l'analisi. */
 export const ANALYSIS_CLOSING =
@@ -203,114 +197,39 @@ export function buildHeadline(f: AnalysisFacts): string {
 /* Schemi ASCII, disegnati qui: ≤ 32 colonne per costruzione            */
 /* ------------------------------------------------------------------ */
 
-/** Accorcia un'etichetta perché stia nelle colonne disponibili. */
-export function fit(text: string, width: number): string {
-  const t = text.trim().replace(/\s+/g, " ");
-  if (t.length <= width) return t;
-  if (width <= 1) return t.slice(0, width);
-  return `${t.slice(0, width - 1)}.`;
-}
-
-/**
- * Tronca una riga GIÀ composta senza toccarne gli spazi iniziali.
- *
- * `fit` normalizza gli spazi — giusto per un'etichetta, sbagliato per una
- * riga di schema: applicandolo alle righe finite i rami dello schema 2
- * perdevano l'indentazione e non convergevano più verso destra.
- */
-function clampLine(line: string, width: number): string {
-  return line.length <= width ? line : line.slice(0, width);
-}
-
-function padTo(text: string, width: number): string {
-  return text.length >= width ? text.slice(0, width) : text.padEnd(width, " ");
-}
-
-/**
- * Schema 1 — confronto ad albero.
- * Le due squadre come rami di uno stesso nodo, con le tre voci confrontabili
- * che il registro conosce sempre: verso del movimento, conferme, persistenza.
- */
-export function buildTreeSchema(f: AnalysisFacts): string {
-  const W = SCHEMA_MAX_COLS;
-  const m = f.movimento;
-  const verso =
-    m.scesa === null ? "non misurabile" : m.scesa ? "in discesa" : "in salita";
-  const conferme =
-    m.bookTotali <= 1 ? "1 linea di consenso" : `${m.bookConfermano}/${m.bookTotali} book`;
-  const durata =
-    m.sostenutoMinuti >= 60
-      ? `${Math.round(m.sostenutoMinuti / 60)}h sul livello`
-      : `${m.sostenutoMinuti} min sul livello`;
-  const prezzo =
-    m.apertura !== null && m.corrente !== null
-      ? `${m.apertura.toFixed(2)} -> ${m.corrente.toFixed(2)}`
-      : "prezzi non noti";
-
-  const lines = [
-    "CONFRONTO",
-    "|",
-    `+-- ${fit(f.homeTeam, W - 4)}`,
-    "|   +-- casa",
-    `+-- ${fit(f.awayTeam, W - 4)}`,
-    "|   +-- trasferta",
-    "|",
-    "+-- movimento",
-    `    +-- ${fit(verso, W - 8)}`,
-    `    +-- ${fit(prezzo, W - 8)}`,
-    `    +-- ${fit(conferme, W - 8)}`,
-    `    +-- ${fit(durata, W - 8)}`,
-  ];
-  return lines.map((l) => clampLine(l, W)).join("\n");
-}
-
-/**
- * Schema 2 — incrocio vettoriale: i rami convergono da sinistra verso destra
- * su un unico punto di arrivo, il prezzo corrente.
- */
-export function buildVectorSchema(f: AnalysisFacts): string {
-  const W = SCHEMA_MAX_COLS;
-  const m = f.movimento;
-  const LEFT = 14;
-
-  const tempo =
-    m.oreAlKickoff === null
-      ? "tempo n/d"
-      : m.oreAlKickoff >= 24
-        ? "precoce"
-        : m.oreAlKickoff <= 6
-          ? "tardivo"
-          : "intermedio";
-  const forma = m.flash ? "flash" : m.rimbalzato ? "rimbalzo" : "sostenuto";
-  const ampiezza =
-    m.bookTotali <= 1 ? "book singolo" : `${m.bookConfermano} book`;
-  const arrivo =
-    m.corrente !== null ? `quota ${m.corrente.toFixed(2)}` : "quota corrente";
-
-  const rows = [
-    `${padTo(fit(tempo, LEFT), LEFT)}\\`,
-    `${" ".repeat(LEFT)} \\`,
-    `${padTo(fit(forma, LEFT), LEFT)}--> ${fit(arrivo, W - LEFT - 4)}`,
-    `${" ".repeat(LEFT)} /`,
-    `${padTo(fit(ampiezza, LEFT), LEFT)}/`,
-  ];
-  return [clampLine("INCROCIO VETTORIALE", W), ...rows]
-    .map((l) => clampLine(l, W))
-    .join("\n");
-}
-
-/** true se ogni riga sta nelle colonne consentite. */
-export function schemaWithinWidth(schema: string, width = SCHEMA_MAX_COLS): boolean {
-  return schema.split("\n").every((l) => l.length <= width);
-}
-
 /* ------------------------------------------------------------------ */
 /* Parti discorsive: contratto col modello                             */
 /* ------------------------------------------------------------------ */
 
+/**
+ * Verdetto di coerenza fra contesto e movimento.
+ *
+ * È la domanda per cui questa sezione esiste: ciò che sappiamo della partita
+ * SPIEGA il movimento della quota, oppure il movimento resta senza causa
+ * visibile? Le tre risposte sono chiuse, perché una scala aperta finirebbe
+ * per essere un giudizio mascherato da misura.
+ *
+ * «non spiegato» non è un fallimento: un movimento senza causa pubblica è
+ * un'informazione, ed è spesso la più interessante.
+ */
+export const COERENZA_VALUES = ["spiegato", "parziale", "non spiegato"] as const;
+export type CoerenzaValue = (typeof COERENZA_VALUES)[number];
+
+export const COERENZA_LABELS: Record<CoerenzaValue, string> = {
+  spiegato: "Il contesto spiega il movimento",
+  parziale: "Il contesto lo spiega solo in parte",
+  "non spiegato": "Il movimento resta senza causa pubblica",
+};
+
 export interface AnalysisProse {
+  /** verdetto di coerenza fra i fatti recuperati e il movimento osservato */
+  coerenza: CoerenzaValue;
+  /** perché quel verdetto, in una frase */
+  coerenzaMotivo: string;
   matrice: string;
   punti: Array<{ titolo: string; testo: string; tag: "fonte" | "ipotesi" }>;
+  /** che cosa servirebbe sapere e non sappiamo: dichiarato, non nascosto */
+  cosaManca: string;
   scenario: string;
 }
 
@@ -330,8 +249,6 @@ export interface MovementStamp {
 
 export interface DeepAnalysis extends AnalysisProse {
   headline: string;
-  schemaAlbero: string;
-  schemaVettore: string;
   closing: string;
   generatedAt: string;
   /** valori del movimento al momento in cui il testo è stato scritto */
@@ -442,36 +359,85 @@ export function buildAnalysisPrompt(f: AnalysisFacts): string {
     );
   const docs = f.docs.slice(0, 6).map((d, i) => `${i + 1}. ${d.titolo} — ${d.url}`);
 
+  /* la forma del movimento, tradotta in parole: al modello serve il PROFILO,
+     non i numeri, perché i numeri invecchiano e il profilo no */
+  const quando =
+    m.oreAlKickoff === null
+      ? "distanza dal calcio d'inizio non nota"
+      : m.oreAlKickoff >= 24
+        ? "movimento PRECOCE, oltre un giorno prima del calcio d'inizio (mercati sottili, poche giocate bastano a spostarli)"
+        : m.oreAlKickoff <= 6
+          ? "movimento TARDIVO, a ridosso del calcio d'inizio (finestra di formazioni e ultime notizie)"
+          : "movimento a distanza intermedia dal calcio d'inizio";
+  const forma = m.flash
+    ? "FLASH: concentrato in pochi minuti, compatibile con una singola giocata grossa"
+    : m.sostenutoMinuti >= 120
+      ? `SOSTENUTO: il prezzo ha tenuto il nuovo livello per ore, il mercato non ha corretto`
+      : "di durata breve ma non istantanea";
+  const conferme =
+    m.bookTotali <= 1
+      ? "UNA SOLA linea di consenso: la concordanza fra bookmaker non è osservabile, e da un solo operatore non si deduce coordinazione"
+      : `${m.bookConfermano} bookmaker su ${m.bookTotali} concordi`;
+
   return [
     "Sei l'analista di un osservatorio statistico sui movimenti delle quote nel calcio.",
-    "Scrivi in italiano. Nessun preambolo, nessun saluto, nessuna descrizione di come raccogli i dati.",
-    "Rispondi SOLO con un oggetto JSON.",
+    "Scrivi in italiano, in prosa densa e concreta. Nessun preambolo, nessun saluto,",
+    "nessuna descrizione di come raccogli i dati. Rispondi SOLO con un oggetto JSON.",
+    "",
+    "LA DOMANDA A CUI DEVI RISPONDERE, e nessun'altra:",
+    "ciò che sappiamo di questa partita SPIEGA il movimento della quota, oppure no?",
+    "Non ti si chiede di prevedere la partita. Ti si chiede di dire se il contesto",
+    "regge il movimento osservato, e dove non lo regge.",
     "",
     `Partita: ${f.homeTeam} contro ${f.awayTeam}${f.league ? ` — ${f.league}` : ""}.`,
     `Calcio d'inizio: ${f.kickoffAt}.`,
     "",
-    "FATTI GIÀ RECUPERATI (non cercarne altri, non inventarne):",
+    "FATTI RECUPERATI. Sono gli unici che puoi usare: non cercarne altri, non",
+    "inventarne, non completarli con ciò che credi di sapere sul campionato.",
     ...(fatti.length > 0 ? fatti : ["- nessun campo di contesto disponibile"]),
     "",
-    "DOCUMENTI RECUPERATI:",
+    "DOCUMENTI CONSULTATI:",
     ...(docs.length > 0 ? docs : ["- nessun documento"]),
     "",
-    "PROFILO DEL MOVIMENTO (misurato dal monitor, non da te):",
-    `- esito osservato: ${m.selezione}`,
-    `- quota: ${m.apertura ?? "n/d"} -> ${m.corrente ?? "n/d"} (${m.scesa === null ? "verso non misurabile" : m.scesa ? "in discesa" : "in salita"})`,
-    `- distanza dal calcio d'inizio alla nascita del segnale: ${m.oreAlKickoff === null ? "non nota" : `${m.oreAlKickoff.toFixed(1)} ore`}`,
-    `- persistenza: ${m.sostenutoMinuti} minuti${m.flash ? ", movimento flash" : ""}${m.rimbalzato ? ", poi rientrato" : ""}`,
-    `- conferme: ${m.bookConfermano} bookmaker su ${m.bookTotali}`,
+    "PROFILO DEL MOVIMENTO, misurato dal monitor (non da te, non discuterlo):",
+    `- esito che si è mosso: ${m.selezione}`,
+    `- direzione: ${m.scesa === null ? "non misurabile" : m.scesa ? "quota in DISCESA (il mercato prezza quell'esito più caro)" : "quota in SALITA (il mercato lo prezza meno caro)"}`,
+    `- tempistica: ${quando}`,
+    `- forma: ${forma}`,
+    `- ampiezza del consenso: ${conferme}`,
+    m.rimbalzato ? "- ATTENZIONE: la quota è poi RIENTRATA verso il livello di partenza: parte del movimento è stata smentita dal mercato stesso" : "",
     "",
     "Chiavi richieste:",
-    '- "matrice": UNA frase d\'impatto, ad alta tensione, che condensa i fattori chiave. Massimo 220 caratteri.',
+    '- "coerenza": esattamente una fra "spiegato", "parziale", "non spiegato".',
+    "  Scegli in base a QUANTO i fatti recuperati giustificano il movimento:",
+    "  «spiegato» solo se esiste un fatto CON FONTE che lo giustifica da solo;",
+    "  «parziale» se i fatti sono compatibili ma non sufficienti;",
+    "  «non spiegato» se non c'è nulla di pubblico che regga il movimento.",
+    "  Nel dubbio scegli il verdetto PIÙ PRUDENTE: «non spiegato» non è un fallimento,",
+    "  è un'informazione preziosa, perché un movimento senza causa pubblica è",
+    "  compatibile con informazione non ancora pubblica — ma resta un'ipotesi.",
+    '- "coerenzaMotivo": UNA frase che spiega quel verdetto, citando il fatto decisivo',
+    "  (o dichiarando che manca). Massimo 240 caratteri.",
+    '- "matrice": UNA frase d\'impatto che condensa la tensione del confronto. Max 220 caratteri.',
     '- "punti": esattamente TRE oggetti {"titolo","testo","tag"}, nell\'ordine:',
-    "  (a) fattore campo e scontri diretti sul piano psicologico;",
-    "  (b) asimmetria di rendimento e di impianto tattico;",
-    "  (c) pressione del dentro-o-fuori e stanchezza da calendario.",
-    '  "titolo": d\'impatto, massimo 60 caratteri. "testo": 2-4 frasi, massimo 480 caratteri.',
-    '  "tag": "fonte" se il punto poggia su un fatto con FONTE qui sopra, altrimenti "ipotesi".',
-    '- "scenario": 3-5 frasi di sintesi, formulate esplicitamente COME IPOTESI di lettura del mercato.',
+    "  (a) fattore campo e precedenti, sul piano psicologico e ambientale;",
+    "  (b) asimmetria di rendimento e di impianto tattico fra le due squadre;",
+    "  (c) posta in palio, calendario e freschezza: chi ha più da perdere e chi arriva stanco.",
+    "  Ogni punto deve CHIUDERE collegandosi al movimento: se quel fattore lo sostiene,",
+    "  lo contraddice o non c'entra. Un punto che non tocca il movimento è inutile.",
+    '  "titolo": d\'impatto, max 60 caratteri. "testo": 3-5 frasi, max 700 caratteri.',
+    '  "tag": "fonte" SOLO se poggia su un fatto con [FONTE] qui sopra; altrimenti "ipotesi".',
+    '- "cosaManca": UNA frase su quale informazione, se l\'avessimo, cambierebbe la lettura',
+    "  (formazioni, infortuni, motivazioni di classifica...). Max 240 caratteri. Dichiarare",
+    "  il buco vale più che riempirlo con supposizioni.",
+    '- "scenario": 3-5 frasi che tengono insieme contesto e profilo del movimento,',
+    "  formulate esplicitamente COME IPOTESI di lettura del mercato.",
+    "",
+    "COME SCRIVERE, perché un'analisi vaga non serve a nulla:",
+    "- usa i nomi delle squadre e i fatti concreti che hai, non formule generiche;",
+    "- se un fattore è debole DILLO invece di gonfiarlo con aggettivi;",
+    "- non ripetere fra i punti la stessa osservazione con parole diverse;",
+    "- distingui sempre ciò che è documentato da ciò che stai supponendo.",
     "",
     "DIVIETI ASSOLUTI, la risposta viene scartata se li violi:",
     "- non citare quote, percentuali, punti percentuali, orari o conteggi esatti: il testo resta valido",
@@ -481,7 +447,9 @@ export function buildAnalysisPrompt(f: AnalysisFacts): string {
     "- non consigliare né suggerire alcuna giocata, in nessuna forma;",
     "- non affermare chi vincerà: descrivi come si muove il mercato, non come finirà la partita;",
     "- metafore tattiche ammesse, certezze no: usa condizionale e forme dubitative.",
-  ].join("\n");
+  ]
+    .filter((r) => r !== "")
+    .join("\n");
 }
 
 function cleanStr(v: unknown, max: number): string | null {
@@ -504,22 +472,40 @@ export function parseAnalysisProse(payload: unknown): AnalysisProse | null {
   const scenario = cleanStr(p.scenario, 1200);
   if (matrice === null || scenario === null) return null;
 
+  /* il verdetto è una classificazione chiusa: nessuna sinonimia a occhio */
+  const coerenzaRaw = cleanStr(p.coerenza, 40);
+  const coerenza = COERENZA_VALUES.find(
+    (v) => v === (coerenzaRaw ?? "").toLowerCase(),
+  );
+  if (coerenza === undefined) return null;
+  const coerenzaMotivo = cleanStr(p.coerenzaMotivo, 300);
+  if (coerenzaMotivo === null) return null;
+  /* «cosa manca» può essere assente: in quel caso lo si dichiara, non si
+     inventa un buco che il modello non ha saputo nominare */
+  const cosaManca = cleanStr(p.cosaManca, 300) ?? "Non dichiarato.";
+
   if (!Array.isArray(p.punti) || p.punti.length !== 3) return null;
   const punti: AnalysisProse["punti"] = [];
   for (const raw of p.punti) {
     if (typeof raw !== "object" || raw === null) return null;
     const r = raw as Record<string, unknown>;
     const titolo = cleanStr(r.titolo, 90);
-    const testo = cleanStr(r.testo, 560);
+    const testo = cleanStr(r.testo, 800);
     if (titolo === null || testo === null) return null;
     const tag = r.tag === "fonte" ? "fonte" : "ipotesi";
     punti.push({ titolo, testo, tag });
   }
 
-  const tutto = [matrice, scenario, ...punti.map((x) => `${x.titolo} ${x.testo}`)].join(" ");
+  const tutto = [
+    matrice,
+    scenario,
+    coerenzaMotivo,
+    cosaManca,
+    ...punti.map((x) => `${x.titolo} ${x.testo}`),
+  ].join(" ");
   if (containsPick(tutto)) return null;
 
-  return { matrice, punti, scenario };
+  return { coerenza, coerenzaMotivo, matrice, punti, cosaManca, scenario };
 }
 
 /** Assembla l'analisi completa: prosa validata + schemi disegnati qui. */
@@ -531,8 +517,6 @@ export function assembleAnalysis(
   return {
     headline: buildHeadline(facts),
     ...prose,
-    schemaAlbero: buildTreeSchema(facts),
-    schemaVettore: buildVectorSchema(facts),
     closing: ANALYSIS_CLOSING,
     generatedAt: now.toISOString(),
     stamp: {
