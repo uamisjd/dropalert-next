@@ -1,0 +1,68 @@
+# Ciclo di verifica del codice: typegen, typecheck, lint, test completi, build.
+#
+# PERCHÉ ESISTE: finché questo file non c'era, l'unico check sui PR era il
+# deployment Vercel, che NON esegue i test. Il 02/09/2026 un test rotto
+# (atteso v5 contro una versione retrieval v6) è arrivato su main proprio per
+# questo: `test:all` falliva in locale, ma nessun gate lo vedeva. Da questo
+# momento un PR non è mergeabile finché questa pipeline non è verde.
+#
+# Postgres di servizio, e perché:
+#  - `test:pipeline` e `test:scheduler` usano `--env-file=.env` (rigido, a
+#    differenza di `--env-file-if-exists` degli altri script): senza un
+#    `.env` presente l'esecuzione fallisce prima di partire. Il passo qui
+#    sotto lo scrive, puntando alla Postgres di servizio del job.
+#  - Le fixture di quei test sono isolate (chiavi "pipetest-*/seed-demo") e
+#    vengono rimosse a fine corsa; il giro di analisi gira con
+#    `skipCollect: true`, quindi nessuna chiamata di rete verso le fonti.
+#  - Le migrazioni si applicano su un DB vergine: è lo stesso percorso del
+#    deploy (drizzle-kit migrate), non uno scorciatoia.
+
+name: Verifica
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: dropalert
+          POSTGRES_PASSWORD: dropalert
+          POSTGRES_DB: dropalert
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U dropalert"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgres://dropalert:dropalert@127.0.0.1:5432/dropalert
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Installazione dipendenze
+        run: npm ci
+      - name: Migrazioni
+        run: npx drizzle-kit migrate
+      - name: .env per test:pipeline e test:scheduler
+        run: echo "DATABASE_URL=${{ env.DATABASE_URL }}" > .env
+      - name: Typegen
+        run: npm run typegen
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Lint
+        run: npx eslint .
+      - name: Test completi
+        run: npm run test:all
+      - name: Build di produzione
+        run: npm run build
