@@ -70,7 +70,10 @@ eq("le due quote sommano al tetto per partita",
 /* --- campi nuovi del contesto --- */
 check("campo forma_recente_5 presente", CONTEXT_FIELD_KEYS.includes("forma_recente_5"));
 check("campo assenze_note presente", CONTEXT_FIELD_KEYS.includes("assenze_note"));
-eq("cache invalidata dal bump", CONTEXT_RETRIEVAL_VERSION, 5);
+/* Ogni modifica alla pipeline di retrieval va accompagnata dal bump della
+   versione (invalida la cache al deploy) e dall'aggiornamento di questo
+   atteso: v6 = ricerca nella lingua del posto con verdetto reale/speculativo. */
+eq("cache invalidata dal bump", CONTEXT_RETRIEVAL_VERSION, 6);
 
 /* --- driver da fonte --- */
 const fields: SourcedField[] = [
