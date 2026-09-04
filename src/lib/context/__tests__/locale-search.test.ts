@@ -14,6 +14,10 @@ import {
   profileFor,
   statsQuery,
 } from "../locale-search";
+import {
+  isWomensFixture,
+  matchesFixtureScope,
+} from "../match-scope";
 
 let passed = 0;
 const failures: string[] = [];
@@ -52,6 +56,49 @@ check("3: logistica in spagnolo", q[2].query.includes("estadio") || q[2].query.i
 check("4: crisi societaria", q[3].query.includes("sueldos") || q[3].query.includes("crisis"));
 check("tutte le query citano le squadre", q.every((x) => x.query.includes("Caballero")));
 check("ogni query dichiara il suo scopo", q.every((x) => x.scopo.length > 10));
+
+/* --- identità femminile: «Pumas W» non deve recuperare la prima squadra --- */
+const qWomen = localQueries(
+  "UNAM Pumas W",
+  "Club America W",
+  "Mexico",
+  "Liga MX Women",
+);
+check(
+  "partita femminile riconosciuta",
+  isWomensFixture("UNAM Pumas W", "Club America W", "Liga MX Women"),
+);
+check(
+  "ogni query specifica il calcio femminile",
+  qWomen.every((x) => /femenil|femenino/.test(x.query)),
+);
+check(
+  "articolo della prima squadra maschile scartato",
+  !matchesFixtureScope(
+    "Pumas y América preparan el Clásico Capitalino de Liga MX",
+    "UNAM Pumas W",
+    "Club America W",
+    "Liga MX Women",
+  ),
+);
+check(
+  "articolo Liga MX Femenil accettato",
+  matchesFixtureScope(
+    "Pumas recibe al América en la Liga MX Femenil",
+    "UNAM Pumas W",
+    "Club America W",
+    "Liga MX Women",
+  ),
+);
+check(
+  "una partita maschile non subisce il filtro femminile",
+  matchesFixtureScope(
+    "Pumas y América preparan el Clásico Capitalino",
+    "UNAM Pumas",
+    "Club America",
+    "Liga MX",
+  ),
+);
 
 /* --- altre lingue: campione di controllo --- */
 const casi: Array<[string, string, string]> = [

@@ -253,7 +253,13 @@ export async function getNewsForMatch(
   /* freschezza e pertinenza: solo notizie delle ultime 72 ore che citano
      ENTRAMBE le squadre. Meglio nessuna notizia che una notizia di un'altra
      partita o di sette mesi fa. */
-  const merged = filterRelevantNews(deduped, homeTeam, awayTeam, now);
+  const merged = filterRelevantNews(
+    deduped,
+    homeTeam,
+    awayTeam,
+    now,
+    leagueName,
+  );
 
   if (merged.length === 0 && !rss.ok && tavily.queriesUsed === 0) {
     await writeFetchState(matchId, "irraggiungibile", 0, null, now);

@@ -17,6 +17,7 @@
  *
  * Modulo PURO: nessuna rete, nessuna chiave, tutto testabile.
  */
+import { isWomensFixture, womenSearchTerms } from "./match-scope";
 
 /** Le parole che contano, nella lingua di chi scrive la notizia. */
 export interface LocaleProfile {
@@ -522,7 +523,10 @@ export function localQueries(
   league: string | null,
 ): Array<{ query: string; scopo: string; lang: string }> {
   const p = profileFor(country, league);
-  const squadre = `${homeTeam} ${awayTeam}`;
+  const scope = isWomensFixture(homeTeam, awayTeam, league)
+    ? ` ${womenSearchTerms(p.lang)}`
+    : "";
+  const squadre = `${homeTeam} ${awayTeam}${scope}`;
   const siti =
     p.testate.length > 0
       ? " " + p.testate.slice(0, 4).map((d) => `site:${d}`).join(" OR ")
@@ -538,7 +542,7 @@ export function localQueries(
       scopo: "convocati e comunicati sui canali ufficiali",
       lang: p.lang,
       query:
-        `("${homeTeam}" OR "${awayTeam}") ${p.formazione} ${p.assenze} ` +
+        `("${homeTeam}" OR "${awayTeam}")${scope} ${p.formazione} ${p.assenze} ` +
         `(site:x.com OR site:twitter.com OR site:facebook.com OR site:instagram.com)`,
     },
     {
@@ -634,5 +638,8 @@ export function statsQuery(
         : p.lang === "it"
           ? "precedenti classifica ultime partite"
           : "head to head standings recent form";
-  return `${homeTeam} ${awayTeam}${l} ${termini}`;
+  const scope = isWomensFixture(homeTeam, awayTeam, league)
+    ? ` ${womenSearchTerms(p.lang)}`
+    : "";
+  return `${homeTeam} ${awayTeam}${l}${scope} ${termini}`;
 }

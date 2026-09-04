@@ -16,11 +16,8 @@
  * nasce dalle altre fonti (Wikipedia, feed) o dal modello — mai inventato.
  */
 
-import {
-  JUNK_DOMAINS,
-  localQueries,
-  statsQuery,
-} from "./locale-search";
+import { JUNK_DOMAINS, localQueries, statsQuery } from "./locale-search";
+import { isWomensFixture, womenSearchTerms } from "./match-scope";
 
 /**
  * Tetto giornaliero dichiarato, CONDIVISO fra Contesto 360° e Notizie:
@@ -72,7 +69,10 @@ export function primaryQuery(
   league: string | null,
 ): string {
   const l = league === null || league.trim() === "" ? "" : ` ${league.trim()}`;
-  return `${homeTeam} ${awayTeam}${l} H2H classifica ultime 5 partite forma`;
+  const scope = isWomensFixture(homeTeam, awayTeam, league)
+    ? ` ${womenSearchTerms("en")}`
+    : "";
+  return `${homeTeam} ${awayTeam}${l}${scope} H2H classifica ultime 5 partite forma`;
 }
 
 /** Seconda query, solo a vuoto della prima: fase e playoff. */
@@ -82,7 +82,10 @@ export function fallbackQueryTavily(
   league: string | null,
 ): string {
   const l = league === null || league.trim() === "" ? "" : ` ${league.trim()}`;
-  return `${homeTeam} ${awayTeam}${l} vigilia dichiarazioni infortuni assenze posta in palio`;
+  const scope = isWomensFixture(homeTeam, awayTeam, league)
+    ? ` ${womenSearchTerms("en")}`
+    : "";
+  return `${homeTeam} ${awayTeam}${l}${scope} vigilia dichiarazioni infortuni assenze posta in palio`;
 }
 
 /** Estrae i risultati dalla risposta Tavily. Puro, testato. */

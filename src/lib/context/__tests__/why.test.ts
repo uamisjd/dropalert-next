@@ -73,7 +73,7 @@ check("campo assenze_note presente", CONTEXT_FIELD_KEYS.includes("assenze_note")
 /* Ogni modifica alla pipeline di retrieval va accompagnata dal bump della
    versione (invalida la cache al deploy) e dall'aggiornamento di questo
    atteso: v6 = ricerca nella lingua del posto con verdetto reale/speculativo. */
-eq("cache invalidata dal bump", CONTEXT_RETRIEVAL_VERSION, 6);
+eq("cache invalidata dal filtro identità competizione", CONTEXT_RETRIEVAL_VERSION, 7);
 
 /* --- driver da fonte --- */
 const fields: SourcedField[] = [
@@ -198,6 +198,27 @@ eq("restano solo le pertinenti e recenti", filtrate.length, 2);
 check("il vecchio è fuori", !filtrate.some((f) => f.title.includes("precedenti")));
 check("l'altra partita è fuori", !filtrate.some((f) => f.title.includes("Clyde")));
 check("lo snippet salva la pertinente", filtrate.some((f) => f.title === "Anteprima"));
+
+const notizieFemminili = filterRelevantNews(
+  [
+    {
+      title: "Pumas y América preparan el Clásico Capitalino",
+      publishedAt: new Date(oggi.getTime() - 2 * 3600000),
+      snippet: "Liga MX: Efraín Juárez prepara la formazione",
+    },
+    {
+      title: "Pumas recibe al América en la Liga MX Femenil",
+      publishedAt: new Date(oggi.getTime() - 2 * 3600000),
+      snippet: "Últimas noticias de ambos equipos femeniles",
+    },
+  ],
+  "UNAM Pumas W",
+  "Club America W",
+  oggi,
+  "Liga MX Women",
+);
+eq("la notizia maschile omonima non entra nella partita femminile", notizieFemminili.length, 1);
+check("resta il contenuto femminile", notizieFemminili[0]?.title.includes("Femenil") === true);
 
 if (failures.length > 0) {
   console.error(`✗ ${failures.length} test falliti su ${passed + failures.length}`);
