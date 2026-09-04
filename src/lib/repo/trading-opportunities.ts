@@ -1,7 +1,16 @@
 /**
- * Repository per opportunità di Trading & Scalping su Betting Exchange.
- * Identifica movimenti di quota (steam moves) ideali per strategie
- * Back-to-Lay pre-match e scalping di momentum.
+ * Escursione dei prezzi pre-gara, letta a ritroso.
+ *
+ * Che cosa è: per ogni segnale con un movimento misurabile (apertura → ultima
+ * lettura) conta i tick percorsi e calcola quanto valeva, QUEI DUE PREZZI, chiudere la
+ * posizione. È aritmetica su letture reali del consenso.
+ *
+ * Che cosa NON è: un'operazione di trading. Questo sito non legge alcun exchange — non
+ * esistono prezzi di bancata, né profondità del ladder, né commissioni rilevate: il
+ * «lay» qui è la stessa quota di consenso usata per l'apertura, e la commissione è
+ * l'assunzione di 4,5% che il calcolatore di exchange usa di norma. Da qui i nomi dei
+ * campi (`hindsight*`): la colonna è «quanto valeva», non «quanto vale». L'audit che ha
+ * portato a riscriverla è in `docs/STUDIO-VALUE-BETS.md` §2.6.
  */
 import { getDashboardData } from "./dashboard";
 import { calculateGreenUp, calculateTickDistance } from "../quant/exchange-trading";
@@ -16,15 +25,20 @@ export interface TradingOpportunity {
   kickoffAt: Date;
   marketLabel: string;
   selectionLabel: string;
-  entryBackOdds: number;
-  currentLayOdds: number;
+  /** apertura letta dal motore dei drop */
+  priceOpening: number;
+  /** ultima lettura di consenso: NON è un prezzo di bancata di alcun exchange */
+  priceCurrent: number;
   tickMovement: number;
   dropPct: number;
   sustainedMinutes: number;
-  greenUpRoiPct: number;
-  exampleNetProfitEuros: number; // calcolato su 100€ di puntata iniziale
-  strategyPhase: "entry_open" | "momentum_active" | "green_up_ready" | "take_profit";
-  volatility: "alta" | "media" | "bassa";
+  /** quanto valeva chiudere fra i due prezzi letti, su 100 € ipotetici */
+  hindsightNetEuros: number;
+  hindsightRoiPct: number;
+  /** commissione ASSUNTA, non rilevata: è il 4,5% tipico dei calcolatori di exchange */
+  commissionAssumedPct: number;
+  /** i dati letti non contengono exchange: lo dichiara la pagina, non lo suggerisce un'etichetta */
+  executable: false;
 }
 
 export async function getTradingOpportunities(
@@ -32,7 +46,8 @@ export async function getTradingOpportunities(
   baseStake: number = 100,
 ): Promise<{
   trades: TradingOpportunity[];
-  totalActive: number;
+  /** segnali letti dall'elenco: il denominale onesto di `trades.length` */
+  signalsRead: number;
   generatedAt: Date;
 }> {
   try {
@@ -61,21 +76,8 @@ export async function getTradingOpportunities(
           commissionPct: 4.5,
         });
 
-        if (greenUp) {
-          let strategyPhase: TradingOpportunity["strategyPhase"] =
-            "momentum_active";
-          if (
-            Math.abs(ticks) >= 15 ||
-            (s.dropPct && Math.abs(s.dropPct) >= 10)
-          ) {
-            strategyPhase = "green_up_ready";
-          } else if (Math.abs(ticks) >= 8) {
-            strategyPhase = "take_profit";
-          }
 
-          let volatility: TradingOpportunity["volatility"] = "media";
-          if (backOdds > 3.0) volatility = "alta";
-          else if (backOdds < 1.7) volatility = "bassa";
+        if (greenUp) {
 
           trades.push({
             signalId: s.id,
@@ -86,31 +88,31 @@ export async function getTradingOpportunities(
             kickoffAt: new Date(s.kickoffAt),
             marketLabel: s.marketLabel,
             selectionLabel: s.selectionLabel,
-            entryBackOdds: round(backOdds, 2),
-            currentLayOdds: round(layOdds, 2),
+            priceOpening: round(backOdds, 2),
+            priceCurrent: round(layOdds, 2),
             tickMovement: Math.abs(ticks),
             dropPct: s.dropPct ?? 0,
             sustainedMinutes: s.sustainedMinutes,
-            greenUpRoiPct: greenUp.roiPct,
-            exampleNetProfitEuros: greenUp.hedgedProfitNet,
-            strategyPhase,
-            volatility,
+            hindsightRoiPct: greenUp.roiPct,
+            hindsightNetEuros: greenUp.hedgedProfitNet,
+            commissionAssumedPct: 4.5,
+            executable: false,
           });
         }
       }
     }
 
-    trades.sort((a, b) => b.greenUpRoiPct - a.greenUpRoiPct);
+    trades.sort((a, b) => b.tickMovement - a.tickMovement);
 
     return {
       trades,
-      totalActive: trades.length,
+      signalsRead: dashboard.signals.length,
       generatedAt: now,
     };
   } catch {
     return {
       trades: [],
-      totalActive: 0,
+      signalsRead: 0,
       generatedAt: now,
     };
   }

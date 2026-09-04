@@ -1,72 +1,59 @@
 "use client";
 
-import { useState } from "react";
 import Link from "next/link";
 import type { TradingOpportunity } from "@/lib/repo/trading-opportunities";
 import { fmtDay, fmtTime } from "@/components/format";
 import { GreenUpCalculator } from "./GreenUpCalculator";
 
 interface Props {
-  initialTrades: TradingOpportunity[];
+  trades: TradingOpportunity[];
+  /** segnali letti dall'elenco del dashboard: il denominale onesto di `trades.length` */
+  signalsRead: number;
 }
 
-export function TradingTerminalView({ initialTrades }: Props) {
-  const [selectedPhase, setSelectedPhase] = useState<string>("all");
-
-  const filtered = initialTrades.filter((t) => {
-    if (selectedPhase === "ready" && t.strategyPhase !== "green_up_ready") return false;
-    if (selectedPhase === "active" && t.strategyPhase !== "momentum_active") return false;
-    return true;
-  });
+/**
+ * Elenco delle escursioni di prezzo lette fra apertura e ultima rilevazione.
+ *
+ * Le etichette dicono «apertura letta» e «ultima lettura»: non «back» e «lay». La
+ * ragione è nei dati, non nello stile — questo sito legge un solo consenso di quote
+ * d'offerta, quindi la seconda gamba di un&#39;operazione di exchange (il prezzo di
+ * bancata, la profondità del ladder, la commissione reale) non esiste: ciò che si vede
+ * qui è quanto il prezzo si è mosso, e quanto varrebbe chiudere fra quei due numeri.
+ * Per questo la sezione è «a ritroso»: misura, non trade da eseguire.
+ */
+export function TradingTerminalView({ trades, signalsRead }: Props) {
+  const filtered = trades;
 
   return (
     <div className="space-y-6">
       {/* Calcolatore Operativo Green-Up */}
       <GreenUpCalculator />
 
-      {/* Sezione Opportunità di Scalping Live */}
+      {/* Escursioni misurate (a ritroso) */}
       <div className="space-y-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <h2 className="text-lg font-bold text-slate-950 sm:text-xl">
-              Steam Moves & Momentum Radar (Pre-Match Trading)
+              Escursioni di prezzo fra apertura e ultima lettura
             </h2>
             <p className="mt-0.5 text-xs text-slate-500">
-              Partite con forti pressioni di mercato in cui la quota sta crollando: ideali per entrare in Back e uscire in Green-Up prima del fischio d'inizio.
+              Ogni riga &egrave; un movimento osservato dal collettore su una selezione gi&agrave;
+              segnalata: tick percorsi e quanto varrebbe chiudere fra quei due prezzi. Non
+              &egrave; una posizione apribile &mdash; i prezzi di bancata di un exchange non sono
+              fra i dati che questo sito legge.
             </p>
           </div>
 
-          <div className="flex gap-1.5 rounded-xl bg-slate-100 p-1 text-xs font-semibold">
-            <button
-              onClick={() => setSelectedPhase("all")}
-              className={`rounded-lg px-2.5 py-1 transition-colors ${
-                selectedPhase === "all" ? "bg-slate-950 text-white" : "text-slate-600 hover:text-slate-950"
-              }`}
-            >
-              Tutti ({initialTrades.length})
-            </button>
-            <button
-              onClick={() => setSelectedPhase("ready")}
-              className={`rounded-lg px-2.5 py-1 transition-colors ${
-                selectedPhase === "ready" ? "bg-slate-950 text-white" : "text-slate-600 hover:text-slate-950"
-              }`}
-            >
-              🚀 Green-Up Pronto
-            </button>
-            <button
-              onClick={() => setSelectedPhase("active")}
-              className={`rounded-lg px-2.5 py-1 transition-colors ${
-                selectedPhase === "active" ? "bg-slate-950 text-white" : "text-slate-600 hover:text-slate-950"
-              }`}
-            >
-              ⚡ Momentum Attivo
-            </button>
+          <div className="rounded-xl bg-slate-100 px-3 py-1.5 text-xs font-semibold text-slate-600 tabular-nums">
+            {trades.length} escursioni su {signalsRead} segnali letti
           </div>
         </div>
 
         {filtered.length === 0 ? (
           <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-8 text-center text-xs text-slate-500">
-            Nessun trade attivo al momento con questi parametri.
+            Nessuna escursione di almeno tre tick, fra le letture disponibili. Se la lista
+            è vuota non è un&#39;assenza di movimento: è il collettore che non l&#39;ha
+            registrato, e la differenza sta nei contatori di&nbsp;<Link href="/api/health" className="underline">/api/health</Link>.
           </div>
         ) : (
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -95,21 +82,21 @@ export function TradingTerminalView({ initialTrades }: Props) {
                   <span className="rounded bg-slate-100 px-2 py-0.5 text-slate-600">
                     {trade.marketLabel}
                   </span>
-                  <span>Target: <strong>{trade.selectionLabel}</strong></span>
+                  <span>Selezione del segnale: <strong>{trade.selectionLabel}</strong></span>
                 </div>
 
                 {/* Prezzi e Ticks */}
                 <div className="mt-3 grid grid-cols-3 gap-2 rounded-xl bg-slate-50 p-2.5 text-center">
                   <div>
-                    <div className="text-[10px] text-slate-500 uppercase">Back Entrata</div>
+                    <div className="text-[10px] text-slate-500 uppercase">Apertura letta</div>
                     <div className="text-sm font-bold text-slate-900 tabular-nums">
-                      {trade.entryBackOdds.toFixed(2)}
+                      {trade.priceOpening.toFixed(2)}
                     </div>
                   </div>
                   <div>
-                    <div className="text-[10px] text-slate-500 uppercase">Lay Uscita</div>
+                    <div className="text-[10px] text-slate-500 uppercase">Ultima lettura</div>
                     <div className="text-sm font-bold text-slate-900 tabular-nums">
-                      {trade.currentLayOdds.toFixed(2)}
+                      {trade.priceCurrent.toFixed(2)}
                     </div>
                   </div>
                   <div>
@@ -123,11 +110,16 @@ export function TradingTerminalView({ initialTrades }: Props) {
                 {/* Potenziale Green-up e Bottone */}
                 <div className="mt-3 flex items-center justify-between border-t border-slate-100 pt-2.5">
                   <div>
-                    <div className="text-[10px] text-slate-500">Potenziale Green-Up (su 100€)</div>
-                    <div className="text-sm font-black text-emerald-600 tabular-nums">
-                      +€ {trade.exampleNetProfitEuros.toFixed(2)}{" "}
-                      <span className="text-xs font-bold text-emerald-700">
-                        (+{trade.greenUpRoiPct.toFixed(1)}%)
+                    <div className="text-[10px] text-slate-500">
+                      Valeva chiudere, fra quei due prezzi (100 € ipotetici, commissione{" "}
+                      {trade.commissionAssumedPct}% assunta)
+                    </div>
+                    <div className="text-sm font-black text-slate-700 tabular-nums">
+                      {trade.hindsightNetEuros >= 0 ? "+" : "−"}€{" "}
+                      {Math.abs(trade.hindsightNetEuros).toFixed(2)}{" "}
+                      <span className="text-xs font-bold text-slate-500">
+                        ({trade.hindsightRoiPct >= 0 ? "+" : "−"}
+                        {Math.abs(trade.hindsightRoiPct).toFixed(1)}%)
                       </span>
                     </div>
                   </div>
@@ -136,7 +128,7 @@ export function TradingTerminalView({ initialTrades }: Props) {
                     href={`/matches/${trade.matchId}`}
                     className="rounded-xl bg-slate-900 px-3 py-2 text-xs font-semibold text-white transition-colors hover:bg-cyan-700"
                   >
-                    Grafico & Trade →
+                    Scheda partita →
                   </Link>
                 </div>
               </div>

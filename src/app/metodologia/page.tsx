@@ -68,6 +68,40 @@ export default function MetodologiaPage() {
         </p>
       </section>
 
+      <section className="mt-5">
+        <h2 className="mb-1.5 text-sm font-semibold text-slate-900">
+          La quota fair senza margine, e dove si ferma
+        </h2>
+        <p className="text-sm leading-relaxed text-slate-700">
+          Una quota pubblicata contiene il margine di chi la espone. Per
+          confrontare due prezzi della stessa natura — la nostra rilevazione e
+          la chiusura — il margine va tolto: le probabilità implicite delle
+          selezioni di un mercato vengono divise per la loro somma. È il metodo
+          proporzionale, il più trasparente fra quelli che richiedono solo i
+          dati che abbiamo; la scelta è nel codice
+          (<code className="rounded bg-slate-100 px-1">src/lib/drop/novig.ts</code>),
+          non nei marketing.
+        </p>
+        <p className="mt-2 text-sm leading-relaxed text-slate-700">
+          Lo stesso metodo genera il numero della pagina{" "}
+          <Link href="/value-bets" className="font-semibold text-cyan-700 hover:underline">
+            divario di prezzo
+          </Link>
+          : lì il confronto non è con la chiusura ma con l&apos;ultima lettura, e
+          serve a vedere quanto margine resta dentro la quota. La stessa linea
+          completa è anche la condizione perché il numero esista: se manca una
+          selezione la riga non viene pubblicata e il motivo è contato.
+        </p>
+        <p className="mt-2 text-sm leading-relaxed text-slate-700">
+          Che cosa questo non autorizza a dire: un vantaggio atteso. Una linea
+          no-vig dello stesso bookmaker che offre la quota non è una linea di
+          mercato indipendente, e con un solo operatore in lettura non esiste il
+          confronto sharp/soft da cui l&apos;+EV discenderebbe. Le pagine lo
+          dichiarano e l&apos;audit che ha portato a scriverlo così è pubblico
+          (<code className="rounded bg-slate-100 px-1">docs/STUDIO-VALUE-BETS.md</code>).
+        </p>
+      </section>
+
       <section className="mt-6">
         <h2 className="mb-1.5 text-sm font-semibold text-slate-900">
           Le verifiche storiche

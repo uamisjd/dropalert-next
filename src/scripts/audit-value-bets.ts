@@ -1,64 +1,52 @@
 /**
- * Audit della sezione «Value Bets (+EV)» — legge la pagina dal suo stesso codice.
+ * Verifica della pagina «Divario di prezzo» (/value-bets): il percorso della pagina,
+ * contato a voce alta.
  *
- *   npm run audit:value-bets            (markdown su stdout)
+ *   npm run audit:value-bets            (markdown su stdout, solo letture)
  *
- * Perché esiste: lo scanner di `/value-bets` ricava la «quota fair» moltiplicando
- * la quota corrente per 1,045 (un margine ipotizzato, non misurato:
- * `src/lib/repo/value-bets.ts:41-49`), valuta l'edge sul prezzo di APERTURA —
- * che nessuno può più comprare — e mostra una puntata in euro calcolata su
- * quell'edge. In più l'elenco dei segnali non ha finestra temporale
- * (`getDashboardSignals` legge i 200 segnali migliori di sempre), quindi la
- * lista può proporre partite già giocate.
- *
- * Questo script non cambia nulla: esegue lo stesso identico percorso della
- * pagina e conta sei fatti, con i numeri che il DB contiene davvero.
- *
- * Solo letture: nessuna scrittura, nessuna chiamata di rete.
+ * È il guard dell'audit `docs/STUDIO-VALUE-BETS.md`: i sei controlli sotto sono le
+ * proprietà che la pagina deve mantenere perché i suoi numeri siano una misura e non
+ * un'opinione. Ognuna ha un verdetto esplicito (OK / ATTENZIONE), così non serve
+ * rileggere il codice per sapere se qualcosa è tornato indietro.
  */
 import { inArray } from "drizzle-orm";
 import { db, sql } from "@/db/client";
 import { matches } from "@/db/schema";
 import { getValueOpportunities } from "@/lib/repo/value-bets";
 
-const BANKROLL = 1_000;
-
 const mean = (xs: number[]): number | null =>
   xs.length === 0 ? null : xs.reduce((a, b) => a + b, 0) / xs.length;
 
-function quantile(xs: number[], q: number): number | null {
+const quantile = (xs: number[], q: number): number | null => {
   if (xs.length === 0) return null;
   const s = [...xs].sort((a, b) => a - b);
   const pos = (s.length - 1) * q;
   const lo = Math.floor(pos);
   const hi = Math.ceil(pos);
   return lo === hi ? s[lo] : s[lo] + (s[hi] - s[lo]) * (pos - lo);
-}
+};
 
 const pc = (v: number | null, d = 1): string =>
   v === null ? "n/d" : `${(v * 100).toFixed(d)}%`;
 
+interface Check {
+  name: string;
+  ok: boolean;
+  detail: string;
+}
+
 async function main(): Promise<void> {
   const now = new Date();
-  const data = await getValueOpportunities({}, now, BANKROLL);
-  const opps = data.opportunities;
+  const data = await getValueOpportunities({}, now);
+  const rows = data.opportunities;
+  const ids = [...new Set(rows.map((o) => o.matchId))];
 
-  console.log("# Audit «Value Bets (+EV)» — la pagina misurata sul proprio percorso\n");
-  console.log(
-    `Generato: ${now.toISOString()} · segnali letti: ${data.totalScanned} · ` +
-      `opportunità restituite: **${opps.length}** · edge medio dichiarato: ` +
-      `**+${data.averageEdgePct.toFixed(1)}%**.`,
-  );
-
-  const ids = [...new Set(opps.map((o) => o.matchId))];
   const matchRows = ids.length
     ? await db
         .select({
           id: matches.id,
           kickoffAt: matches.kickoffAt,
           status: matches.status,
-          homeGoals: matches.homeGoals,
-          awayGoals: matches.awayGoals,
           settledAt: matches.settledAt,
         })
         .from(matches)
@@ -66,130 +54,121 @@ async function main(): Promise<void> {
     : [];
   const byId = new Map(matchRows.map((m) => [m.id, m]));
 
-  /* 1 — il pavimento a +0,5%: ogni segnale diventa un'opportunità */
-  const floored = opps.filter((o) => o.edgePct <= 0.5001);
-  console.log("\n## 1 — Che cosa significa «opportunità» qui dentro\n");
+  const pastKickoff = rows.filter(
+    (o) => new Date(o.kickoffAt).getTime() <= now.getTime(),
+  ).length;
+  const settledInList = rows.filter((o) => {
+    const m = byId.get(o.matchId);
+    return m ? m.settledAt !== null || m.status === "finished" : false;
+  }).length;
+  const edges = rows.map((o) => o.edgePct);
+  const fakeFair = rows.filter(
+    (o) => Math.abs(o.fairOdds / o.currentOdds - 1.045) < 0.0005,
+  ).length;
+  const noFloor = rows.filter((o) => o.edgePct < 0).length;
+  const books = rows.map((o) => o.booksWithLine);
+  const ages = rows
+    .map((o) => o.lineAgeMinutes)
+    .filter((x): x is number => x !== null);
+
+  const checks: Check[] = [
+    {
+      name: "solo partite non ancora al kickoff",
+      ok: pastKickoff === 0,
+      detail: `${pastKickoff} righe su ${rows.length} con kickoff già passato (atteso 0)`,
+    },
+    {
+      name: "nessuna partita con verdetto a registro",
+      ok: settledInList === 0,
+      detail: `${settledInList} righe su partite già concluse nel database (atteso 0)`,
+    },
+    {
+      name: "la fair viene da una linea, non da 1,045",
+      ok: fakeFair === 0,
+      detail: `${fakeFair} righe con fair = quota × 1,045 esatto (atteso 0: il margine si misura, non si presume)`,
+    },
+    {
+      name: "nessun pavimento a +0,5%: i divari negativi si vedono",
+      ok: rows.length === 0 || noFloor > 0 || Math.min(...edges) < 0.5,
+      detail: `${noFloor} righe sotto zero su ${rows.length}`,
+    },
+    {
+      name: "il divario medio non è un margine di comodo",
+      ok: Math.abs(data.averageEdgePct) < 12,
+      detail: `media ${data.averageEdgePct.toFixed(2)} pp — un valore intorno a −4/+5 pp è il margine della linea; un ordine di grandezza diverso qui significa una formula reinventata`,
+    },
+    {
+      name: "contatori di scarto esposti",
+      ok: Object.values(data.skipped).reduce((a, b) => a + b, 0) + rows.length <=
+        data.signalsRead,
+      detail: `${data.signalsRead} segnali letti, ${rows.length} elencati, ${Object.entries(
+        data.skipped,
+      )
+        .map(([k, v]) => `${k}: ${v}`)
+        .join(" · ")}`,
+    },
+  ];
+
+  console.log("# Verifica «Divario di prezzo» (/value-bets)\n");
   console.log(
-    `- ` +
-      `${opps.length} segnali letti, ${opps.length} opportunità elencate: il filtro non scarta nulla ` +
-      `perché l'edge è salvato come \`Math.max(0.5, edgePct)\`. ` +
-      `Edge esattamente a pavimento (+0,5%): **${floored.length}** (${pc(
-        floored.length / Math.max(1, opps.length),
-      )}).`,
+    `Eseguito: ${now.toISOString()} · metodo ${data.method} · ${data.dataNote}\n`,
   );
-  const edges = opps.map((o) => o.edgePct);
+  console.log("| controllo | esito | dettaglio |");
+  console.log("|---|---|---|");
+  for (const c of checks) {
+    console.log(`| ${c.name} | ${c.ok ? "OK" : "ATTENZIONE"} | ${c.detail} |`);
+  }
+
+  console.log("\n## Distribuzione dei divari elencati\n");
   console.log(
-    `- Edge dichiarato: mediana ${quantile(edges, 0.5)?.toFixed(1)}% · P90 ${quantile(
-      edges,
-      0.9,
-    )?.toFixed(1)}% · massimo ${edges.length ? Math.max(...edges).toFixed(1) : "n/d"}%.`,
+    `- righe: ${rows.length} · mediana ${quantile(edges, 0.5)?.toFixed(2)} pp · ` +
+      `min ${edges.length ? Math.min(...edges).toFixed(2) : "n/d"} pp · ` +
+      `max ${edges.length ? Math.max(...edges).toFixed(2) : "n/d"} pp · ` +
+      `sopra zero ${pc(rows.length === 0 ? null : rows.filter((o) => o.edgePct > 0).length / rows.length)}`,
+  );
+  console.log(
+    `- bookmaker con terna completa per riga: media ${(mean(books) ?? 0).toFixed(2)} · ` +
+      `massimo ${books.length ? Math.max(...books) : "n/d"} (con un solo operatore in ` +
+      `fonte questo numero non può salire: è il limite da rimuovere per parlare di valore)`,
+  );
+  console.log(
+    `- età delle letture usate: mediana ${quantile(ages, 0.5)?.toFixed(0)} min · ` +
+      `massimo ${ages.length ? Math.max(...ages).toFixed(0) : "n/d"} min`,
+  );
+  console.log(
+    `- scarti: ${data.skipped.kickoffPassed} già al kickoff · ` +
+      `${data.skipped.notPlayable} non più giocabili · ` +
+      `${data.skipped.incompleteLine} senza terna completa · ` +
+      `${data.skipped.noLine} senza lettura della linea · ` +
+      `${data.skipped.noCurrentPrice} senza prezzo corrente`,
   );
 
-  /* 2 — il prezzo dell'edge non è acquistabile */
-  const recompute = opps.map((o) => {
-    const fairProb = 1 / o.fairOdds;
-    const edgeOnCurrent = fairProb * o.currentOdds - 1;
-    return { o, edgeOnCurrent };
-  });
-  const declared = mean(recompute.map((r) => r.o.edgePct / 100));
-  const honest = mean(recompute.map((r) => r.edgeOnCurrent));
-  console.log("\n## 2 — Il prezzo su cui si calcola l'edge non è quello offeribile\n");
-  console.log(
-    `- Edge medio dichiarato dalla pagina: **${pc(declared)}** · ricalcolato sullo ` +
-      `stesso identico insieme di partite ma sul prezzo che si poteva davvero ` +
-      `ottenere (quello corrente): **${pc(honest)}**.`,
-  );
-  console.log(
-    `- La «fair» non viene da un libro sharp: è \`corrente × 1,045\`. Con quella ` +
-      `costruzione l'edge sul prezzo corrente vale, per ogni riga, −4,3%: ` +
-      `il margine ipotizzato. Non è un caso di calcolo sbagliato — è il ` +
-      `disegno: l'edge della pagina è la variazione di prezzo già avvenuta.`,
-  );
-
-  /* 3 — partite già giocate in una lista di «opportunità attive» */
-  const past = opps.filter((o) => new Date(o.kickoffAt).getTime() < now.getTime());
-  const settled = opps.filter((o) => byId.get(o.matchId)?.settledAt != null);
-  const withGoals = opps.filter(
-    (o) => (byId.get(o.matchId)?.homeGoals ?? null) !== null,
-  );
-  console.log("\n## 3 — «Attive»: che cosa c'è davvero nella lista\n");
-  console.log(
-    `- opportunità con kickoff già passato: **${past.length} su ${opps.length}** ` +
-      `(${pc(past.length / Math.max(1, opps.length))});\n` +
-      `- su partite il cui esito è **già registrato nel database** (` +
-      "`matches.settled_at` non vuoto): **" +
-      `${settled.length}** · con gol a registro: ${withGoals.length}.`,
-  );
-  if (settled.length > 0) {
-    console.log("\nEsempi (primi 8) — l'esito è noto e la card propone una puntata:\n");
-    console.log("| Partita | kickoff | selezione | quota | edge dichiarato | Kelly € | esito |");
-    console.log("|---|---|---|---|---|---|---|");
-    for (const o of settled.slice(0, 8)) {
-      const m = byId.get(o.matchId);
+  const worst = [...rows].sort((a, b) => a.edgePct - b.edgePct).slice(0, 5);
+  if (worst.length > 0) {
+    console.log("\n## I cinque divari più negativi\n");
+    console.log("| partita | selezione | quota | fair | divario | margine rimosso |");
+    console.log("|---|---|---|---|---|---|");
+    for (const o of worst) {
       console.log(
-        `| ${o.homeTeam} – ${o.awayTeam} | ${new Date(o.kickoffAt).toLocaleString("it-IT")} | ${
-          o.selectionLabel
-        } | ${o.currentOdds.toFixed(2)} | +${o.edgePct.toFixed(1)}% | ${o.recommendedStakeEuros?.toFixed(
+        `| ${o.homeTeam} – ${o.awayTeam} | ${o.selectionLabel} | ${o.currentOdds.toFixed(
           2,
-        )} € | ${m?.homeGoals ?? "?"}–${m?.awayGoals ?? "?"} |`,
+        )} | ${o.fairOdds.toFixed(2)} | ${o.edgePct.toFixed(2)} pp | ${o.lineMarginPct.toFixed(2)}% |`,
       );
     }
   }
 
-  /* 4 — duplicati sulla stessa partita */
-  const perMatch = new Map<number, number>();
-  for (const o of opps) perMatch.set(o.matchId, (perMatch.get(o.matchId) ?? 0) + 1);
-  const dupes = [...perMatch.entries()].filter(([, n]) => n > 1);
-  const dupRows = dupes.reduce((a, [, n]) => a + n, 0);
-  console.log("\n## 4 — Conta delle opportunità\n");
-  console.log(
-    `- partite distinte rappresentate: ${perMatch.size} contro ${opps.length} righe in ` +
-      `lista: la stessa partita compare fino a ${Math.max(
-        1,
-        ...[...perMatch.values()],
-      )} volte, una per segnale/selezione, ognuna con la sua puntata consigliata. ` +
-      `Partite con più di una riga: ${dupes.length} (${dupRows} righe in lista su ${opps.length}).`,
-  );
-
-  /* 5 — input reali per un calcolo +EV */
-  const withSharp = opps.filter((o) => o.sharpConfirmed);
-  console.log("\n## 5 — Esiste un input per parlare di valore?\n");
-  console.log(
-    `- opportunità con una linea sharp osservata (non derivata): **${withSharp.length}**. ` +
-      `Con la fonte attuale la capacità \`perBookmakerOdds\` è spenta: non esistono quote ` +
-      `di singoli bookmaker da confrontare, quindi non esiste un fair di riferimento da ` +
-      `cui far discendere un edge. \`sharpPrice\` in scheda è \`corrente × 0,96\`: un ` +
-      `valore costruito, non letto.`,
-  );
-
-  /* 6 — esposizione del bankroll */
-  const stakes = opps.reduce((a, o) => a + (o.recommendedStakeEuros ?? 0), 0);
-  console.log("\n## 6 — Che cosa chiedono le puntate suggerite\n");
-  console.log(
-    `- somma dei € suggeriti come «Kelly stake» su un bankroll di ${BANKROLL} €: ` +
-      `**${stakes.toFixed(0)} €** (${(stakes / BANKROLL).toFixed(1)}× il bankroll) su ` +
-      `${opps.length} «occasioni», cioè ${(
-        (stakes / opps.length / BANKROLL) *
-        100
-      ).toFixed(1)} € di media a card.`,
-  );
-  console.log(
-    `- nessuna di queste puntate passa da un prezzo eseguibile (punto 2) e ` +
-      `${past.length} riguardano partite già concluse (punto 3): \`Bankroll\` e \`Kelly\` ` +
-      `sono qui due campi di una calcolatrice, non una gestione del rischio.`,
-  );
-
+  const failed = checks.filter((c) => !c.ok).length;
   console.log("\n---\n");
   console.log(
-    "Nessuna modifica applicata da questo script: è la radiografia del percorso " +
-      "`getValueOpportunities` sui dati presenti. Le correzioni proposte sono in " +
-      "`docs/STUDIO-VALUE-BETS.md`.",
+    failed === 0
+      ? "Tutti i controlli passano: la pagina espone solo divari calcolati su letture reali."
+      : `${failed} controlli da leggere: niente è stato modificato da questo script, che fa solo letture.`,
   );
   await sql.end();
 }
 
 main().catch(async (err) => {
-  console.error("Audit fallito:", err);
+  console.error("Verifica fallita:", err);
   await sql.end();
   process.exit(1);
 });

@@ -80,6 +80,15 @@ bloccate in questa voce:
   torna a «non osservabile», che è già dichiarato esattamente così. Mai il
   core del monitor, mai la serie N/10, mai il CLV.
 
+> **Aggiornamento (dopo l'audit di `/value-bets`, `docs/STUDIO-VALUE-BETS.md`).** Questa voce è
+> il prerequisito reale di qualunque pagina «+EV»: oggi la fonte espone un solo operatore
+> (`perBookmakerOdds` spento), quindi il divario pubblicato in `/value-bets` è il no-vig della
+> linea di **quel** bookmaker confrontata con la sua stessa quota — un auto-confronto, dichiarato
+> come tale nella pagina. Con una fonte per singolo bookmaker la stessa riga diventa un confronto
+> fra linee, e la funzione già scritta per farlo (`findValueFromSharpPrices` in
+> `src/lib/quant/ev-engine.ts`, con i suoi test) torna ad avere un chiamante. Nessuna delle due
+> versioni pubblica puntate: il sizing è rimasto una calcolatrice in `/strumenti`.
+
 ## 6. Coerenza multi-mercato (1X2 + GG + OU)
 
 **Stato:** bloccato da prerequisito · **Prerequisito:** la fonte della voce 5 attiva e stabile.

@@ -171,7 +171,7 @@ npm run job:collect -- --force         # ignora l'intervallo minimo
 npm run job:collect -- --no-collect    # solo consolidamento, nessuna rete
 npm run job:collect -- --collect-only --max 10 --no-results
 npm run job:verify-results       # verifica partita → risultato su dati reali
-npm run audit:value-bets         # audit della pagina «Value Bets (+EV)»: formula, partite già giocate, effetti pavimento (read-only)
+npm run audit:value-bets         # verifica della pagina «Divario di prezzo»: 6 controlli (kickoff futuro, verdetti, fair reale, nessun pavimento)
 npm run audit:finished           # audit dello storico «partite finite» (solo letture, markdown su stdout)
 npm run study:finished           # studio quantitativo sui CSV congelati (zero rete, zero DB)
 npm run validate         # typegen + typecheck + test + build

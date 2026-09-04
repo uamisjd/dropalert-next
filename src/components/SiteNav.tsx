@@ -5,9 +5,9 @@ import { usePathname } from "next/navigation";
 
 const LINKS: Array<{ href: string; label: string; badge?: string; highlight?: boolean }> = [
   { href: "/", label: "Movimenti" },
-  { href: "/value-bets", label: "Value Bets (+EV)", highlight: true },
-  { href: "/trading", label: "Trading & Green-Up" },
-  { href: "/surebet", label: "Surebet" },
+  { href: "/value-bets", label: "Divario di prezzo", highlight: false },
+  { href: "/trading", label: "Escursione prezzi" },
+  { href: "/surebet", label: "Surebet (calcolo)" },
   { href: "/simulator", label: "Simulatore xG" },
   { href: "/strumenti", label: "Strumenti" },
   { href: "/preferite", label: "Watchlist" },

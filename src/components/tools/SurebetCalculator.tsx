@@ -84,7 +84,9 @@ export function SurebetCalculator() {
             Calcolatore Surebet & Arbitraggio Matematico
           </h2>
           <p className="mt-1 text-xs text-slate-500">
-            Calcola la distribuzione ideale del capitale tra diversi operatori per garantire un profitto certo al 100%.
+            Distribuisce l&apos;importo sulle quote che inserisci, così che il risultato sia lo
+stesso a ogni esito. La distribuzione è matematica; l&apos;esistenza di quelle quote,
+nello stesso momento e allo stesso importo, non lo è.
           </p>
         </div>
 
@@ -138,7 +140,7 @@ export function SurebetCalculator() {
               onChange={(e) => setRoundStakes(e.target.checked)}
               className="h-4 w-4 rounded border-slate-300 text-cyan-600 focus:ring-cyan-500"
             />
-            <span>Arrotonda puntate all'euro intero (anti-limitazione)</span>
+            <span>Arrotonda gli importi all&apos;euro intero</span>
           </label>
         </div>
       </div>

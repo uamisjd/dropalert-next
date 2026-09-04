@@ -122,8 +122,9 @@ informazione, e sono lo 0,5% del campione, quindi ordine di grandezza e non inte
 
 ## 4. Le correzioni, nell'ordine in cui le applicherei
 
-Ogni punto è una proposta: **nessuna modifica applicata** dal mio turno (come per lo studio sulle
-partite finite). Patch concrete pronte all'uso.
+**Stato: applicate** nel turno successivo (le P0–P6 sono nel codice di questo branch; il §4bis
+dice che cosa è cambiato davvero e dove il testo qui sotto è stato superato dall'implementazione).
+Il testo resta così com'era, perché la diagnosi non si riscrive a posteriori.
 
 **P0 — la pagina, intanto, non è un terminale di valore.** Due strade, non una via di mezzo:
 (a) fuori dalla nav e in «in costruzione» (la dizione che il repo già usa per `/xg`);
@@ -206,22 +207,69 @@ che non hanno ancora aggiornato le loro linee», «Market Lag», «Risk-Free» (
 (`react/no-unescaped-entities`, apici non escapati) che `b43dcf6` ha portato in `main`: `npm run lint`
 oggi è rosso su quelle pagine e sui due script di studio lo è a zero.
 
+## 4bis. Applicato: che cosa è cambiato, e cosa no
+
+| | file | che cosa è successo |
+|---|---|---|
+| P0 | `src/components/SiteNav.tsx`, `src/app/page.tsx` | la pagina si chiama **Divario di prezzo** e non è più in evidenza; l'hero della home non promette più «rilevamento automatico di Value Bets (+EV)» né «quote fair No-Vig (Shin / Power)» |
+| P1 | `src/lib/repo/value-bets.ts` | filtro `kickoff > now` **più** `matches.status = 'scheduled'` e `settled_at IS NULL` (`loadPlayableMatchIds`): una riga su partita conclusa non può comparire, anche se l'elenco del dashboard la contiene |
+| P2 | idem + `src/lib/quant/types.ts` | via `Math.max(0.5, …)`, via `expectedValue: Math.max(0.005, …)`, via `?? 50` e `|| 1.5`; i contatori di scarto (`signalsRead`, `skipped.*`) sono nel tipo di ritorno e la pagina li stampa |
+| P3 | **nuovo** `src/lib/quant/value-gap.ts` + test `[2b]` in `quant.test.ts` | la fair viene da `fairMarket` sulla **linea completa dello stesso bookmaker alla stessa ora**, letta da `odds_snapshots`; il prezzo valutato è `currentPrice`. Il divario può essere negativo e viene mostrato |
+| P4 | `types.ts`, `value-bets.ts` | `sharpPrice` (×0,96) e `confidenceScore` escono dal tipo; restano `lineMarginPct`, `booksWithLine`, `lineAgeMinutes`, `lineSource`: quattro campi che dicono **da dove** arriva il numero |
+| P5 | `ValueScannerTable.tsx` | l'input «Il tuo Bankroll (€)» e la card «Kelly stake · €» non esistono più; la calcolatrice con i numeri inseriti a mano resta in `/strumenti` e nel pannello partita |
+| P6 | `page.tsx`, `/trading`, `/surebet` | via «vantaggio matematico di lungo periodo», «Sfrutta la lentezza dei bookmaker», «Market Lag», «Risk-Free», «certo al 100%», «profitto garantito»; le 9 lint error sono a **0** (`npm run lint`: 0 errori, 7 warning preesistenti) |
+
+Tre cose trovate **durante** l'applicazione, che l'audit non elencava:
+
+- **la formula era altrove, ed è la parte più vista.** `src/components/SignalCard.tsx` (le card del
+  dashboard) e `src/components/MatchQuantPanel.tsx` (pannello della partita) ripetevano lo stesso
+  `implied / 1.045` con `priceToEvaluate = apertura`, e la card mostrava `edgePct > 0 ? +x : "0.0%"`:
+  i negativi erano **renderizzati come zero**. Entrambi i blocchi sono usciti; la card conserva i
+  tick del movimento, che sono una misura.
+- `evaluateDroppingSignalValue` (`ev-engine.ts:128-177`) era **richiamata solo dai test**: funzione
+  morta che fabbrica il margine di comodo. Rimossa, con un commento al suo posto che dice perché e
+  dove sta la sostituzione.
+- Il pannello quantitativo aveva una simulazione Dixon-Coles con `lambdaHome: 1.55 / muAway: 1.15`
+  **costanti hardcoded** (mai mostrate, mai usate) e le quote sintetiche con fallback `?? 2.2`,
+  `?? 3.3`, `?? 3.4`: quando la terna mancava, inventava i prezzi per riempire. Ora le sintetiche
+  esistono solo con la terna reale, e la simulazione fantasma non c'è più.
+
+**Che cosa resta com'era (e non è un dettaglio minore):**
+
+- **la linea sharp vera non c'è.** `perBookmakerOdds` è spento: il divario è auto-confronto dello
+  stesso bookmaker, non un +EV. Con questi dati la lista sarà quasi sempre corta e negativa — è il
+  risultato atteso, non un guasto. Rimuovere il limite significa R2/R3 del backlog, cioè la seconda
+  fonte di quote.
+- **il CLV è ancora a basi miste** (`closing.ts:477-480`, studio partite finite §2/patch A): la
+  patch P3 qui sopra usa la stessa `fairMarket`, quindi *avvicina* le due scale, non le unifica.
+- `minutesBeforeKickoff` continua a non essere letto da nessun calcolo; l'età della riga ora è
+  esposta (`lineAgeMinutes`), ma non è ancora un filtro sulla qualità della lettura.
+- `/trading` è stato rinominato nella sostanza (due prezzi di consenso, green-up **a ritroso**,
+  commissione dichiarata come assunta): un vero terminale exchange resta fuori portata finché non
+  esiste una fonte di prezzi di bancata.
+
 ## 5. Come si verifica
 
 ```bash
-npm run audit:value-bets           # serve DATABASE_URL (in questo ambiente non c'è Postgres: qui
-                                   # i numeri della sezione 3 vengono dal dataset congelato,
-                                   # `npm run study:finished` → S9, stesso tipo di prezzi)
-npm run study:finished > /tmp/studio.md && sed -n '/## S9/,$p' /tmp/studio.md
+npm run audit:value-bets    # VERIFICA a 6 controlli della pagina, oggi: dopo la patch è un guard
+                            # (esito OK/ATTENZIONE per proprietà), non più una radiografia
+npm run test:quant          # include [2b]: «linea incompleta → nessun numero», «nessun pavimento»
+npm run study:finished > /tmp/studio.md && sed -n '/## S9/,$p' /tmp/studio.md   # la misura della §3
+npm run lint && npm run typecheck && npm run build
 ```
 
-`src/scripts/audit-value-bets.ts` esegue **lo stesso percorso della pagina** e conta sei fatti:
-segnali letti vs opportunità (effetto pavimento), età dei kickoff, partite con `settled_at` non
-vuoto in lista, duplicati sulla stessa partita, righe con una linea sharp osservata, somma dei
-suggeriti in euro sul bankroll. Sono solo letture.
+I controlli di `src/scripts/audit-value-bets.ts`, ora che la pagina è sistemata, sono sei proprietà
+da mantenere: solo kickoff futuri; nessuna partita con verdetto a registro; nessuna riga con
+`fair = quota × 1,045`; divari negativi visibili; media dei divari nell'ordine del margine di una
+linea (non oltre); contatori di scarto coerenti con i segnali letti. Ognuno ha `OK` o
+`ATTENZIONE`, quindi un regresso si vede senza rileggere il codice. `npm run audit:value-bets`
+richiede `DATABASE_URL`; in questo ambiente non c'è Postgres, e la §3 è infatti calcolata sul
+dataset congelato (`study:finished` → S9), che contiene la stessa famiglia di prezzi.
 
-I sei punti della sezione 2 non richiedono il database: sono formule e filtri, e si controllano
-nel codice. La misura della sezione 3 richiede solo il dataset congelato.
+Le pagine verificano anche da sole: `/value-bets` costruita **senza** database acceso rende lo
+stato vuoto con la frase «nessun segnale letto dall'elenco» invece di un finto «0 opportunità»:
+la lista vuota e l'errore di lettura sono due cose diverse, e la pagina le distingue
+(`ValueScannerResult.error`).
 
 ---
 
