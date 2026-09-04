@@ -171,6 +171,8 @@ npm run job:collect -- --force         # ignora l'intervallo minimo
 npm run job:collect -- --no-collect    # solo consolidamento, nessuna rete
 npm run job:collect -- --collect-only --max 10 --no-results
 npm run job:verify-results       # verifica partita → risultato su dati reali
+npm run audit:finished           # audit dello storico «partite finite» (solo letture, markdown su stdout)
+npm run study:finished           # studio quantitativo sui CSV congelati (zero rete, zero DB)
 npm run validate         # typegen + typecheck + test + build
 npm run db:generate      # genera migrazione da schema.ts
 npm run db:migrate       # applica migrazioni
