@@ -11,6 +11,7 @@
  * dichiarata per ciò che è — conoscenza di un modello linguistico, da
  * verificare — e mai spacciata per dato raccolto.
  */
+import { sportKeyFor } from "@/lib/providers/optional/sport-keys";
 
 /** Dicitura fissa in testa al blocco, ovunque il contesto compaia. */
 export const CONTEXT_DISCLAIMER =
@@ -273,4 +274,32 @@ export function dailyUsageKey(now: Date): string {
     day: "2-digit",
   }).format(now);
   return `context:daily:${romeDay}`;
+}
+
+/* ------------------------------------------------------------------ */
+/* Copertura informativa della competizione                            */
+/* ------------------------------------------------------------------ */
+
+/** Nomi che dichiarano una competizione femminile (o il tag «W»/«WSL»). */
+const WOMEN_COMPETITION_HINT =
+  /(\bwomen\b|\bfemminile\b|\bwsl\b|(?:^|[\s\-–—])w(?:[\s\-–—]|$))/i;
+
+/**
+ * true se la competizione è a bassa copertura informativa per il contesto.
+ *
+ * È una DICHIARAZIONE, non un dato: per le femminili e per i tornei minori
+ * le fonti pubbliche esistono meno, quindi è normale che il modello
+ * risponda «non noto» su più campi. Lo si dice in testa al blocco, così chi
+ * legge si aspetta meno contenuti invece di percepire la scheda come rotta.
+ *
+ * Per la «lista coperta dalla linea sharp» si usa la stessa mappa del
+ * budget Odds API (`sportKeyFor`): un campionato minore o un femminile non
+ * sono lì, e non lo sono neppure le coppe mascherate da campionato.
+ */
+export function isLowInformationCompetition(league: string | null): boolean {
+  if (league === null) return false;
+  const name = league.trim();
+  if (name === "") return false;
+  if (WOMEN_COMPETITION_HINT.test(name)) return true;
+  return sportKeyFor(name) === null;
 }
