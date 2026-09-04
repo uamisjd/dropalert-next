@@ -161,40 +161,63 @@ export default async function Home({
 
   return (
     <main className="mx-auto w-full max-w-4xl flex-1 px-4 py-5">
-      <header className="relative mb-5 overflow-hidden rounded-2xl bg-slate-950 px-5 py-7 text-white shadow-sm sm:px-7 sm:py-9">
+      <header className="relative mb-5 overflow-hidden rounded-3xl bg-slate-950 px-6 py-8 text-white shadow-lg sm:px-8 sm:py-10">
         <div
           aria-hidden
-          className="absolute -top-24 -right-20 h-64 w-64 rounded-full bg-cyan-400/10 blur-3xl"
+          className="absolute -top-24 -right-20 h-72 w-72 rounded-full bg-cyan-400/15 blur-3xl"
         />
-        <div className="relative max-w-2xl">
-          <p className="text-xs font-semibold tracking-[0.16em] text-cyan-300 uppercase">
-            Osservatorio quote calcio
-          </p>
-          <h1 className="mt-2 text-3xl font-semibold tracking-tight sm:text-4xl">
-            Guarda come si muove il mercato.
+        <div
+          aria-hidden
+          className="absolute -bottom-20 -left-16 h-60 w-60 rounded-full bg-emerald-500/10 blur-3xl"
+        />
+        <div className="relative max-w-3xl">
+          <div className="flex items-center gap-2">
+            <span className="flex h-2 w-2 rounded-full bg-cyan-400 animate-pulse" />
+            <p className="text-xs font-bold tracking-[0.2em] text-cyan-300 uppercase">
+              Quantitative Betting & Trading Terminal
+            </p>
+          </div>
+          <h1 className="mt-2 text-3xl font-extrabold tracking-tight sm:text-5xl">
+            Intelligence Quantitativa sul Calcio.
           </h1>
           <p className="mt-3 text-sm leading-relaxed text-slate-300 sm:text-base">
-            DropAlert registra i cambi di quota, ne misura la solidità e
-            dichiara ciò che non riesce a verificare.{" "}
-            <span className="font-medium text-white">
-              Non dà pronostici e non suggerisce giocate.
-            </span>
+            Monitoraggio dei flussi di mercato in tempo reale, rilevamento automatico di{" "}
+            <strong className="text-emerald-400">Value Bets (+EV)</strong>, calcolo delle quote fair{" "}
+            <strong>No-Vig (Shin / Power)</strong>, dimensionamento tramite{" "}
+            <strong>Criterio di Kelly</strong> e strumenti di <strong>Green-Up & Trading Exchange</strong>.
           </p>
+
           <nav
-            aria-label="Letture del monitor"
-            className="mt-5 flex flex-wrap gap-2 text-xs"
+            aria-label="Accesso rapido ai moduli terminale"
+            className="mt-6 flex flex-wrap gap-2 text-xs"
           >
             <Link
-              href="/ieri"
-              className="rounded-lg border border-white/15 bg-white/10 px-3 py-2 font-medium text-white hover:bg-white/15"
+              href="/value-bets"
+              className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-500 px-3.5 py-2 font-bold text-slate-950 shadow-sm transition-colors hover:bg-emerald-400"
             >
-              Cosa è successo ieri
+              <span>💎</span>
+              <span>Value Bets Scanner (+EV)</span>
             </Link>
             <Link
-              href="/domani"
-              className="rounded-lg border border-white/15 px-3 py-2 font-medium text-slate-300 hover:bg-white/10 hover:text-white"
+              href="/trading"
+              className="inline-flex items-center gap-1.5 rounded-xl border border-white/20 bg-white/10 px-3.5 py-2 font-semibold text-white transition-colors hover:bg-white/20"
             >
-              Partite di domani
+              <span>⚡</span>
+              <span>Trading & Green-Up</span>
+            </Link>
+            <Link
+              href="/surebet"
+              className="inline-flex items-center gap-1.5 rounded-xl border border-white/20 bg-white/10 px-3.5 py-2 font-semibold text-white transition-colors hover:bg-white/20"
+            >
+              <span>⚖️</span>
+              <span>Surebet & Dutching</span>
+            </Link>
+            <Link
+              href="/simulator"
+              className="inline-flex items-center gap-1.5 rounded-xl border border-white/20 px-3.5 py-2 font-medium text-slate-300 transition-colors hover:bg-white/10 hover:text-white"
+            >
+              <span>📊</span>
+              <span>Simulatore xG</span>
             </Link>
           </nav>
         </div>
