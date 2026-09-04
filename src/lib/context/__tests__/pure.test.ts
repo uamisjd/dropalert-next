@@ -27,6 +27,7 @@ import {
   dailyUsageKey,
   isContextFresh,
   isDailyBudgetExhausted,
+  isLowInformationCompetition,
   parseContextDetail,
   parseContextFields,
 } from "../pure";
@@ -277,6 +278,30 @@ function main(): void {
 
   test("i valori d'accordo sono esattamente tre", () => {
     assertEqual(ACCORDO_VALUES.length, 3);
+  });
+
+  console.log("\n-- Copertura informativa della competizione --\n");
+
+  test("femminili e minori sono a bassa copertura, dichiarata", () => {
+    assertEqual(isLowInformationCompetition("Liga MX Women"), true, "Women in chiaro");
+    assertEqual(isLowInformationCompetition("Germany: Bundesliga Women"), true);
+    assertEqual(isLowInformationCompetition("Italia: Serie A Femminile"), true);
+    assertEqual(isLowInformationCompetition("Mexico: Liga MX W"), true, "tag «W»");
+    assertEqual(isLowInformationCompetition("England: WSL"), true, "Women's Super League");
+    assertEqual(isLowInformationCompetition("Italy: Serie C"), true, "minore non coperta");
+    assertEqual(isLowInformationCompetition("England: Premier League Cup"), true, "coppa travestita");
+  });
+
+  test("i campionati della linea sharp restano a copertura normale", () => {
+    assertEqual(isLowInformationCompetition("Italy: Serie A"), false);
+    assertEqual(isLowInformationCompetition("Italy: Serie B"), false, "Serie B è coperta");
+    assertEqual(isLowInformationCompetition("England: Premier League"), false);
+    assertEqual(isLowInformationCompetition("Europe: UEFA Champions League"), false);
+  });
+
+  test("senza nome della lega non si dichiara nulla", () => {
+    assertEqual(isLowInformationCompetition(null), false);
+    assertEqual(isLowInformationCompetition("   "), false);
   });
 
   console.log(

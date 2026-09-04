@@ -44,7 +44,7 @@
     "test:context": "tsx src/lib/context/__tests__/pure.test.ts",
     "test:news": "tsx src/lib/news/__tests__/source.test.ts",
     "test:backoff": "tsx src/lib/providers/__tests__/backoff.test.ts",
-    "test:client": "tsx src/components/__tests__/watch-toggle.test.tsx && tsx src/components/__tests__/tools.test.tsx && tsx src/components/__tests__/signal-card.test.tsx",
+    "test:client": "tsx src/components/__tests__/watch-toggle.test.tsx && tsx src/components/__tests__/tools.test.tsx && tsx src/components/__tests__/signal-card.test.tsx && tsx src/components/__tests__/context360.test.tsx",
     "test:tools": "tsx src/lib/tools/__tests__/tools.test.ts",
     "backtest:r1": "tsx scripts/backtest-r1.ts",
     "backtest:r15": "tsx scripts/backtest-r15.ts",

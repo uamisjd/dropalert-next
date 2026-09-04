@@ -22,6 +22,7 @@ import { getDeepAnalysis } from "@/lib/repo/analysis";
 import { DATA_REVALIDATE_SECONDS, cachedRead } from "@/lib/repo/cached";
 import { getSharpLine } from "@/lib/repo/sharp";
 import { sportKeyFor } from "@/lib/providers/optional/sport-keys";
+import { isLowInformationCompetition } from "@/lib/context/pure";
 import { SharpLineBlock } from "@/components/SharpLineBlock";
 import { DeepAnalysis360 } from "@/components/DeepAnalysis360";
 import { fetchTeamNews } from "@/lib/context/rss";
@@ -347,6 +348,11 @@ export default async function MatchDetailPage({
       }
     : undefined;
 
+  /* competizioni a bassa copertura informativa (femminili, minori): lo si
+     dichiara in testa al blocco, così i campi «non noto» non sembrano un
+     guasto. È una dichiarazione, mai un dato inventato. */
+  const lowInformation = isLowInformationCompetition(detail.match.league);
+
   /* Analisi 360° completa: on-demand alla prima apertura, sui fatti GIÀ
      recuperati (campi di contesto con fonte, documenti, profilo del
      movimento). Nessuna ricerca nuova, nessun budget speso su partite mai
@@ -498,6 +504,7 @@ export default async function MatchDetailPage({
             news={news}
             now={now}
             profile={profile}
+            lowInformation={lowInformation}
           />
         </section>
       ) : null}

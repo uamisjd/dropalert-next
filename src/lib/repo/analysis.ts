@@ -111,15 +111,33 @@ async function writeCache(
     });
 }
 
+/** Opzioni iniettabili per la chiamata al modello (test e chiave). */
+export interface DeepAnalysisOptions {
+  fetchImpl?: typeof fetch;
+  apiKey?: string;
+}
+
 /**
  * L'analisi di una partita: cache se fresca, altrimenti UNA chiamata al
- * modello sui fatti già recuperati. Nessuna eccezione attraversa il confine:
- * al peggio l'analisi «non è disponibile», e il motivo si legge in pagina.
+ * modello sui fatti già recuperati. Un fallimento transiente (timeout o
+ * errore di trasporto) merita UNA sola ripetizione: la distinzione fra un
+ * modello lento e un modello rotto non è misurabile con una chiamata sola,
+ * e un timeout occasionale non è un motivo per dichiarare impossibile
+ * l'analisi. Mai un loop: dopo la seconda risposta si dichiara, qualunque
+ * cosa dica. `chiave_assente` e `risposta_invalida` non sono transienti e
+ * non si riprovano.
+ *
+ * `bumpUsage` resta chiamato UNA volta, anche se la generazione è stata
+ * ripetuta: un secondo tentativo non è un secondo consumo di budget.
+ *
+ * Nessuna eccezione attraversa il confine: al peggio l'analisi «non è
+ * disponibile», e il motivo si legge in pagina.
  */
 export async function getDeepAnalysis(
   matchId: number,
   facts: AnalysisFacts,
   now: Date = new Date(),
+  options: DeepAnalysisOptions = {},
 ): Promise<AnalysisView> {
   const used = await readUsedToday(now);
   const usage = { used, limit: CONTEXT_DAILY_LIMIT };
@@ -169,10 +187,20 @@ export async function getDeepAnalysis(
     };
   }
 
-  const outcome = await generateDeepAnalysis(facts).catch(() => ({
+  const first = await generateDeepAnalysis(facts, options).catch(() => ({
     ok: false as const,
     reason: "errore" as const,
   }));
+  /* solo i fallimenti TRANSIENTI si ripetono, una volta sola: timeout ed
+     errore di trasporto possono essere un singhiozzo; chiave assente e
+     risposta invalida no, riprovarle non cambierebbe nulla */
+  const outcome =
+    first.ok || (first.reason !== "timeout" && first.reason !== "errore")
+      ? first
+      : await generateDeepAnalysis(facts, options).catch(() => ({
+          ok: false as const,
+          reason: "errore" as const,
+        }));
   await bumpUsage(now);
 
   if (!outcome.ok) {

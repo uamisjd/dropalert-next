@@ -1,6 +1,6 @@
 # DropAlert — Coda di lavoro dichiarata
 
-Ultimo aggiornamento: 18/08/2026, fine Sprint 5B.
+Ultimo aggiornamento: 04/09/2026.
 
 Questo file è la coda ufficiale del progetto. Serve a un'unica cosa: tenere
 visibile ciò che manca, invece di lasciarlo implicito nel codice o nella
@@ -145,6 +145,65 @@ risolvere le chiavi delle partite future in voci di watchlist.
 
 ---
 
+## 5. Contesto 360° — campi «non noto» e copertura dichiarata — chiuso 04/09/2026
+
+**Stato:** chiuso · **Priorità:** alta/media
+
+Tre correzioni sulla stessa regola non negoziabile: dichiarare ciò che manca,
+mai mostrarlo come una scheda rotta o un valore riempito per simmetria.
+
+### 5.1 Etichette e campi «non noto»
+
+- `FIELD_LABELS` in `Context360.tsx` ora copre tutte le chiavi v2, comprese
+  `forma_recente_5` («Forma recente (ultime cinque)») e `assenze_note`
+  («Assenze e indisponibilità»); la UI non stampa mai la chiave grezza
+  snake_case (`fieldLabel`).
+- I campi «non noto» o vuoti non diventano più card vuote: le card restano
+  solo per i valori dichiarati e per l'accordo col movimento; gli altri
+  finiscono in UNA riga: «Non recuperati per questa partita: … — sono
+  dichiarati, non riempiti per simmetria».
+- Coperto da `npm run test:client` (`context360.test.tsx`, jsdom): nessuna
+  chiave grezza, nessuna card «non noto», riga riassuntiva, card con
+  contenuto e accordo.
+
+### 5.2 Un solo retry su fallimento transiente
+
+- `getDeepAnalysis` ripete UNA volta sola i fallimenti `timeout` ed `errore`
+  (trasporto); `chiave_assente` e `risposta_invalida` non si riprovano
+  (riprovarle non cambierebbe nulla); `bumpUsage` resta UNA chiamata anche
+  dopo la ripetizione. Mai un loop di retry.
+- Test in `test:repo-analysis` con `fetchImpl` finto: 500 poi ok (due
+  chiamate, un credito), timeout poi ok, due fallimenti transienti (due
+  chiamate, poi dichiarato «non disponibile»), chiave assente (zero
+  chiamate), risposta invalida (una chiamata, scartata).
+
+### 5.3 Copertura informativa dichiarata
+
+- In testa al blocco Contesto 360°, per le competizioni a bassa copertura
+  informativa (femminili/minori) compare: «Competizione a bassa copertura
+  informativa: è normale che diversi campi siano dichiarati non noti».
+- Euristica `isLowInformationCompetition` in `lib/context/pure.ts`: nome
+  con «Women»/«W»/«Femminile», oppure competizione fuori dalla lista
+  coperta dalla linea sharp (`sportKeyFor` — la stessa mappa del budget
+  Odds API). È una dichiarazione, mai un dato inventato.
+- **Bug trovato strada facendo**: `EXCLUDE` in `sport-keys.ts` conteneva
+  `b\b|ii\b` (tag delle squadre riserve, non delle leghe) e scartava anche
+  la Serie B — il campionato dichiarato coperto in `COVERED_LABEL` non
+  avrebbe mai ricevuto una linea sharp. I due tag sono stati rimossi e il
+  test «Serie B mappata» è stato aggiunto a `test:odds-budget`.
+
+### 5.4 Ridurre i timeout del modello (facoltativo)
+
+Valutata la riduzione di `maxOutputTokens` (1600) o la compressione del
+prompt in `analysis-llm.ts`/`analysis.ts`: **non adottata**. Con il retry
+singolo (5.2) un timeout occasionale non è più un fallimento definitivo;
+ridurre i token aumenterebbe il rischio di risposta incompleta
+(`risposta_invalida`) e non c'è un modo misurabile in locale di verificare
+il guadagno senza una chiave live. La decisione resta aperta a un esperimento
+reale su una partita campione.
+
+---
+
 ## Debiti minori già noti
 
 - **`/domani` non è un calendario**: legge l'archivio del monitor, cioè le
@@ -165,9 +224,10 @@ risolvere le chiavi delle partite future in voci di watchlist.
   è un difetto, è il tempo che manca: il vincolo delle 30 osservazioni resta.
 - **Workflow GitHub Actions mai eseguito**: `.github/workflows/collect.yml`
   esiste ma richiede un repository remoto e il secret `JOBS_TOKEN`.
-- **Nessun test sui componenti React**: i test coprono le funzioni pure
-  (`view.test.ts`, 68 test). Il rendering dei componenti è verificato solo per
-  ispezione dell'HTML prodotto e screenshot.
+- **Test sui componenti React parziali**: `test:client` copre in un DOM reale
+  il toggle delle preferite, gli strumenti, la card segnale e il Contesto 360°;
+  per gli altri componenti il rendering resta verificato per ispezione
+  dell'HTML prodotto e screenshot.
 
 ---
 

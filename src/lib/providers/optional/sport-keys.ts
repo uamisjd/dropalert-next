@@ -25,8 +25,16 @@ const MAP: Array<{ match: RegExp; sportKey: string }> = [
   { match: /conference league/i, sportKey: "soccer_uefa_europa_conference_league" },
 ];
 
-/** Escluso a priori: coppe minori, femminili, riserve, giovanili. */
-const EXCLUDE = /\b(women|femminile|u1[5-9]|u2[0-3]|b\b|ii\b|riserve|reserves|youth|primavera)\b/i;
+/**
+ * Escluso a priori: coppe minori, femminili, riserve, giovanili.
+ *
+ * Niente tag «B»/«II» qui: sono etichette di squadre riserve (il nome della
+ * squadra, non della lega) e includerle escludeva anche la Serie B, che è
+ * un campionato coperto e dichiarato tale in `COVERED_LABEL`. Le coppe di
+ * riserve che citano un campionato coperto restano escluse da
+ * `COPPA_TRAVESTITA` qui sotto.
+ */
+const EXCLUDE = /\b(women|femminile|u1[5-9]|u2[0-3]|riserve|reserves|youth|primavera)\b/i;
 
 /**
  * Competizioni che CONTENGONO il nome di un campionato coperto ma non sono

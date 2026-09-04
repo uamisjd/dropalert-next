@@ -33,15 +33,32 @@ const FIELD_LABELS: Record<string, string> = {
   posta_in_palo: "Posta in palo",
   rotazioni_fatica: "Rotazioni e fatica",
   h2h_e_forma_recente: "Scontri diretti e forma recente",
+  forma_recente_5: "Forma recente (ultime cinque)",
+  assenze_note: "Assenze e indisponibilità",
   accordo_col_drop: "Accordo col movimento osservato",
 };
+
+/** Etichetta leggibile di un campo: mai la chiave grezza in snake_case. */
+function fieldLabel(key: string): string {
+  return FIELD_LABELS[key] ?? key.replace(/_/g, " ");
+}
+
+/**
+ * Un campo è recuperato solo se esiste un valore dichiarato. «Non noto» e
+ * stringa vuota sono dichiarazioni di assenza del dato: non si stampano come
+ * card (sarebbe una card vuota) ma si elencano in una riga che lo dice.
+ */
+function isUnknownField(field: ContextFieldDetail): boolean {
+  const valore = field.valore.trim().toLowerCase();
+  return valore === "" || valore === "non noto";
+}
 
 function FieldCard({ field }: { field: ContextFieldDetail }) {
   const isAccordo = field.key === "accordo_col_drop";
   return (
     <div className="rounded border border-slate-200 bg-white px-3 py-2">
       <div className="text-[11px] leading-tight text-slate-500">
-        {FIELD_LABELS[field.key] ?? field.key}
+        {fieldLabel(field.key)}
       </div>
       <div className="mt-0.5 text-sm text-slate-800">
         {isAccordo ? (
@@ -82,16 +99,29 @@ export function Context360({
   news,
   now,
   profile,
+  lowInformation = false,
 }: {
   context: ContextRowView | null;
   news: NewsItem[];
   now: Date;
   /** profilo del movimento già misurato: alimenta la lettura «Perché si muove» */
   profile?: MovementProfile;
+  /**
+   * true per competizioni a bassa copertura informativa (femminili, minori):
+   * si dichiara in testa al blocco, così i «non noto» non sembrano un guasto.
+   */
+  lowInformation?: boolean;
 }) {
   const ok = context !== null && context.status === "ok" && context.fields !== null;
   const detailFields = context?.detail?.fields ?? null;
   const sources = context?.sources ?? null;
+
+  /* campi con un valore dichiarato (oppure l'accordo, che è sempre un
+     verdetto) e campi dichiarati «non noto»: due trattamenti diversi */
+  const visibili = (detailFields ?? []).filter(
+    (f) => f.key === "accordo_col_drop" || !isUnknownField(f),
+  );
+  const ignoti = (detailFields ?? []).filter((f) => !visibili.includes(f));
 
   /* deduplica: un link già mostrato sotto a un campo non torna nell'elenco */
   const urlGiaCitati = new Set(
@@ -117,6 +147,13 @@ export function Context360({
         {CONTEXT_DISCLAIMER}
       </p>
 
+      {lowInformation ? (
+        <p className="mb-3 rounded border border-slate-300 bg-slate-50 px-3 py-2 text-xs leading-relaxed text-slate-700">
+          Competizione a bassa copertura informativa: è normale che diversi
+          campi siano dichiarati non noti.
+        </p>
+      ) : null}
+
       {context === null ? (
         <p className="text-xs leading-relaxed text-slate-600">
           Contesto non disponibile per questa partita: si genera solo per
@@ -139,11 +176,26 @@ export function Context360({
         </p>
       ) : detailFields !== null ? (
         <>
-          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-            {detailFields.map((f) => (
-              <FieldCard key={f.key} field={f} />
-            ))}
-          </div>
+          {visibili.length === 0 ? (
+            <p className="rounded border border-slate-200 bg-slate-50 px-3 py-2 text-xs leading-relaxed text-slate-600">
+              Nessun campo con un valore dichiarato per questa partita:
+              tutte le informazioni richieste sono risultate non note.
+              Nessun valore viene ricostruito al loro posto.
+            </p>
+          ) : (
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+              {visibili.map((f) => (
+                <FieldCard key={f.key} field={f} />
+              ))}
+            </div>
+          )}
+          {ignoti.length > 0 ? (
+            <p className="mt-2 rounded border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] leading-relaxed text-amber-900">
+              Non recuperati per questa partita:{" "}
+              {ignoti.map((f) => fieldLabel(f.key).toLowerCase()).join(", ")}{" "}
+              — sono dichiarati, non riempiti per simmetria.
+            </p>
+          ) : null}
           {sources === null || sources.length === 0 ? (
             <p className="mt-2 text-[11px] leading-relaxed text-slate-500">
               {context?.searchUnavailableReason !== null &&

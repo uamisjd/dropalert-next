@@ -122,6 +122,7 @@ check("«non osservabile» non è una smentita", sharpVerdict(3.0, 2.6, null) !=
 
 /* --- mappa competizioni: prima difesa del budget --- */
 eq("Serie A mappata", sportKeyFor("Italy: Serie A"), "soccer_italy_serie_a");
+eq("Serie B mappata (il tag «B» è della squadra riserve, non della lega)", sportKeyFor("Italy: Serie B"), "soccer_italy_serie_b");
 eq("Premier League mappata", sportKeyFor("England: Premier League"), "soccer_epl");
 eq("lega minore non mappata", sportKeyFor("Scotland: Challenge Cup"), null);
 eq("femminile esclusa", sportKeyFor("Germany: Bundesliga Women"), null);
