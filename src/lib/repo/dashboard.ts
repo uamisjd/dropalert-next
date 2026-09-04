@@ -936,18 +936,50 @@ export async function getDashboardData(
   filters: DashboardFilters = {},
   now = new Date(),
 ): Promise<DashboardData> {
-  const [signals, status, clv] = await Promise.all([
-    getDashboardSignals(filters, now),
-    getDashboardStatus(now),
-    getClvMaturity(now),
-  ]);
+  try {
+    const [signals, status, clv] = await Promise.all([
+      getDashboardSignals(filters, now),
+      getDashboardStatus(now),
+      getClvMaturity(now),
+    ]);
 
-  return {
-    signals: signals.items,
-    totalSignals: signals.total,
-    leagues: signals.leagues,
-    status,
-    clv,
-    generatedAt: now.toISOString(),
-  };
+    return {
+      signals: signals.items,
+      totalSignals: signals.total,
+      leagues: signals.leagues,
+      status,
+      clv,
+      generatedAt: now.toISOString(),
+    };
+  } catch {
+    return {
+      signals: [],
+      totalSignals: 0,
+      leagues: [],
+      status: {
+        sources: [],
+        sourcesOk: 0,
+        sourcesBlocked: 0,
+        openGaps: 0,
+        gapsByReason: [],
+        lastRun: null,
+        lastSuccessfulRun: null,
+        matchesToday: 0,
+        matchesMonitored: 0,
+        snapshotsToday: 0,
+        overall: "no_data",
+        overallLabel: "Nessun dato a registro",
+      },
+      clv: {
+        sampleSize: 0,
+        meanClvPp: null,
+        meanClvPct: null,
+        positiveClvSharePct: null,
+        bands: [],
+        mature: false,
+        note: CLV_MATURITY_NOTE,
+      },
+      generatedAt: now.toISOString(),
+    };
+  }
 }
