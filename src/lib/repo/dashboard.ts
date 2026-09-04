@@ -737,7 +737,17 @@ export async function getDashboardSignals(
     const band = s.confidenceBand as ConfidenceBand;
     const magnitude = s.magnitudeClass as MagnitudeClass;
     const status = s.status as SignalStatus;
-    const level = signalLevelOf(band, magnitude, status);
+    /* L'indice normalizzato si calcola prima del livello: il livello letto in
+       pagina e l'etichetta dell'indice devono derivare dalla stessa scala,
+       altrimenti la stessa carta dice «debole» nel badge e «media» nell'indice.
+       La banda grezza del motore resta per il CLV storico. */
+    const normalized = normalizedOf(explanation.components ?? [], num(s.confidenceScore), {
+      booksTotal: s.booksTotal,
+      sharpAvailable: s.sharpAvailable,
+      sharpConfirms: s.sharpConfirms,
+      pointCount: snap?.n ?? 0,
+    });
+    const level = signalLevelOf(normalized.normalizedBand ?? band, magnitude, status);
 
     return {
       id: s.id,
@@ -783,12 +793,7 @@ export async function getDashboardSignals(
       suspicion: explanation.suspicion ?? null,
       wideDropPct,
       wideDrop: wideDropPct !== null && wideDropPct >= WIDE_DROP_THRESHOLD * 100,
-      ...normalizedOf(explanation.components ?? [], num(s.confidenceScore), {
-        booksTotal: s.booksTotal,
-        sharpAvailable: s.sharpAvailable,
-        sharpConfirms: s.sharpConfirms,
-        pointCount: snap?.n ?? 0,
-      }),
+      ...normalized,
       sparkline: downsample(
         sparkByKey.get(`${r.matchId}::${s.market}::${s.selection}`) ?? [],
       ),

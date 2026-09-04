@@ -281,7 +281,15 @@ function main(): void {
     const pts = Array.from({ length: MIN_RUNS_FOR_TREND }, (_, i) => point(i, i, 11, 9));
     const v = viewOf(coverageOf(), pts);
     assert(!v.seriesInsufficient, "abbastanza punti");
-    assertEqual(v.seriesLabel, "10/10 giri");
+    assertEqual(v.seriesLabel, "10 giri schedulati");
+  });
+
+  test("oltre la soglia non si stampa una frazione assurda come 39/10", () => {
+    const pts = Array.from({ length: 39 }, (_, i) => point(i, i, 11, 9));
+    const v = viewOf(coverageOf(), pts);
+    assert(!v.seriesInsufficient, "39 giri superano la soglia");
+    assertEqual(v.seriesLabel, "39 giri schedulati");
+    assert(!v.seriesLabel.includes("/10"), "il numeratore non si legge più come frazione");
   });
 
   test("la frase di profondità arriva dalla misura, non dalla vista", () => {

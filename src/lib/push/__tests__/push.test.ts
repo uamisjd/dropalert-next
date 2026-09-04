@@ -16,6 +16,7 @@ import {
   type LiveValue,
   type WatchedItem,
 } from "../pure";
+import { liveValueOf } from "../live";
 
 let passed = 0;
 const failures: string[] = [];
@@ -166,6 +167,46 @@ eq(
 eq("payload non oggetto: rifiutata", parseSubscription(null, now), null);
 check("la chiave di registro è stabile", subscriptionKey(endpoint) === subscriptionKey(endpoint));
 check("la chiave di registro ha un prefisso proprio", subscriptionKey(endpoint).startsWith("push:sub:"));
+
+/* ------------------------------------------------------------------ */
+/* Una sola scala per la soglia: pagina, card e notifica               */
+/* ------------------------------------------------------------------ */
+
+/* La soglia «indice ≥ 60» viene confrontata in tre posti: la card della
+   lista, la pagina /preferite e l'invio della notifica. Se uno dei tre usa
+   l'indice grezzo e gli altri quello normalizzato sulla base misurabile, la
+   stessa partita risulta raggiunta in un posto e non raggiunta in un altro.
+   `liveValueOf` è il punto unico che decide quale numero si confronta. */
+eq(
+  "indice normalizzato presente: è quello che si confronta con la soglia",
+  liveValueOf({ normalizedScore: 73, confidenceScore: 58, dropPct: -12 }).score,
+  73,
+);
+eq(
+  "senza scomposizione a registro si ripiega sul grezzo, dichiarato",
+  liveValueOf({ normalizedScore: null, confidenceScore: 58, dropPct: -12 }).score,
+  58,
+);
+eq(
+  "il calo passa così com'è: nessuna rielaborazione",
+  liveValueOf({ normalizedScore: null, confidenceScore: null, dropPct: -7.5 })
+    .dropPct,
+  -7.5,
+);
+eq(
+  "nessun dato: score null, cioè non valutabile e non zero",
+  liveValueOf({ normalizedScore: null, confidenceScore: null, dropPct: null })
+    .score,
+  null,
+);
+check(
+  "lo stesso numero decide la notifica: 73 normalizzato supera la soglia 60 " +
+    "che il grezzo 58 non superava",
+  thresholdCrossed(
+    { thresholdKind: "indice", thresholdValue: 60 },
+    liveValueOf({ normalizedScore: 73, confidenceScore: 58, dropPct: -12 }),
+  ) === true,
+);
 
 if (failures.length > 0) {
   console.error(`✗ ${failures.length} test falliti su ${passed + failures.length}`);

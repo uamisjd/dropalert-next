@@ -10,6 +10,7 @@
  * può suggerire che un esito sia più probabile nella realtà.
  */
 import type { DashboardSignal } from "@/lib/repo/dashboard";
+import { isPlayed } from "@/lib/view/timeline";
 
 /* ------------------------------------------------------------------ */
 /* Etichette piane accanto a quelle tecniche                           */
@@ -22,6 +23,19 @@ export const PLAIN_STRENGTH_LABELS: Record<PlainStrength, string> = {
   "in-movimento": "Il mercato si sta muovendo",
   ampio: "Movimento ampio e sostenuto",
 };
+
+/**
+ * La stessa etichetta, al tempo giusto. A partita iniziata «il mercato si sta
+ * muovendo» è cronaca di un incontro già cominciato: si dice «si è mosso».
+ * Le altre due etichette sono neutre e restano identiche.
+ */
+export function plainStrengthPhrase(
+  strength: PlainStrength,
+  played: boolean,
+): string {
+  if (played && strength === "in-movimento") return "Il mercato si è mosso";
+  return PLAIN_STRENGTH_LABELS[strength];
+}
 
 /**
  * Traduzione in lingua piana di ciò che il motore ha già deciso.
@@ -124,10 +138,14 @@ export function plainSentence(
     /* elisione obbligatoria: "dal pareggio", non "da il pareggio" */
     const meta = towards(signal);
     const daMeta = meta.startsWith("il ") ? `dal ${meta.slice(3)}` : `da ${meta}`;
+    /* A partita iniziata il movimento è storia, non cronaca: il presente
+       progressivo («si sta spostando») su un incontro già cominciato sarebbe
+       lo stesso errore del racconto pre-gara in cache. Si passa al passato. */
+    const played = isPlayed(signal.kickoffAt, now);
     const direzione =
       current < opening
-        ? ` : il mercato si sta spostando verso ${meta}`
-        : ` : il mercato si sta allontanando ${daMeta}`;
+        ? ` : il mercato si ${played ? "è spostato" : "sta spostando"} verso ${meta}`
+        : ` : il mercato si ${played ? "è allontanato" : "sta allontanando"} ${daMeta}`;
     parts.push(
       `${subjectOf(signal)} ${verso} da ${fmtOdd(opening)} a ${fmtOdd(current)}${durata}${direzione}.`.replace(
         " : ",
@@ -158,7 +176,6 @@ export function plainSentence(
     parts.push("Movimento su un solo bookmaker.");
   }
 
-  void now;
   return parts.join(" ");
 }
 

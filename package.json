@@ -16,7 +16,7 @@
     "db:seed": "tsx src/db/seed.ts",
     "validate": "npm run typegen && npm run typecheck && npm run test && npm run build",
     "test:pipeline": "tsx --env-file=.env src/lib/pipeline/__tests__/pipeline.test.ts",
-    "test:all": "npm run test && npm run test:view && npm run test:timeline && npm run test:plain && npm run test:why && npm run test:locale && npm run test:analysis && npm run test:odds-budget && npm run test:watchlist && npm run test:feed && npm run test:calendar && npm run test:push && npm run test:gate && npm run test:pipeline && npm run test:providers && npm run test:betexplorer && npm run test:coverage && npm run test:cov-view && npm run test:scheduler && npm run test:settle && npm run test:shape && npm run test:context && npm run test:news && npm run test:backoff",
+    "test:all": "npm run test && npm run test:view && npm run test:timeline && npm run test:plain && npm run test:why && npm run test:locale && npm run test:analysis && npm run test:odds-budget && npm run test:watchlist && npm run test:feed && npm run test:calendar && npm run test:push && npm run test:gate && npm run test:pipeline && npm run test:providers && npm run test:betexplorer && npm run test:coverage && npm run test:cov-view && npm run test:scheduler && npm run test:settle && npm run test:shape && npm run test:context && npm run test:news && npm run test:backoff && npm run test:tools && npm run test:client && npm run test:repo-analysis",
     "test:coverage": "tsx src/lib/cov/__tests__/coverage.test.ts",
     "report:coverage": "tsx --env-file=.env src/scripts/run-coverage.ts",
     "job:analyze": "tsx --env-file-if-exists=.env src/scripts/run-analyze.ts",
@@ -44,8 +44,11 @@
     "test:context": "tsx src/lib/context/__tests__/pure.test.ts",
     "test:news": "tsx src/lib/news/__tests__/source.test.ts",
     "test:backoff": "tsx src/lib/providers/__tests__/backoff.test.ts",
+    "test:client": "tsx src/components/__tests__/watch-toggle.test.tsx && tsx src/components/__tests__/tools.test.tsx && tsx src/components/__tests__/signal-card.test.tsx",
+    "test:tools": "tsx src/lib/tools/__tests__/tools.test.ts",
     "backtest:r1": "tsx scripts/backtest-r1.ts",
-    "backtest:r15": "tsx scripts/backtest-r15.ts"
+    "backtest:r15": "tsx scripts/backtest-r15.ts",
+    "test:repo-analysis": "tsx --env-file-if-exists=.env src/lib/repo/__tests__/analysis.test.ts"
   },
   "dependencies": {
     "drizzle-orm": "^0.45.2",
@@ -58,6 +61,7 @@
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
+    "@types/jsdom": "^30.0.0",
     "@types/node": "20.19.43",
     "@types/react": "19.2.18",
     "@types/react-dom": "^19",
@@ -65,6 +69,7 @@
     "drizzle-kit": "^0.31.10",
     "eslint": "^9",
     "eslint-config-next": "16.3.1",
+    "jsdom": "^30.0.1",
     "tailwindcss": "^4",
     "tsx": "^4.23.12",
     "typescript": "5.9.3"

@@ -21,6 +21,7 @@ import {
   othersLabel,
   plainSentence,
   plainStrengthOf,
+  plainStrengthPhrase,
   sourcesLabel,
 } from "../plain";
 
@@ -193,6 +194,26 @@ eq("serie corta intatta", downsample([1, 2, 3], 60).length, 3);
 const f4 = plainSentence(sig({ openingPrice: 2.0, currentPrice: 2.5, selection: "away" }), now);
 check("frase: quota salita", f4.includes("è salita da 2,00 a 2,50"));
 check("frase: allontanamento", f4.includes("si sta allontanando da Beta"));
+
+/* --- a partita giocata la frase passa al passato --- */
+const nowPlayed = new Date("2026-08-25T21:00:00Z"); // due ore DOPO il fischio
+const fPlayed = plainSentence(
+  sig({ openingPrice: 2.0, currentPrice: 2.5, selection: "away" }),
+  nowPlayed,
+);
+check("giocata: allontanamento al passato", fPlayed.includes("si è allontanato da Beta"));
+check("giocata: niente presente progressivo", !fPlayed.includes("si sta allontanando"));
+const fPlayedDown = plainSentence(
+  sig({ openingPrice: 2.5, currentPrice: 2.0, selection: "home" }),
+  nowPlayed,
+);
+check("giocata: spostamento al passato", fPlayedDown.includes("si è spostato verso"));
+
+/* --- etichetta di forza al tempo giusto --- */
+eq("forza: in movimento, da giocare", plainStrengthPhrase("in-movimento", false), "Il mercato si sta muovendo");
+eq("forza: in movimento, giocata", plainStrengthPhrase("in-movimento", true), "Il mercato si è mosso");
+eq("forza: ampio resta neutro anche da giocata", plainStrengthPhrase("ampio", true), "Movimento ampio e sostenuto");
+eq("forza: rumore resta neutro anche da giocato", plainStrengthPhrase("rumore", true), "Movimento piccolo, probabilmente rumore");
 
 /* --- una card per partita --- */
 const groups = groupByMatch([

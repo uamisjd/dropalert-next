@@ -39,4 +39,5 @@ export const PUBLIC_PAGES = [
   "/gioco-responsabile",
   "/preferite",
   "/performance",
+  "/strumenti",
 ] as const;

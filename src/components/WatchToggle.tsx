@@ -21,12 +21,37 @@ import {
   type WatchEntry,
 } from "@/lib/view/watchlist";
 
+/**
+ * Lettura CON MEMORIA della lista.
+ *
+ * Non è un'ottimizzazione: è ciò che tiene in piedi il componente.
+ * `useSyncExternalStore` confronta lo snapshot con `Object.is` e, se a ogni
+ * lettura arriva un oggetto nuovo, ritiene che il negozio sia cambiato e
+ * forza un altro render — all'infinito, fino a «Maximum update depth
+ * exceeded» e allo smontaggio dell'albero. Finché il contenuto grezzo del
+ * localStorage non cambia, qui si restituisce LO STESSO array e gli stessi
+ * oggetti al suo interno.
+ */
+let cacheRaw: string | null | undefined;
+let cacheList: WatchEntry[] = [];
+
 function read(): WatchEntry[] {
+  let raw: string | null = null;
   try {
-    return parseWatchlist(window.localStorage.getItem(WATCHLIST_KEY));
+    raw = window.localStorage.getItem(WATCHLIST_KEY);
   } catch {
-    return [];
+    /* storage negato: la lista è vuota e il pulsante non ricorda nulla */
+    raw = null;
   }
+  if (raw !== cacheRaw) {
+    cacheRaw = raw;
+    try {
+      cacheList = parseWatchlist(raw);
+    } catch {
+      cacheList = [];
+    }
+  }
+  return cacheList;
 }
 
 function write(entries: WatchEntry[]): void {

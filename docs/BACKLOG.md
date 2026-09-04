@@ -12,6 +12,40 @@ Ordine: dal debito che oggi degrada di più la qualità della misura, al resto.
 
 ---
 
+## 0. Revisione qualità post-produzione — chiuso 04/09/2026
+
+**Stato:** chiuso · **Origine:** screenshot del sito in produzione
+
+Passata di verifica su ciò che il sito mostrava davvero, con correzioni mirate:
+
+- **Indice di copertura**: oltre la soglia la serie stampava «39/10 giri», una
+  frazione impossibile. Ora sotto soglia resta il progresso `N/10`, sopra si
+  legge `39 giri schedulati`.
+- **Badge di livello vs indice**: la carta diceva «Segnale debole» (banda
+  grezza) e insieme «Indice 63 · Media» (banda normalizzata). Il livello ora
+  deriva dalla banda normalizzata, la stessa dell'indice: una sola scala letta
+  dall'utente. La banda grezza resta intatta per il CLV storico.
+- **Analisi 360° su partita giocata**: la cache pre-gara parlava al futuro di
+  un incontro già cominciato. A kickoff superato l'analisi non si serve né si
+  rigenera (si dichiara perché manca), e la chiusura del segnale cancella la
+  cache (`invalidateAnalysis`).
+- **Frase piana della carta**: a partita iniziata «il mercato si sta spostando»
+  diventa «si è spostato». Stessa regola per l'etichetta di forza.
+- **Dettaglio partita**: la scheda compatta «Contesto non disponibile» non
+  compare più sopra un'analisi 360° completa già presente.
+- **Gerarchia della carta**: l'intestazione accumulava sette badge in una riga
+  sola (livello, tempo, freschezza, iper-reazione, contesto, notizie, drop
+  ampio). Ora sono su tre righe distinte — identità del segnale, avvisi,
+  contesto di contorno — e le righe vuote non compaiono. Coperto da un test di
+  rendering DOM (`signal-card.test.tsx`).
+
+Lezione: il tempo verbale e la scala di lettura devono seguire lo stato reale
+della partita e l'unica scala che l'utente vede. Due scale sulla stessa carta,
+o un presente su una partita giocata, sono contraddizioni anche se ogni pezzo,
+preso da solo, è corretto.
+
+---
+
 ## 1. Espansione della copertura del collector sui tornei minori
 
 **Stato:** aperto · **Priorità:** alta · **Gap collegati:** 30 `bookmaker_missing`
@@ -66,27 +100,48 @@ fonte non esiste, il gap resta aperto e dichiarato.
 
 ## 3. Notifiche
 
-**Stato:** aperto · **Priorità:** media
+**Stato:** chiuso il 04/09/2026 · **Priorità:** era media
 
-Avvisare quando un segnale supera una soglia. Da progettare dopo il punto 2:
-notificare oggi significherebbe mandare avvisi costruiti su un indice di cui
-quasi metà dei componenti non è misurabile.
+Fatte: web push, iscrizioni anonime in `system_state`, soglia personale per
+partita, una notifica al giorno per partita e per iscrizione.
 
-Da definire: canale (nessun servizio a pagamento obbligatorio), soglia di
-attivazione, deduplicazione, e soprattutto il testo — una notifica è il luogo
-dove il tono da osservatorio si perde più facilmente. Nessuna formulazione che
-somigli a un consiglio di giocata.
+Due cose sono state risolte strada facendo e vale la pena tenerle scritte:
+
+- **la soglia si confronta con l'indice normalizzato**, lo stesso della card e
+  di `/preferite`. Confrontarla con l'indice grezzo avrebbe fatto dire
+  «soglia raggiunta» all'avviso e «non raggiunta» alla pagina: due scale per
+  una sola promessa. `liveValueOf` in `lib/push/live.ts` è il punto unico che
+  decide il numero, coperto da test;
+- **l'invio sta dentro il ciclo di osservazione**, non in una rotta a parte.
+  La rotta `POST /api/push/dispatch` esisteva già e nessuno scheduler la
+  chiamava: le iscrizioni si salvavano, il pulsante di prova funzionava e
+  nessun avviso partiva mai. Verificato end-to-end con un endpoint di prova:
+  il giro invia, e al secondo giro il dedupe blocca il bis.
+
+Il limite del punto 2 resta valido e va tenuto a mente: l'avviso descrive un
+movimento il cui indice ha quasi metà dei componenti non osservabili. Il testo
+dell'avviso lo dichiara, e non assomiglia a un consiglio di giocata.
+
+Da fare, se si vuole: una pagina che mostri a chi legge **che cosa** gli è stato
+inviato e quando, oggi la traccia sta solo a registro.
 
 ---
 
 ## 4. Watchlist
 
-**Stato:** aperto · **Priorità:** media
+**Stato:** chiuso per le partite (04/09/2026), aperto per squadre e competizioni
 
-Permettere di seguire partite, squadre o competizioni specifiche. Richiede una
-nozione di utente o quantomeno di sessione persistente, che oggi non esiste.
-Da valutare se risolverla lato client (senza account) prima di introdurre
-autenticazione.
+Seguire una partita è possibile dal pulsante «☆ Segui» su ogni card: la lista
+vive nel localStorage, senza account e senza inviare nulla al server, e la
+pagina `/preferite` la legge. Un difetto bloccante è stato trovato e corretto
+il 04/09/2026: `WatchToggle` restituiva a `useSyncExternalStore` un oggetto
+nuovo a ogni lettura, e React — che confronta con `Object.is` — rilanciava il
+render all'infinito. Cliccare «Segui» rompeva la pagina con «Maximum update
+depth exceeded». Coperto da `npm run test:client`, che esegue il componente in
+un DOM reale: nessuna funzione pura poteva accorgersene.
+
+Resta aperto: seguire una **squadra** o una **competizione**, che richiede di
+risolvere le chiavi delle partite future in voci di watchlist.
 
 ---
 

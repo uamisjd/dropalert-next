@@ -107,6 +107,22 @@ async function fullCycle(): Promise<void> {
   console.log(`  di cui fair no-vig   ${report.closing.fairLinesCaptured}`);
   console.log(`  record CLV           ${report.closing.clvComputed}`);
 
+  /* Le notifiche sono una fase del giro, non un pensiero: se non partono il
+     perché deve essere scritto qui, non scoperto da chi aspetta un avviso. */
+  console.log("\nNotifiche");
+  if (!report.notifications.configured) {
+    console.log(
+      "  chiavi VAPID non configurate: nessun avviso può partire (VAPID_PUBLIC_KEY / VAPID_PRIVATE_KEY)",
+    );
+  } else if (!report.notifications.executed) {
+    console.log("  fase non eseguita in questo giro (dato vivo non leggibile)");
+  } else {
+    console.log(`  iscrizioni a registro ${report.notifications.subscriptions}`);
+    console.log(`  avvisi inviati       ${report.notifications.sent}`);
+    console.log(`  invii non riusciti   ${report.notifications.skipped}`);
+    console.log(`  iscrizioni rimosse   ${report.notifications.removed} (endpoint morti)`);
+  }
+
   console.log(`\nIn attesa di chiusura : ${report.pending.length} partite monitorate`);
   for (const p of report.pending.slice(0, 10)) {
     console.log(`  - ${p.key} → kickoff ${fmtRome(p.kickoffAt)} (Europe/Rome)`);
