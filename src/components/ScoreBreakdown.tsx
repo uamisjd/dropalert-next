@@ -9,12 +9,12 @@
  * cosa.
  */
 import type { DetailSignal } from "@/lib/repo/match-detail";
-import type { ScoreComponentView } from "@/lib/repo/score-view";
-import { fmtRate } from "./format";
 import {
-  NORMALIZED_BAND_NOTE,
-  normalizedBandOf,
-} from "@/lib/repo/dashboard";
+  normalizedReachabilityScore,
+  type ScoreComponentView,
+} from "@/lib/repo/score-view";
+import { fmtRate } from "./format";
+import { NORMALIZED_BAND_NOTE, normalizedBandOf } from "@/lib/repo/dashboard";
 import { CONFIDENCE_LABELS_IT } from "@/lib/drop/constants";
 
 function ComponentRow({ c }: { c: ScoreComponentView }) {
@@ -68,13 +68,13 @@ function ComponentRow({ c }: { c: ScoreComponentView }) {
 export function ScoreBreakdown({ signal }: { signal: DetailSignal }) {
   const { components, reachability } = signal;
   const gaps = components.filter((c) => c.isGap);
-
-  /* la fascia si legge sulla stessa scala del numero grande: un 48,76 su 55
-     è l'89% del misurabile, e chiamarlo «bassa» contraddiceva l'hero */
-  const percentuale =
-    reachability.measurableMax > 0
-      ? Math.round((reachability.earned / reachability.measurableMax) * 100)
-      : null;
+  /* confidenceScore comprende gli eventuali moltiplicatori applicati dopo la
+     somma delle componenti. È lo stesso numeratore usato nella dashboard. */
+  const earned = signal.confidenceScore ?? reachability.earned;
+  const percentuale = normalizedReachabilityScore(
+    reachability,
+    signal.confidenceScore,
+  );
   const normalizedBand = normalizedBandOf(percentuale);
   const normalizedLabel =
     normalizedBand === null ? null : CONFIDENCE_LABELS_IT[normalizedBand];
@@ -85,17 +85,15 @@ export function ScoreBreakdown({ signal }: { signal: DetailSignal }) {
         Come è composto l&apos;indice
       </h4>
 
-      {/* Numero principale: punti ottenuti sui punti REALMENTE ottenibili.
-          Il grezzo su 100 resta, ma come nota: contare come zero i punti che
-          nessuna fonte permette di misurare faceva sembrare debole un
-          movimento che era semplicemente poco osservabile. */}
+      {/* Numero principale: punteggio effettivo, inclusi gli eventuali
+          moltiplicatori, sui punti realmente misurabili. */}
       <div className="mb-3 rounded border border-slate-200 bg-slate-50 px-3 py-2">
         <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
           <span
             className="text-2xl font-semibold tabular-nums text-slate-900"
             title="Punti ottenuti sui punti effettivamente misurabili: i componenti che i dati disponibili non permettono di valutare non entrano nel denominatore, invece di pesare come uno zero."
           >
-            {reachability.earned}
+            {earned}
             <span className="text-base font-normal text-slate-500">
               /{reachability.measurableMax}
             </span>
@@ -106,21 +104,24 @@ export function ScoreBreakdown({ signal }: { signal: DetailSignal }) {
           >
             su base misurabile
           </span>
-          <span
-            className="text-xs text-slate-600"
-            title={NORMALIZED_BAND_NOTE}
-          >
+          <span className="text-xs text-slate-600" title={NORMALIZED_BAND_NOTE}>
             banda {(normalizedLabel ?? signal.confidenceLabel).toLowerCase()}
           </span>
         </div>
         <p className="mt-1 text-[11px] leading-relaxed text-slate-500">
           Fascia calcolata su base misurabile ({percentuale ?? "n/d"}%).{" "}
-          {NORMALIZED_BAND_NOTE} Indice grezzo{" "}
-          <span className="tabular-nums">
-            {signal.confidenceScore ?? "n/d"}/100
-          </span>{" "}
-          · {reachability.gapMax} punti su {reachability.totalMax} non
-          osservabili (GAP) · copertura dati {fmtRate(signal.dataCoverage)}.
+          {NORMALIZED_BAND_NOTE} {reachability.gapMax} punti su{" "}
+          {reachability.totalMax} non osservabili (GAP) · copertura dati{" "}
+          {fmtRate(signal.dataCoverage)}.
+          {signal.suspicion !== null &&
+          Math.abs(reachability.earned - earned) > 0.005 ? (
+            <>
+              {" "}
+              Le componenti totalizzano {reachability.earned} punti prima del
+              moltiplicatore {signal.suspicion.multiplier}; il valore usato qui
+              e nella home è {earned}.
+            </>
+          ) : null}
         </p>
       </div>
 
@@ -139,14 +140,16 @@ export function ScoreBreakdown({ signal }: { signal: DetailSignal }) {
 
       {gaps.length > 0 && (
         <p className="mt-2 rounded border border-slate-200 bg-slate-50 px-3 py-2 text-xs leading-relaxed text-slate-700">
-          <span className="font-medium">Lettura corretta dell&apos;indice:</span>{" "}
-          {reachability.earned} punti su {reachability.measurableMax}{" "}
-          effettivamente misurabili. Gli altri {reachability.gapMax} punti su{" "}
+          <span className="font-medium">
+            Lettura corretta dell&apos;indice:
+          </span>{" "}
+          {earned} punti su {reachability.measurableMax} effettivamente
+          misurabili. Gli altri {reachability.gapMax} punti su{" "}
           {reachability.totalMax} appartengono a{" "}
-          {gaps.length === 1 ? "un componente" : `${gaps.length} componenti`} che
-          i dati disponibili non permettono di valutare. Un indice basso qui
-          descrive soprattutto quanto poco si riesce a osservare, non quanto sia
-          debole il movimento.
+          {gaps.length === 1 ? "un componente" : `${gaps.length} componenti`}{" "}
+          che i dati disponibili non permettono di valutare. Questi criteri non
+          pesano come zero, ma riducono la base su cui il movimento può essere
+          verificato.
         </p>
       )}
 

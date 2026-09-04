@@ -10,23 +10,31 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { SITE_NAME, SITE_URL } from "@/lib/site";
-import { getMatchDetail, type MarketSeries } from "@/lib/repo/match-detail";
-import { FreshnessBadge, MagnitudeBadge, MetaPill, SignalLevelBadge } from "@/components/Badges";
+import {
+  getMatchDetail,
+  type DetailSignal,
+  type MarketSeries,
+} from "@/lib/repo/match-detail";
+import {
+  FreshnessBadge,
+  MagnitudeBadge,
+  MetaPill,
+  SignalLevelBadge,
+} from "@/components/Badges";
 import { OddsChart } from "@/components/OddsChart";
 import { ScoreBreakdown } from "@/components/ScoreBreakdown";
 import { Context360 } from "@/components/Context360";
 import { NewsBlock } from "@/components/NewsBlock";
 import { getNewsForMatch } from "@/lib/repo/news";
 import { getContextForMatch } from "@/lib/repo/context";
-import { getDeepAnalysis } from "@/lib/repo/analysis";
 import { DATA_REVALIDATE_SECONDS, cachedRead } from "@/lib/repo/cached";
 import { getSharpLine } from "@/lib/repo/sharp";
 import { sportKeyFor } from "@/lib/providers/optional/sport-keys";
 import { isLowInformationCompetition } from "@/lib/context/pure";
 import { SharpLineBlock } from "@/components/SharpLineBlock";
-import { DeepAnalysis360 } from "@/components/DeepAnalysis360";
-import { fetchTeamNews } from "@/lib/context/rss";
 import { SignalTimeline } from "@/components/SignalTimeline";
+import { MatchSummary } from "@/components/MatchSummary";
+import { normalizedReachabilityScore } from "@/lib/repo/score-view";
 import {
   ND,
   fmtAgo,
@@ -68,9 +76,9 @@ export async function generateMetadata({
   const m = detail.match;
   const lead = detail.signals[0] ?? null;
   const serie = lead
-    ? detail.series.find(
+    ? (detail.series.find(
         (x) => x.market === lead.market && x.selection === lead.selection,
-      ) ?? null
+      ) ?? null)
     : null;
 
   /* Titolo social: chi gioca e QUANTO si è mossa la quota, perché è
@@ -184,15 +192,25 @@ function Metric({
 }
 
 /** Blocco di una singola serie: grafico + numeri che ne derivano. */
-function SeriesBlock({ series }: { series: MarketSeries }) {
+function SeriesBlock({
+  series,
+  featured = false,
+}: {
+  series: MarketSeries;
+  featured?: boolean;
+}) {
   const hasDistinctPeak =
     series.peak !== null &&
     series.opening !== null &&
     Math.abs(series.peak - series.opening) > 0.0005;
 
   return (
-    <section className="rounded-lg border border-slate-200 bg-white p-4">
-      <header className="mb-3 flex flex-wrap items-center justify-between gap-2">
+    <section
+      className={`border border-slate-200 bg-white ${
+        featured ? "rounded-2xl p-5 shadow-sm sm:p-6" : "rounded-xl p-4"
+      }`}
+    >
+      <header className="mb-4 flex flex-wrap items-center justify-between gap-2">
         <h3 className="text-sm font-semibold text-slate-900">
           {series.marketLabel} · {series.selectionLabel}
         </h3>
@@ -223,11 +241,11 @@ function SeriesBlock({ series }: { series: MarketSeries }) {
           hint="Prima quota osservata dal monitor, non la quota di apertura del bookmaker."
         />
         <Metric
-          label="Picco"
+          label="Estremo osservato"
           value={hasDistinctPeak ? fmtPrice(series.peak) : "—"}
           hint={
             hasDistinctPeak
-              ? "Estremo realmente registrato nella direzione del movimento."
+              ? "Quota più lontana dall'apertura nella direzione del movimento. Non è necessariamente il valore massimo."
               : "Nessun estremo distinto dall'apertura fra le rilevazioni disponibili."
           }
         />
@@ -268,6 +286,153 @@ function SeriesBlock({ series }: { series: MarketSeries }) {
   );
 }
 
+/**
+ * Scheda progressiva del segnale: la sintesi resta visibile, mentre formula,
+ * audit trail e note del motore sono disponibili senza occupare tutta la
+ * pagina al primo sguardo.
+ */
+function SignalPanel({ signal, now }: { signal: DetailSignal; now: Date }) {
+  const score = normalizedReachabilityScore(
+    signal.reachability,
+    signal.confidenceScore,
+  );
+  const observable =
+    signal.reachability.totalMax > 0
+      ? Math.round(
+          (signal.reachability.measurableMax / signal.reachability.totalMax) *
+            100,
+        )
+      : null;
+  const coverage =
+    signal.dataCoverage === null ? null : Math.round(signal.dataCoverage * 100);
+
+  return (
+    <article className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+      <header className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <div className="flex flex-wrap items-center gap-1.5">
+            <SignalLevelBadge level={signal.level} label={signal.levelLabel} />
+            <MagnitudeBadge label={signal.magnitudeLabel} />
+            <MetaPill title="Stato corrente del segnale nel ciclo di vita del motore.">
+              {signal.statusLabel}
+            </MetaPill>
+          </div>
+          <h3 className="mt-2 text-base font-semibold text-slate-950">
+            {signal.marketLabel} · {signal.selectionLabel}
+          </h3>
+          {signal.summary ? (
+            <p className="mt-1 max-w-2xl text-xs leading-relaxed text-slate-600">
+              {signal.summary}
+            </p>
+          ) : null}
+        </div>
+        <div className="text-right">
+          <p className="text-[11px] font-medium tracking-wide text-slate-500 uppercase">
+            Qualità osservata
+          </p>
+          <p className="text-2xl font-semibold tabular-nums text-slate-950">
+            {score ?? "—"}
+            <span className="text-sm font-normal text-slate-400">/100</span>
+          </p>
+        </div>
+      </header>
+
+      <dl className="mt-5 grid grid-cols-2 gap-2 sm:grid-cols-4">
+        <Metric
+          label="Quota rilevata"
+          value={fmtPrice(signal.detectedPrice)}
+          hint="Quota congelata al primo rilevamento: è il riferimento per il CLV."
+        />
+        <Metric
+          label="Spostamento"
+          value={fmtPp(signal.deltaPp)}
+          hint="Spostamento della probabilità implicita registrato dal motore."
+        />
+        <Metric
+          label="Tenuta"
+          value={fmtMinutes(signal.sustainedMinutes)}
+          hint="Durata per cui il nuovo livello si è mantenuto."
+        />
+        <Metric
+          label="Confronto bookmaker"
+          value={
+            signal.booksTotal <= 1
+              ? "Non misurabile"
+              : `${signal.booksConfirming}/${signal.booksTotal}`
+          }
+          hint={
+            signal.booksTotal <= 1
+              ? "La fonte espone una sola linea di consenso, non le quote dei singoli operatori."
+              : "Bookmaker che si muovono nella stessa direzione sul totale osservato."
+          }
+        />
+      </dl>
+
+      <div className="mt-4 grid gap-3 rounded-xl bg-slate-50 p-3 text-xs sm:grid-cols-3">
+        <div>
+          <span className="block text-slate-500">Base verificabile</span>
+          <strong className="mt-0.5 block tabular-nums text-slate-900">
+            {observable === null ? "—" : `${observable}%`}
+          </strong>
+        </div>
+        <div>
+          <span className="block text-slate-500">Copertura dello storico</span>
+          <strong className="mt-0.5 block tabular-nums text-slate-900">
+            {coverage === null ? "—" : `${coverage}%`}
+          </strong>
+        </div>
+        <div>
+          <span className="block text-slate-500">Linea indipendente</span>
+          <strong className="mt-0.5 block text-slate-900">
+            {!signal.sharpAvailable || signal.sharpConfirms === null
+              ? "Non osservabile"
+              : signal.sharpConfirms
+                ? "Conferma"
+                : "Non conferma"}
+          </strong>
+        </div>
+      </div>
+
+      {signal.suspicion !== null ? (
+        <p className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-relaxed text-amber-900">
+          <strong>Possibile iper-reazione storica.</strong> Il motore applica un
+          moltiplicatore {signal.suspicion.multiplier}; è un&apos;ipotesi da
+          validare, non un giudizio sull&apos;esito.
+        </p>
+      ) : null}
+
+      <div className="mt-4 divide-y divide-slate-100 border-t border-slate-100">
+        <details className="py-3">
+          <summary className="cursor-pointer text-sm font-medium text-slate-800 hover:text-slate-950">
+            Come è calcolata la qualità dell&apos;osservazione
+          </summary>
+          <div className="mt-3">
+            <ScoreBreakdown signal={signal} />
+          </div>
+        </details>
+        <details className="py-3">
+          <summary className="cursor-pointer text-sm font-medium text-slate-800 hover:text-slate-950">
+            Storia del segnale ({signal.timeline.length} eventi)
+          </summary>
+          <div className="mt-3">
+            <SignalTimeline signal={signal} />
+          </div>
+        </details>
+        <details className="py-3">
+          <summary className="cursor-pointer text-sm font-medium text-slate-800 hover:text-slate-950">
+            Tracciabilità tecnica
+          </summary>
+          <p className="mt-2 text-xs leading-relaxed text-slate-500">
+            Motore <span className="font-mono">{signal.engineVersion}</span> ·
+            rilevato {fmtDateTime(signal.detectedAt)} · ultimo ricalcolo{" "}
+            {fmtAgo(signal.updatedAt, now)}.
+          </p>
+        </details>
+      </div>
+    </article>
+  );
+}
+
 /* ------------------------------------------------------------------ */
 
 const BANNER_STYLES: Record<string, string> = {
@@ -296,35 +461,32 @@ export default async function MatchDetailPage({
   )(matchId, bucket * DATA_REVALIDATE_SECONDS * 1000);
   if (!detail) notFound();
 
-  /* Contesto 360°: cache 24h, una sola chiamata al modello per visita a
-     cache scaduta, mai un campo inventato. Le notizie RSS, quando ci
-     sono, citano la fonte. */
-  const [context, news, matchNews] = await Promise.all([
+  /* Un solo sistema di contesto e un solo sistema di notizie. La vecchia
+     analisi speculativa non viene più generata all'apertura della pagina: una
+     causa senza riscontri pubblici non deve diventare una sezione autorevole. */
+  const [context, matchNews] = await Promise.all([
     getContextForMatch(matchId, now).catch(() => null),
-    fetchTeamNews(detail.match.homeTeam, detail.match.awayTeam).catch(() => []),
     getNewsForMatch(
       matchId,
       detail.match.homeTeam,
       detail.match.awayTeam,
       now,
-    ).catch(
-      (): Awaited<ReturnType<typeof getNewsForMatch>> => ({
-        state: "irraggiungibile",
-        itemsCount: 0,
-        language: null,
-        updatedAt: null,
-        items: [],
-      }),
-    ),
+    ).catch((): Awaited<ReturnType<typeof getNewsForMatch>> => ({
+      state: "irraggiungibile",
+      itemsCount: 0,
+      language: null,
+      updatedAt: null,
+      items: [],
+    })),
   ]);
 
   /* profilo del movimento per la lettura: solo misure già a registro,
      prese dal segnale più forte della partita */
   const lead = detail.signals[0] ?? null;
   const leadSeries = lead
-    ? detail.series.find(
+    ? (detail.series.find(
         (x) => x.market === lead.market && x.selection === lead.selection,
-      ) ?? null
+      ) ?? null)
     : null;
   const profile = lead
     ? {
@@ -353,47 +515,6 @@ export default async function MatchDetailPage({
      guasto. È una dichiarazione, mai un dato inventato. */
   const lowInformation = isLowInformationCompetition(detail.match.league);
 
-  /* Analisi 360° completa: on-demand alla prima apertura, sui fatti GIÀ
-     recuperati (campi di contesto con fonte, documenti, profilo del
-     movimento). Nessuna ricerca nuova, nessun budget speso su partite mai
-     aperte; cache 24h. Se qualcosa va storto, la sezione lo dichiara. */
-  const analysis =
-    profile !== undefined
-      ? await getDeepAnalysis(
-          matchId,
-          {
-            homeTeam: detail.match.homeTeam,
-            awayTeam: detail.match.awayTeam,
-            league: detail.match.league,
-            country: detail.match.country,
-            kickoffAt: detail.match.kickoffAt,
-            fase:
-              context?.detail?.fields.find((f) => f.key === "posta_in_palo")
-                ?.valore ?? null,
-            stadio: null,
-            citta: null,
-            fields: context?.detail?.fields ?? [],
-            docs: (context?.sources ?? []).map((s) => ({
-              titolo: s.title ?? s.uri,
-              url: s.uri,
-            })),
-            movimento: {
-              selezione: lead!.selectionLabel,
-              apertura: leadSeries?.opening ?? null,
-              corrente: leadSeries?.current ?? null,
-              oreAlKickoff: profile.hoursToKickoff,
-              sostenutoMinuti: profile.sustainedMinutes,
-              flash: profile.isFlash,
-              rimbalzato: profile.rebounded,
-              bookConfermano: profile.booksConfirming,
-              bookTotali: profile.booksTotal,
-              scesa: profile.falling,
-            },
-          },
-          now,
-        ).catch(() => null)
-      : null;
-
   /* Linea sharp (The Odds API): solo segnali attivi, solo competizioni
      coperte, una lettura al giorno per partita e budget con hard-stop.
      Se una qualunque di queste condizioni non regge, non parte richiesta. */
@@ -416,388 +537,311 @@ export default async function MatchDetailPage({
 
   const { match } = detail;
   const hasResult = match.homeGoals !== null && match.awayGoals !== null;
+  const primarySeries = leadSeries ?? detail.series[0] ?? null;
+  const secondarySeries = primarySeries
+    ? detail.series.filter((series) => series !== primarySeries)
+    : [];
 
   return (
-    <main className="mx-auto w-full max-w-3xl flex-1 px-4 py-5">
-      <nav className="mb-3 flex flex-wrap items-center justify-between gap-2">
-        <Link
-          href="/"
-          className="text-xs text-slate-600 underline underline-offset-2 hover:text-slate-900"
-        >
-          ← Torna all&apos;elenco dei movimenti
-        </Link>
-        <span className="flex flex-wrap gap-x-3 gap-y-1 text-xs">
-          <Link
-            href="/ieri"
-            className="text-slate-600 underline underline-offset-2 hover:text-slate-900"
-          >
-            Ieri — segnali ed esiti
-          </Link>
-          <Link
-            href="/domani"
-            className="text-slate-600 underline underline-offset-2 hover:text-slate-900"
-          >
-            Domani — programma
-          </Link>
-        </span>
-      </nav>
+    <main className="mx-auto w-full max-w-4xl flex-1 px-4 py-6 sm:py-8">
+      <Link
+        href="/"
+        className="mb-4 inline-flex items-center gap-1 text-xs font-medium text-slate-600 hover:text-slate-950"
+      >
+        <span aria-hidden>←</span> Tutti i movimenti
+      </Link>
 
-      {/* ---------------- intestazione della partita ---------------- */}
-      <header className="mb-4">
-        <div className="mb-1.5 flex flex-wrap items-center gap-1.5">
-          <FreshnessBadge
-            level={detail.freshness}
-            label={detail.freshnessLabel}
-            reason={detail.freshnessReason}
-          />
-          <MetaPill title="Stato della partita secondo l'ultima rilevazione della fonte.">
-            {match.statusLabel}
-          </MetaPill>
-          {match.isDemo && (
-            <MetaPill title="Record di prova: non è un dato reale.">
-              FIXTURE DI TEST — non è un dato reale
-            </MetaPill>
-          )}
-        </div>
-
-        <h1 className="text-xl leading-snug font-bold tracking-tight text-slate-900">
-          {match.homeTeam} <span className="text-slate-400">–</span>{" "}
-          {match.awayTeam}
-        </h1>
-
-        <p className="mt-1 text-sm text-slate-600">
-          {match.league ?? "Competizione non attribuita"}
-          {match.country && (
-            <span className="text-slate-500"> ({match.country})</span>
-          )}
-          <span className="mx-1.5 text-slate-300">|</span>
-          {fmtDay(match.kickoffAt)} ore {fmtTime(match.kickoffAt)}
-        </p>
-
-        {hasResult ? (
-          <p className="mt-2 inline-block rounded border border-slate-300 bg-slate-100 px-3 py-1 text-sm font-semibold tabular-nums text-slate-900">
-            Risultato finale {match.homeGoals}–{match.awayGoals}
-            <span className="ml-2 text-xs font-normal text-slate-600">
-              (registrato, non usato per valutare il segnale)
+      <header className="relative overflow-hidden rounded-2xl bg-slate-950 px-5 py-6 text-white shadow-sm sm:px-7 sm:py-8">
+        <div
+          aria-hidden
+          className="absolute -top-20 -right-16 h-56 w-56 rounded-full bg-cyan-400/10 blur-3xl"
+        />
+        <div className="relative">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-xs font-semibold tracking-[0.16em] text-cyan-300 uppercase">
+              {match.league ?? "Competizione non attribuita"}
             </span>
+            {match.country ? (
+              <span className="text-xs text-slate-400">· {match.country}</span>
+            ) : null}
+            <span className="ml-auto flex flex-wrap gap-1.5">
+              <FreshnessBadge
+                level={detail.freshness}
+                label={detail.freshnessLabel}
+                reason={detail.freshnessReason}
+              />
+              <MetaPill title="Stato della partita secondo l'ultima rilevazione della fonte.">
+                {match.statusLabel}
+              </MetaPill>
+            </span>
+          </div>
+
+          <h1 className="mt-5 max-w-4xl text-2xl leading-tight font-semibold tracking-tight sm:text-4xl">
+            {match.homeTeam}{" "}
+            <span className="font-normal text-slate-500">–</span>{" "}
+            {match.awayTeam}
+          </h1>
+          <p className="mt-2 text-sm text-slate-300">
+            {fmtDay(match.kickoffAt)} · ore {fmtTime(match.kickoffAt)}
           </p>
-        ) : (
-          <p className="mt-2 text-xs text-slate-500">
-            Risultato non ancora registrato. La qualità di un segnale si misura
-            sul CLV, cioè sul confronto con la quota di chiusura, non sull&apos;esito
-            della partita.
+
+          {hasResult ? (
+            <p className="mt-4 inline-flex rounded-lg border border-white/15 bg-white/10 px-3 py-1.5 text-sm font-semibold tabular-nums">
+              Risultato finale {match.homeGoals}–{match.awayGoals}
+            </p>
+          ) : null}
+          {match.isDemo ? (
+            <p className="mt-3 text-xs font-medium text-amber-300">
+              Fixture di test: non è un dato reale.
+            </p>
+          ) : null}
+
+          <p className="mt-5 max-w-2xl border-t border-white/10 pt-4 text-xs leading-relaxed text-slate-400">
+            Osserviamo il mercato, non prevediamo il risultato. Un movimento di
+            quota non è un consiglio di scommessa.
           </p>
-        )}
+        </div>
       </header>
 
-      {/* ---------------- contesto 360 ----------------
-          La scheda compatta si genera solo per partite con un segnale in
-          essere. Se il contesto compatto manca MA c'è già il CONTENUTO
-          dell'analisi 360° completa, mostrare «contesto non disponibile»
-          sopra un'analisi completa è una contraddizione: la sezione compatta
-          si nasconde. `analysis` è la vista (quasi sempre presente), il
-          contenuto vero è `analysis.analysis`: si guarda quello. */}
-      {context !== null || analysis?.analysis == null ? (
-        <section aria-labelledby="contesto-360-wrap" className="mb-5">
-          <Context360
-            context={context}
-            news={news}
-            now={now}
-            profile={profile}
-            lowInformation={lowInformation}
-          />
-        </section>
-      ) : null}
+      <div className="mt-5">
+        <MatchSummary signal={lead} series={leadSeries} />
+      </div>
 
-      {/* ---------------- linea sharp ---------------- */}
-      {sharp !== null ? (
-        <section aria-labelledby="linea-sharp-wrap" className="mb-5">
-          <SharpLineBlock view={sharp} />
-        </section>
-      ) : null}
+      <nav
+        aria-label="Sezioni della partita"
+        className="mt-5 flex gap-1 overflow-x-auto rounded-xl border border-slate-200 bg-white p-1.5 shadow-sm"
+      >
+        {[
+          ["#movimento", "Movimento"],
+          ["#contesto", "Contesto"],
+          ["#affidabilita", "Affidabilità"],
+          ["#dati", "Qualità dati"],
+        ].map(([href, label]) => (
+          <a
+            key={href}
+            href={href}
+            className="shrink-0 rounded-lg px-3 py-2 text-xs font-medium text-slate-600 hover:bg-slate-100 hover:text-slate-950"
+          >
+            {label}
+          </a>
+        ))}
+      </nav>
 
-      {/* ---------------- analisi 360 completa ---------------- */}
-      {analysis !== null ? (
-        <section aria-labelledby="analisi-360-wrap" className="mb-5">
-          <DeepAnalysis360 view={analysis} />
-        </section>
-      ) : null}
+      <section
+        id="movimento"
+        aria-labelledby="titolo-movimento"
+        className="scroll-mt-20 pt-10"
+      >
+        <div className="mb-4">
+          <p className="text-xs font-semibold tracking-[0.16em] text-cyan-700 uppercase">
+            Dati osservati
+          </p>
+          <h2
+            id="titolo-movimento"
+            className="mt-1 text-xl font-semibold tracking-tight text-slate-950"
+          >
+            Andamento della quota
+          </h2>
+          <p className="mt-1 text-sm text-slate-600">
+            Ogni punto è una rilevazione registrata; i tratti servono soltanto a
+            collegare un&apos;osservazione alla successiva.
+          </p>
+        </div>
 
-      {/* ---------------- notizie pubbliche ---------------- */}
-      <section aria-labelledby="notizie-wrap" className="mb-5">
-        <NewsBlock news={matchNews} />
+        {primarySeries === null ? (
+          <p className="rounded-2xl border border-dashed border-slate-300 bg-white px-4 py-8 text-sm leading-relaxed text-slate-600">
+            Nessuna rilevazione utilizzabile per questa partita. Non viene
+            ricostruita una serie al posto dei dati mancanti.
+          </p>
+        ) : (
+          <SeriesBlock series={primarySeries} featured />
+        )}
+
+        {secondarySeries.length > 0 ? (
+          <details className="mt-3 rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
+            <summary className="cursor-pointer text-sm font-medium text-slate-800 hover:text-slate-950">
+              Altre quote della partita ({secondarySeries.length})
+            </summary>
+            <p className="mt-1 text-xs leading-relaxed text-slate-500">
+              Serie dello stesso mercato che non rappresentano il movimento
+              principale mostrato nella sintesi.
+            </p>
+            <div className="mt-4 space-y-3">
+              {secondarySeries.map((series) => (
+                <SeriesBlock
+                  key={`${series.market}-${series.selection}-${series.bookmakerKey}`}
+                  series={series}
+                />
+              ))}
+            </div>
+          </details>
+        ) : null}
       </section>
 
-      {/* ---------------- banner stato dati ---------------- */}
-      <section aria-labelledby="stato-dati-partita" className="mb-5">
-        <h2
-          id="stato-dati-partita"
-          className="mb-2 text-sm font-semibold tracking-wide text-slate-900 uppercase"
-        >
-          Stato dei dati di questa partita
-        </h2>
-        <p
-          className={`mb-2 rounded border px-3 py-2 text-sm ${BANNER_STYLES[detail.freshness]}`}
-        >
-          {detail.freshnessReason}
-        </p>
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-          <Metric
-            label="Rilevazioni totali"
-            value={String(detail.totalSnapshots)}
-            hint="Righe registrate in odds_snapshots per questa partita."
-          />
-          <Metric
-            label="Serie osservate"
-            value={String(detail.series.length)}
-            hint="Combinazioni di mercato, esito e bookmaker con almeno una rilevazione."
-          />
-          <Metric
-            label="Ultima raccolta"
-            value={fmtAgo(detail.lastSnapshotAt, now)}
-            hint={
-              detail.lastSnapshotAt
-                ? fmtDateTime(detail.lastSnapshotAt)
-                : "Nessuna rilevazione registrata."
-            }
-          />
-          <Metric
-            label="Lacune aperte"
-            value={String(detail.openGaps.length)}
-            hint="Informazioni mancanti dichiarate a registro per questa partita."
-          />
+      <section
+        id="contesto"
+        aria-labelledby="titolo-contesto"
+        className="scroll-mt-20 pt-10"
+      >
+        <div className="mb-4">
+          <p className="text-xs font-semibold tracking-[0.16em] text-cyan-700 uppercase">
+            Possibili spiegazioni
+          </p>
+          <h2
+            id="titolo-contesto"
+            className="mt-1 text-xl font-semibold tracking-tight text-slate-950"
+          >
+            Contesto e riscontri
+          </h2>
+          <p className="mt-1 text-sm leading-relaxed text-slate-600">
+            Le fonti pubbliche aiutano a leggere il movimento, ma non lo
+            trasformano in un pronostico. Le ipotesi non verificate restano
+            separate dai fatti.
+          </p>
+        </div>
+
+        <Context360
+          context={context}
+          now={now}
+          profile={profile}
+          lowInformation={lowInformation}
+        />
+
+        <div className="mt-4 grid gap-4 sm:grid-cols-2">
+          {sharp !== null ? <SharpLineBlock view={sharp} /> : null}
+          <NewsBlock news={matchNews} />
         </div>
       </section>
 
-      {/* ---------------- serie storiche ---------------- */}
-      <section aria-labelledby="serie" className="mb-5">
-        <h2
-          id="serie"
-          className="mb-2 text-sm font-semibold tracking-wide text-slate-900 uppercase"
-        >
-          Serie storica delle quote
-        </h2>
-
-        {detail.series.length === 0 ? (
-          <p className="rounded-lg border border-dashed border-slate-300 bg-white px-4 py-6 text-sm leading-relaxed text-slate-600">
-            Nessuna rilevazione di quota registrata per questa partita. La
-            partita risulta a monitor ma il collector non ha ancora prodotto
-            osservazioni utilizzabili: non c&apos;è nulla da mostrare e nulla
-            viene ricostruito.
+      <section
+        id="affidabilita"
+        aria-labelledby="titolo-affidabilita"
+        className="scroll-mt-20 pt-10"
+      >
+        <div className="mb-4">
+          <p className="text-xs font-semibold tracking-[0.16em] text-cyan-700 uppercase">
+            Metodo
           </p>
-        ) : (
-          <div className="space-y-4">
-            {detail.series.map((s) => (
-              <SeriesBlock
-                key={`${s.market}-${s.selection}-${s.bookmakerKey}`}
-                series={s}
-              />
-            ))}
-          </div>
-        )}
-      </section>
-
-      {/* ---------------- segnali ---------------- */}
-      <section aria-labelledby="segnali" className="mb-5">
-        <h2
-          id="segnali"
-          className="mb-2 text-sm font-semibold tracking-wide text-slate-900 uppercase"
-        >
-          Segnali registrati
-        </h2>
+          <h2
+            id="titolo-affidabilita"
+            className="mt-1 text-xl font-semibold tracking-tight text-slate-950"
+          >
+            Affidabilità del movimento
+          </h2>
+          <p className="mt-1 text-sm leading-relaxed text-slate-600">
+            La sintesi è subito leggibile; formula, componenti e storia completa
+            sono disponibili nei pannelli di approfondimento.
+          </p>
+        </div>
 
         {detail.signals.length === 0 ? (
-          <p className="rounded-lg border border-dashed border-slate-300 bg-white px-4 py-6 text-sm leading-relaxed text-slate-600">
-            Nessun segnale registrato su questa partita. Il monitor sta
-            raccogliendo le quote, ma nessun movimento ha superato la soglia di
-            rumore di 2 punti percentuali di probabilità implicita.
+          <p className="rounded-2xl border border-dashed border-slate-300 bg-white px-4 py-8 text-sm leading-relaxed text-slate-600">
+            Nessun movimento ha superato la soglia di rumore di 2 punti
+            percentuali di probabilità implicita.
           </p>
         ) : (
           <div className="space-y-4">
-            {detail.signals.map((s) => (
-              <article
-                key={s.id}
-                className="rounded-lg border border-slate-200 bg-white p-4"
-              >
-                <header className="mb-3">
-                  <div className="mb-1.5 flex flex-wrap items-center gap-1.5">
-                    <SignalLevelBadge level={s.level} label={s.levelLabel} />
-                    <MagnitudeBadge label={s.magnitudeLabel} />
-                    <MetaPill title="Stato corrente del segnale nel ciclo di vita del motore.">
-                      {s.statusLabel}
-                    </MetaPill>
-                  </div>
-                  <h3 className="text-sm font-semibold text-slate-900">
-                    {s.marketLabel} · {s.selectionLabel}
-                  </h3>
-                  {s.summary && (
-                    <p className="mt-1.5 border-l-2 border-slate-200 pl-3 text-xs leading-relaxed text-slate-600">
-                      {s.summary}
-                    </p>
-                  )}
-                  {/* versione dell'algoritmo e, se applicato, il
-                      moltiplicatore con i suoi motivi: chi legge può
-                      sempre risalire a come è stato calcolato il punteggio */}
-                  <p className="mt-1.5 text-[11px] text-slate-500">
-                    Algoritmo:{" "}
-                    <span className="font-mono text-slate-600">
-                      {s.engineVersion}
-                    </span>
-                  </p>
-                  {s.suspicion !== null ? (
-                    <div className="mt-1.5 rounded border border-amber-300 bg-amber-50 px-3 py-2 text-xs leading-relaxed text-amber-900">
-                      <p className="font-semibold">
-                        ⚠ Possibile iper-reazione (storico): moltiplicatore{" "}
-                        {s.suspicion.multiplier} applicato al punteggio
-                        (prima: {s.suspicion.scoreBefore.toFixed(0)}/100,
-                        dopo: {s.confidenceScore !== null ? s.confidenceScore.toFixed(0) : "n/d"}/100).
-                      </p>
-                      <ul className="mt-1 list-disc space-y-0.5 pl-4">
-                        {s.suspicion.reasons.map((r) => (
-                          <li key={r.code}>
-                            <span className="font-medium">{r.label}</span> —{" "}
-                            {r.detail}
-                          </li>
-                        ))}
-                      </ul>
-                      <p className="mt-1 text-[11px] text-amber-800">
-                        Il moltiplicatore è un valore iniziale dichiarato,
-                        da validare in R2. Il segnale resta in elenco: la
-                        fiducia si riduce, la misura no.
-                      </p>
-                    </div>
-                  ) : null}
-                </header>
-
-                <div className="mb-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
-                  <Metric
-                    label="Quota al rilevamento"
-                    value={fmtPrice(s.detectedPrice)}
-                    hint="Quota congelata al primo rilevamento: è il riferimento per il CLV e non viene mai riscritta."
-                  />
-                  <Metric
-                    label="Spostamento"
-                    value={fmtPp(s.deltaPp)}
-                    hint="Spostamento della probabilità implicita registrato dal motore."
-                  />
-                  <Metric
-                    label="Sostenuto per"
-                    value={fmtMinutes(s.sustainedMinutes)}
-                    hint="Durata per cui il movimento si è mantenuto."
-                  />
-                  <Metric
-                    label="Bookmaker concordi"
-                    value={`${s.booksConfirming}/${s.booksTotal}`}
-                    hint="Bookmaker che si muovono nella stessa direzione sul totale osservato."
-                  />
-                </div>
-
-                <div className="mb-4 space-y-1 text-xs text-slate-700">
-                  <div>
-                    Linea sharp:{" "}
-                    {!s.sharpAvailable || s.sharpConfirms === null ? (
-                      <span
-                        className="text-slate-500"
-                        title="La fonte non pubblica le quote dei singoli bookmaker: la conferma sharp non è osservabile, il che è diverso da una smentita."
-                      >
-                        non osservabile
-                      </span>
-                    ) : (
-                      <span className="font-medium text-slate-900">
-                        {s.sharpConfirms ? "conferma" : "non conferma"}
-                      </span>
-                    )}
-                  </div>
-                  {s.isFlash && (
-                    <div className="text-slate-600">
-                      Movimento flash: completato in meno di 30 minuti, la tenuta
-                      non è verificabile.
-                    </div>
-                  )}
-                  {s.rebounded && (
-                    <div className="text-slate-600">
-                      Movimento rimbalzato: la quota è rientrata verso il livello
-                      di apertura.
-                    </div>
-                  )}
-                </div>
-
-                <div className="mb-4 border-t border-slate-100 pt-3">
-                  <ScoreBreakdown signal={s} />
-                </div>
-
-                <div className="border-t border-slate-100 pt-3">
-                  <SignalTimeline signal={s} />
-                </div>
-
-                <footer className="mt-3 flex flex-wrap items-center gap-1.5 border-t border-slate-100 pt-2.5 text-[11px] text-slate-500">
-                  <MetaPill title="Versione dell'algoritmo che ha prodotto il record.">
-                    motore {s.engineVersion}
-                  </MetaPill>
-                  <MetaPill>
-                    rilevato {fmtDateTime(s.detectedAt)}
-                  </MetaPill>
-                  <MetaPill>
-                    ultimo ricalcolo {fmtAgo(s.updatedAt, now)}
-                  </MetaPill>
-                </footer>
-              </article>
+            {detail.signals.map((signal) => (
+              <SignalPanel key={signal.id} signal={signal} now={now} />
             ))}
           </div>
         )}
       </section>
 
-      {/* ---------------- lacune dichiarate ---------------- */}
-      <section aria-labelledby="lacune" className="mb-5">
-        <h2
-          id="lacune"
-          className="mb-2 text-sm font-semibold tracking-wide text-slate-900 uppercase"
-        >
-          Dati mancanti
-        </h2>
-
-        {detail.openGaps.length === 0 ? (
-          <p className="rounded-lg border border-slate-200 bg-white px-4 py-3 text-sm text-slate-600">
-            Nessuna lacuna aperta a registro per questa partita.
-            {detail.resolvedGaps > 0 &&
-              ` ${detail.resolvedGaps} ${detail.resolvedGaps === 1 ? "lacuna risolta" : "lacune risolte"} in precedenza.`}
+      <section
+        id="dati"
+        aria-labelledby="titolo-dati"
+        className="scroll-mt-20 pt-10"
+      >
+        <div className="mb-4">
+          <p className="text-xs font-semibold tracking-[0.16em] text-cyan-700 uppercase">
+            Trasparenza
           </p>
-        ) : (
-          <ul className="space-y-2">
-            {detail.openGaps.map((g) => (
-              <li
-                key={g.id}
-                className="rounded border border-orange-200 bg-orange-50 px-3 py-2"
-              >
-                <div className="flex flex-wrap items-baseline justify-between gap-x-2">
-                  <span className="text-sm font-medium text-orange-900">
-                    {g.reasonLabel}
-                  </span>
-                  <span className="text-[11px] tabular-nums text-orange-800">
-                    aperta dal {fmtDateTime(g.observedFrom)}
-                  </span>
-                </div>
-                {g.detail && (
-                  <p className="mt-1 text-xs leading-relaxed text-orange-900">
-                    {g.detail}
-                  </p>
-                )}
-              </li>
-            ))}
-          </ul>
-        )}
+          <h2
+            id="titolo-dati"
+            className="mt-1 text-xl font-semibold tracking-tight text-slate-950"
+          >
+            Qualità e limiti dei dati
+          </h2>
+        </div>
+
+        <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+          <p
+            className={`rounded-lg border px-3 py-2 text-sm ${BANNER_STYLES[detail.freshness]}`}
+          >
+            {detail.freshnessReason}
+          </p>
+          <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
+            <Metric
+              label="Rilevazioni"
+              value={String(detail.totalSnapshots)}
+              hint="Righe registrate per questa partita."
+            />
+            <Metric
+              label="Serie osservate"
+              value={String(detail.series.length)}
+              hint="Combinazioni di mercato, esito e fonte con almeno una rilevazione."
+            />
+            <Metric
+              label="Ultima raccolta"
+              value={fmtAgo(detail.lastSnapshotAt, now)}
+              hint={
+                detail.lastSnapshotAt
+                  ? fmtDateTime(detail.lastSnapshotAt)
+                  : "Nessuna rilevazione."
+              }
+            />
+            <Metric
+              label="Limitazioni aperte"
+              value={String(detail.openGaps.length)}
+              hint="Informazioni mancanti dichiarate a registro."
+            />
+          </div>
+
+          {detail.openGaps.length > 0 ? (
+            <details className="mt-4 border-t border-slate-100 pt-3">
+              <summary className="cursor-pointer text-sm font-medium text-slate-800 hover:text-slate-950">
+                Vedi le limitazioni dichiarate ({detail.openGaps.length})
+              </summary>
+              <ul className="mt-3 space-y-2">
+                {detail.openGaps.map((gap) => (
+                  <li
+                    key={gap.id}
+                    className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2"
+                  >
+                    <div className="flex flex-wrap items-baseline justify-between gap-2">
+                      <span className="text-sm font-medium text-amber-950">
+                        {gap.reasonLabel}
+                      </span>
+                      <span className="text-[11px] tabular-nums text-amber-800">
+                        dal {fmtDateTime(gap.observedFrom)}
+                      </span>
+                    </div>
+                    {gap.detail ? (
+                      <p className="mt-1 text-xs leading-relaxed text-amber-900">
+                        {gap.detail}
+                      </p>
+                    ) : null}
+                  </li>
+                ))}
+              </ul>
+            </details>
+          ) : (
+            <p className="mt-4 border-t border-slate-100 pt-3 text-xs text-slate-500">
+              Nessuna limitazione aperta a registro.
+              {detail.resolvedGaps > 0
+                ? ` ${detail.resolvedGaps} ${detail.resolvedGaps === 1 ? "limitazione risolta" : "limitazioni risolte"} in precedenza.`
+                : ""}
+            </p>
+          )}
+        </div>
       </section>
 
-      <footer className="mt-6 border-t border-slate-200 pt-4 text-xs leading-relaxed text-slate-500">
-        <p className="mb-2">
-          Questa pagina descrive come si è mossa una quota e quanto di quel
-          movimento il monitor è riuscito a osservare. Non contiene pronostici
-          né consigli di scommessa, e un movimento ampio non implica alcun
-          vantaggio.
-        </p>
-        <p className="text-slate-400">
-          Pagina generata il {fmtDateTime(detail.generatedAt)} (ora italiana) ·
-          chiave partita <span className="tabular-nums">{match.key}</span>
+      <footer className="mt-10 border-t border-slate-200 pt-5 text-xs leading-relaxed text-slate-500">
+        <p>
+          Pagina aggiornata il {fmtDateTime(detail.generatedAt)} (ora italiana)
+          · identificativo partita{" "}
+          <span className="tabular-nums">{match.key}</span>.
         </p>
       </footer>
     </main>

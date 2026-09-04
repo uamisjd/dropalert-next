@@ -42,7 +42,7 @@ export default async function PerformancePage() {
   const geo = view === null ? null : buildClvChart(view.points);
 
   return (
-    <main className="mx-auto w-full max-w-3xl flex-1 px-4 py-5">
+    <main className="mx-auto w-full max-w-4xl flex-1 px-4 py-5">
       <h1 className="text-xl font-bold tracking-tight text-slate-900">
         Performance
       </h1>

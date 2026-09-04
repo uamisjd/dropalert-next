@@ -1,62 +1,65 @@
 "use client";
 
-/**
- * Navigazione persistente (Sprint lancio, punto E1).
- *
- * Sta nel layout radice: le stesse cinque voci su ogni pagina, così non si
- * arriva mai in un vicolo cieco. La voce corrente è marcata con
- * `aria-current` e non è un link a sé stessa.
- *
- * Client component solo per leggere il percorso attivo: nessun dato, nessuna
- * chiamata, nessuno stato.
- */
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 const LINKS: Array<{ href: string; label: string }> = [
-  { href: "/", label: "Home" },
+  { href: "/", label: "Movimenti" },
   { href: "/ieri", label: "Ieri" },
   { href: "/domani", label: "Domani" },
   { href: "/preferite", label: "Preferite" },
   { href: "/strumenti", label: "Strumenti" },
-  { href: "/metodologia", label: "Metodologia" },
-  { href: "/gioco-responsabile", label: "Gioco responsabile" },
+  { href: "/metodologia", label: "Metodo" },
 ];
 
 export function SiteNav() {
   const pathname = usePathname();
 
   return (
-    <header className="border-b border-slate-200 bg-white">
-      <nav
-        aria-label="Navigazione principale"
-        className="mx-auto flex w-full max-w-3xl flex-wrap items-center gap-x-1 gap-y-1 px-4 py-2"
-      >
+    <header className="sticky top-0 z-50 border-b border-slate-200/80 bg-white/95 backdrop-blur">
+      <div className="mx-auto flex w-full max-w-4xl items-center gap-4 px-4 py-2.5">
         <Link
           href="/"
-          className="mr-2 text-sm font-bold tracking-tight text-slate-900"
+          className="flex shrink-0 items-center gap-2 text-sm font-bold tracking-tight text-slate-950"
+          aria-label="DropAlert — movimenti"
         >
-          DropAlert
+          <span
+            aria-hidden
+            className="grid h-7 w-7 place-items-center rounded-lg bg-slate-950 shadow-sm"
+          >
+            <span className="h-2 w-2 rounded-full bg-cyan-400" />
+          </span>
+          <span>DropAlert</span>
         </Link>
-        {LINKS.map((l) => {
-          const active =
-            l.href === "/" ? pathname === "/" : pathname.startsWith(l.href);
-          return (
-            <Link
-              key={l.href}
-              href={l.href}
-              aria-current={active ? "page" : undefined}
-              className={`rounded px-2 py-1 text-xs font-medium transition-colors ${
-                active
-                  ? "bg-slate-800 text-white"
-                  : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
-              }`}
-            >
-              {l.label}
-            </Link>
-          );
-        })}
-      </nav>
+
+        <nav
+          aria-label="Navigazione principale"
+          className="min-w-0 flex-1 overflow-x-auto"
+        >
+          <div className="flex min-w-max items-center justify-end gap-1">
+            {LINKS.map((link) => {
+              const active =
+                link.href === "/"
+                  ? pathname === "/"
+                  : pathname.startsWith(link.href);
+              return (
+                <Link
+                  key={link.href}
+                  href={link.href}
+                  aria-current={active ? "page" : undefined}
+                  className={`rounded-lg px-2.5 py-1.5 text-xs font-medium transition-colors ${
+                    active
+                      ? "bg-slate-950 text-white"
+                      : "text-slate-600 hover:bg-slate-100 hover:text-slate-950"
+                  }`}
+                >
+                  {link.label}
+                </Link>
+              );
+            })}
+          </div>
+        </nav>
+      </div>
     </header>
   );
 }

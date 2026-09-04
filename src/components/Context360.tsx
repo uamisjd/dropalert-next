@@ -1,36 +1,28 @@
 /**
- * Blocco "Contesto 360°" per il dettaglio partita, con ricerca attiva.
+ * Contesto pubblico della partita.
  *
- * Regole non negoziabili, ereditate e confermate dallo sprint grounding:
- *  1. la dicitura fissa in testa non si toglie mai;
- *  2. ogni campo porta UNO di due tag: «da fonte recuperata» col link,
- *     se la ricerca ha citato una sorgente, altrimenti «conoscenza
- *     modello, da verificare». I tag nascono dal parsing, non dalla UI;
- *  3. se il contesto manca si dice che manca e perché: niente inventato;
- *  4. il tetto giornaliero è dichiarato qui, visibile a chi legge;
- *  5. niente di questo blocco entra nel punteggio.
+ * La gerarchia è intenzionale: prima i fatti collegati a una fonte, poi — in
+ * un'area chiusa e chiaramente etichettata — le indicazioni automatiche non
+ * verificate. In questo modo una frase del modello non ha lo stesso peso
+ * visivo di una fonte consultabile.
  */
 import type { ContextRowView } from "@/lib/repo/context";
 import type { ContextFieldDetail } from "@/lib/context/pure";
-import {
-  CONTEXT_DISCLAIMER,
-  MODEL_KNOWLEDGE_TAG,
-} from "@/lib/context/pure";
-import type { NewsItem } from "@/lib/context/rss";
-
+import { CONTEXT_DISCLAIMER, MODEL_KNOWLEDGE_TAG } from "@/lib/context/pure";
 import type { MovementProfile } from "@/lib/context/why";
+import type { NewsItem } from "@/lib/context/rss";
 import { WhyMoves } from "./WhyMoves";
 
 const ACCORDO_STYLES: Record<string, string> = {
-  sostiene: "border-emerald-300 bg-emerald-50 text-emerald-900",
-  contraddice: "border-red-300 bg-red-50 text-red-900",
+  sostiene: "border-slate-700 bg-slate-800 text-white",
+  contraddice: "border-slate-400 bg-white text-slate-800",
   "non c'entra": "border-slate-300 bg-slate-100 text-slate-700",
 };
 
 const FIELD_LABELS: Record<string, string> = {
   livello_categorie: "Livello delle categorie",
   anomalia_campo: "Anomalia del campo",
-  posta_in_palo: "Posta in palo",
+  posta_in_palo: "Posta in palio",
   rotazioni_fatica: "Rotazioni e fatica",
   h2h_e_forma_recente: "Scontri diretti e forma recente",
   forma_recente_5: "Forma recente (ultime cinque)",
@@ -38,30 +30,24 @@ const FIELD_LABELS: Record<string, string> = {
   accordo_col_drop: "Accordo col movimento osservato",
 };
 
-/** Etichetta leggibile di un campo: mai la chiave grezza in snake_case. */
 function fieldLabel(key: string): string {
   return FIELD_LABELS[key] ?? key.replace(/_/g, " ");
 }
 
-/**
- * Un campo è recuperato solo se esiste un valore dichiarato. «Non noto» e
- * stringa vuota sono dichiarazioni di assenza del dato: non si stampano come
- * card (sarebbe una card vuota) ma si elencano in una riga che lo dice.
- */
 function isUnknownField(field: ContextFieldDetail): boolean {
-  const valore = field.valore.trim().toLowerCase();
-  return valore === "" || valore === "non noto";
+  const value = field.valore.trim().toLowerCase();
+  return value === "" || value === "non noto";
 }
 
 function FieldCard({ field }: { field: ContextFieldDetail }) {
-  const isAccordo = field.key === "accordo_col_drop";
+  const isAgreement = field.key === "accordo_col_drop";
   return (
     <div className="rounded border border-slate-200 bg-white px-3 py-2">
-      <div className="text-[11px] leading-tight text-slate-500">
+      <div className="text-[11px] leading-tight font-medium text-slate-500">
         {fieldLabel(field.key)}
       </div>
-      <div className="mt-0.5 text-sm text-slate-800">
-        {isAccordo ? (
+      <div className="mt-1 text-sm leading-relaxed text-slate-800">
+        {isAgreement ? (
           <span
             className={`rounded border px-2 py-0.5 text-xs font-semibold ${
               ACCORDO_STYLES[field.valore] ?? ACCORDO_STYLES["non c'entra"]
@@ -73,7 +59,7 @@ function FieldCard({ field }: { field: ContextFieldDetail }) {
           field.valore
         )}
       </div>
-      <div className="mt-1 text-[10px] uppercase tracking-wide text-slate-400">
+      <div className="mt-1.5 text-[10px] tracking-wide text-slate-400 uppercase">
         {field.fonteUrl !== null ? (
           <>
             da fonte recuperata —{" "}
@@ -81,7 +67,7 @@ function FieldCard({ field }: { field: ContextFieldDetail }) {
               href={field.fonteUrl}
               target="_blank"
               rel="noopener noreferrer nofollow"
-              className="normal-case text-slate-600 underline underline-offset-2 hover:text-slate-900"
+              className="normal-case text-slate-600 underline decoration-slate-300 underline-offset-2 hover:text-slate-950"
             >
               {field.fonteTitolo ?? field.fonteUrl}
             </a>
@@ -96,234 +82,243 @@ function FieldCard({ field }: { field: ContextFieldDetail }) {
 
 export function Context360({
   context,
-  news,
   now,
   profile,
   lowInformation = false,
 }: {
   context: ContextRowView | null;
-  news: NewsItem[];
   now: Date;
-  /** profilo del movimento già misurato: alimenta la lettura «Perché si muove» */
+  /** mantenuto nel contratto per compatibilità; le notizie hanno un blocco unico separato */
+  news?: NewsItem[];
   profile?: MovementProfile;
-  /**
-   * true per competizioni a bassa copertura informativa (femminili, minori):
-   * si dichiara in testa al blocco, così i «non noto» non sembrano un guasto.
-   */
   lowInformation?: boolean;
 }) {
-  const ok = context !== null && context.status === "ok" && context.fields !== null;
+  const ok =
+    context !== null && context.status === "ok" && context.fields !== null;
   const detailFields = context?.detail?.fields ?? null;
-  const sources = context?.sources ?? null;
+  const sources = context?.sources ?? [];
 
-  /* campi con un valore dichiarato (oppure l'accordo, che è sempre un
-     verdetto) e campi dichiarati «non noto»: due trattamenti diversi */
-  const visibili = (detailFields ?? []).filter(
-    (f) => f.key === "accordo_col_drop" || !isUnknownField(f),
+  const visible = (detailFields ?? []).filter(
+    (field) => field.key === "accordo_col_drop" || !isUnknownField(field),
   );
-  const ignoti = (detailFields ?? []).filter((f) => !visibili.includes(f));
+  const unknown = (detailFields ?? []).filter(
+    (field) => !visible.includes(field),
+  );
+  const sourced = visible.filter(
+    (field) => field.key !== "accordo_col_drop" && field.fonteUrl !== null,
+  );
+  const automatic = visible.filter(
+    (field) => field.key === "accordo_col_drop" || field.fonteUrl === null,
+  );
 
-  /* deduplica: un link già mostrato sotto a un campo non torna nell'elenco */
-  const urlGiaCitati = new Set(
+  const citedUrls = new Set(
     (detailFields ?? [])
-      .map((f) => f.fonteUrl)
-      .filter((u): u is string => u !== null),
+      .map((field) => field.fonteUrl)
+      .filter((url): url is string => url !== null),
   );
-  const altreFonti = (sources ?? []).filter((s) => !urlGiaCitati.has(s.uri));
+  const otherSources = sources.filter((source) => !citedUrls.has(source.uri));
 
   return (
     <section
-      aria-labelledby="contesto-360"
-      className="rounded-lg border border-slate-200 bg-white p-4"
+      aria-labelledby="contesto-pubblico"
+      className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6"
     >
-      <h2
-        id="contesto-360"
-        className="mb-1 text-sm font-semibold tracking-wide text-slate-700 uppercase"
-      >
-        Contesto 360°
-      </h2>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <p className="text-xs font-semibold tracking-[0.16em] text-cyan-700 uppercase">
+            Contesto pubblico
+          </p>
+          <h2
+            id="contesto-pubblico"
+            className="mt-1 text-lg font-semibold text-slate-950"
+          >
+            Cosa sappiamo davvero
+          </h2>
+        </div>
+        <span className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[11px] text-slate-600">
+          Non entra nel punteggio
+        </span>
+      </div>
 
-      <p className="mb-3 rounded border border-slate-300 bg-slate-50 px-3 py-2 text-xs font-medium text-slate-800">
+      <p className="mt-2 text-xs leading-relaxed text-slate-500">
         {CONTEXT_DISCLAIMER}
       </p>
 
       {lowInformation ? (
-        <p className="mb-3 rounded border border-slate-300 bg-slate-50 px-3 py-2 text-xs leading-relaxed text-slate-700">
+        <p className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-relaxed text-amber-900">
           Competizione a bassa copertura informativa: è normale che diversi
           campi siano dichiarati non noti.
         </p>
       ) : null}
 
       {context === null ? (
-        <p className="text-xs leading-relaxed text-slate-600">
-          Contesto non disponibile per questa partita: si genera solo per
-          partite con un segnale in essere.
+        <p className="mt-4 rounded-lg border border-dashed border-slate-300 bg-slate-50 px-3 py-3 text-sm leading-relaxed text-slate-600">
+          Non è disponibile un contesto pubblico per questa partita. Le quote
+          restano valide come osservazione di mercato, ma non attribuiamo loro
+          una causa senza fonti.
         </p>
       ) : !ok ? (
-        <p className="text-xs leading-relaxed text-slate-600">
+        <p className="mt-4 rounded-lg border border-dashed border-slate-300 bg-slate-50 px-3 py-3 text-sm leading-relaxed text-slate-600">
           Contesto non disponibile
-          {context.unavailableReason !== null
-            ? ` — ${context.unavailableReason}`
-            : ""}
-          . Nessun campo viene inventato al suo posto.
-          {context.usage.exhausted ? (
-            <>
-              {" "}
-              Tetto giornaliero raggiunto ({context.usage.used}/
-              {context.usage.limit}): riprende domani.
-            </>
-          ) : null}
+          {context.unavailableReason ? ` — ${context.unavailableReason}` : ""}.
+          Nessuna spiegazione viene ricostruita al suo posto.
         </p>
       ) : detailFields !== null ? (
         <>
-          {visibili.length === 0 ? (
-            <p className="rounded border border-slate-200 bg-slate-50 px-3 py-2 text-xs leading-relaxed text-slate-600">
-              Nessun campo con un valore dichiarato per questa partita:
-              tutte le informazioni richieste sono risultate non note.
-              Nessun valore viene ricostruito al loro posto.
-            </p>
-          ) : (
-            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-              {visibili.map((f) => (
-                <FieldCard key={f.key} field={f} />
-              ))}
+          <div className="mt-5">
+            <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2">
+              <h3 className="text-sm font-semibold text-slate-900">
+                Fatti collegati a una fonte
+              </h3>
+              <span className="text-xs text-slate-500">
+                {sourced.length === 1
+                  ? "1 elemento"
+                  : `${sourced.length} elementi`}
+              </span>
             </div>
-          )}
-          {ignoti.length > 0 ? (
-            <p className="mt-2 rounded border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] leading-relaxed text-amber-900">
-              Non recuperati per questa partita:{" "}
-              {ignoti.map((f) => fieldLabel(f.key).toLowerCase()).join(", ")}{" "}
-              — sono dichiarati, non riempiti per simmetria.
-            </p>
+
+            {sourced.length > 0 ? (
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                {sourced.map((field) => (
+                  <FieldCard key={field.key} field={field} />
+                ))}
+              </div>
+            ) : (
+              <p className="rounded-lg border border-dashed border-slate-300 bg-slate-50 px-3 py-3 text-sm leading-relaxed text-slate-600">
+                Nessun fatto specifico è stato collegato a una fonte pubblica.
+                Il movimento resta osservato, ma la sua causa non è documentata.
+              </p>
+            )}
+          </div>
+
+          {profile !== undefined ? (
+            <WhyMoves fields={detailFields} profile={profile} />
           ) : null}
-          {sources === null || sources.length === 0 ? (
-            <p className="mt-2 text-[11px] leading-relaxed text-slate-500">
-              {context?.searchUnavailableReason !== null &&
-              context?.searchUnavailableReason !== undefined
-                ? `${context.searchUnavailableReason}: nessun campo viene inventato al suo posto.`
-                : "Nessuna fonte recuperata per questa partita: tutti i campi sono conoscenza del modello, da verificare."}
+
+          {automatic.length > 0 ? (
+            <details className="mt-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5">
+              <summary className="cursor-pointer text-xs font-semibold text-slate-800">
+                Indicazioni automatiche da verificare ({automatic.length})
+              </summary>
+              <p className="mt-2 text-xs leading-relaxed text-slate-600">
+                Queste frasi non sono collegate a una fonte recuperata. Sono
+                separate dai fatti perché non vanno lette come informazioni
+                confermate.
+              </p>
+              <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
+                {automatic.map((field) => (
+                  <FieldCard key={field.key} field={field} />
+                ))}
+              </div>
+            </details>
+          ) : null}
+
+          {unknown.length > 0 ? (
+            <p className="mt-3 text-xs leading-relaxed text-slate-500">
+              <span className="font-medium text-slate-700">
+                Non recuperati per questa partita:
+              </span>{" "}
+              {unknown
+                .map((field) => fieldLabel(field.key).toLowerCase())
+                .join(", ")}{" "}
+              — sono dichiarati, non riempiti per simmetria.
             </p>
           ) : null}
         </>
       ) : (
-        /* righe dell'era v1: stessi campi, tutti conoscenza modello */
-        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-          {(
-            [
-              ["Livello delle categorie", context.fields!.livelloCategorie],
-              ["Anomalia del campo", context.fields!.anomaliaCampo],
-              ["Posta in palo", context.fields!.postaInPalo],
-              ["Rotazioni e fatica", context.fields!.rotazioniFatica],
-            ] as Array<[string, string]>
-          ).map(([label, value]) => (
-            <div
-              key={label}
-              className="rounded border border-slate-200 bg-white px-3 py-2"
-            >
-              <div className="text-[11px] leading-tight text-slate-500">
-                {label}
-              </div>
-              <div className="mt-0.5 text-sm text-slate-800">{value}</div>
-              <div className="mt-1 text-[10px] uppercase tracking-wide text-slate-400">
-                {MODEL_KNOWLEDGE_TAG}
-              </div>
-            </div>
-          ))}
-          <div className="rounded border border-slate-200 bg-white px-3 py-2 sm:col-span-2">
-            <div className="text-[11px] leading-tight text-slate-500">
-              Accordo col movimento osservato
-            </div>
-            <div className="mt-1">
-              <span
-                className={`rounded border px-2 py-0.5 text-xs font-semibold ${
-                  ACCORDO_STYLES[context.fields!.accordoColDrop] ??
-                  ACCORDO_STYLES["non c'entra"]
-                }`}
+        <details className="mt-4 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5">
+          <summary className="cursor-pointer text-xs font-semibold text-slate-800">
+            Indicazioni automatiche da verificare
+          </summary>
+          <p className="mt-2 text-xs leading-relaxed text-slate-600">
+            Questa analisi appartiene a una versione precedente e non contiene
+            collegamenti puntuali alle fonti. Per questo resta in secondo piano.
+          </p>
+          <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
+            {(
+              [
+                ["Livello delle categorie", context.fields!.livelloCategorie],
+                ["Anomalia del campo", context.fields!.anomaliaCampo],
+                ["Posta in palio", context.fields!.postaInPalo],
+                ["Rotazioni e fatica", context.fields!.rotazioniFatica],
+              ] as Array<[string, string]>
+            ).map(([label, value]) => (
+              <div
+                key={label}
+                className="rounded border border-slate-200 bg-white px-3 py-2"
               >
-                {context.fields!.accordoColDrop}
-              </span>
-            </div>
-            <p className="mt-1 text-[11px] leading-relaxed text-slate-500">
-              Non modifica il punteggio e non lo giustifica.
-            </p>
+                <div className="text-[11px] leading-tight text-slate-500">
+                  {label}
+                </div>
+                <div className="mt-0.5 text-sm text-slate-800">{value}</div>
+                <div className="mt-1 text-[10px] tracking-wide text-slate-400 uppercase">
+                  {MODEL_KNOWLEDGE_TAG}
+                </div>
+              </div>
+            ))}
           </div>
-        </div>
+        </details>
       )}
 
-      {/* lettura «Perché si muove»: sotto i campi, collassabile */}
-      {profile !== undefined ? (
-        <WhyMoves fields={detailFields ?? []} profile={profile} />
+      {ok ? (
+        <details className="mt-4 border-t border-slate-100 pt-3">
+          <summary className="cursor-pointer text-xs font-medium text-slate-600 hover:text-slate-950">
+            Fonti e trasparenza della ricerca
+          </summary>
+          <div className="mt-2 space-y-2 text-xs leading-relaxed text-slate-600">
+            {otherSources.length > 0 ? (
+              <div>
+                <h3 className="font-semibold text-slate-700">
+                  Altre fonti consultate
+                </h3>
+                <ul className="mt-1 list-disc space-y-1 pl-4">
+                  {otherSources.map((source) => (
+                    <li key={source.uri}>
+                      <a
+                        href={source.uri}
+                        target="_blank"
+                        rel="noopener noreferrer nofollow"
+                        className="underline decoration-slate-300 underline-offset-2 hover:text-slate-950"
+                      >
+                        {source.title ?? source.uri}
+                      </a>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
+            <p className="text-[11px] text-slate-500">
+              Cache 24 ore · modello {context?.usage.used ?? 0}/
+              {context?.usage.limit ?? "—"}
+              {context?.usage.exhausted ? " (in pausa fino a domani)" : ""} ·
+              ricerca{" "}
+              {context !== null && (context.grounded || sources.length > 0)
+                ? "attiva"
+                : "non attiva"}
+              {context?.searchProvider ? ` (${context.searchProvider})` : ""} ·
+              generato{" "}
+              {context?.generatedAt
+                ? new Date(context.generatedAt).toLocaleString("it-IT", {
+                    timeZone: "Europe/Rome",
+                    day: "2-digit",
+                    month: "2-digit",
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  })
+                : "—"}{" "}
+              (ora italiana{" "}
+              {now.toLocaleString("it-IT", {
+                timeZone: "Europe/Rome",
+                day: "2-digit",
+                month: "2-digit",
+                hour: "2-digit",
+                minute: "2-digit",
+              })}
+              ).
+            </p>
+          </div>
+        </details>
       ) : null}
-
-      {/* Fonti consultate: solo quelle NON già citate da un campo qui sopra.
-          Ripetere lo stesso link a due centimetri di distanza non aggiunge
-          nulla e fa sembrare due fonti quella che è una sola. */}
-      {ok && altreFonti.length > 0 ? (
-        <div className="mt-3">
-          <h3 className="mb-1 text-xs font-semibold text-slate-700">
-            Altre fonti consultate
-          </h3>
-          <ul className="space-y-1">
-            {altreFonti.map((s) => (
-              <li key={s.uri} className="text-xs leading-relaxed">
-                <a
-                  href={s.uri}
-                  target="_blank"
-                  rel="noopener noreferrer nofollow"
-                  className="text-slate-700 underline underline-offset-2 hover:text-slate-900"
-                >
-                  {s.title ?? s.uri}
-                </a>
-              </li>
-            ))}
-          </ul>
-        </div>
-      ) : null}
-
-      {/* Le notizie NON si ripetono qui: hanno un blocco proprio poco sotto,
-          con testata, data e lingua. Qui resta solo il rimando. */}
-      {news.length > 0 ? (
-        <p className="mt-3 text-[11px] leading-relaxed text-slate-500">
-          {news.length === 1
-            ? "1 notizia pubblica recuperata per questa partita"
-            : `${news.length} notizie pubbliche recuperate per questa partita`}
-          : sono elencate nel blocco «Notizie» qui sotto, con testata e data.
-        </p>
-      ) : null}
-
-      <p className="mt-3 border-t border-slate-100 pt-2 text-[11px] leading-relaxed text-slate-500">
-        Cache di 24 ore per partita · chiamate al modello:{" "}
-        {context?.usage.used ?? 0}/{context?.usage.limit ?? "—"}
-        {context?.usage.exhausted ? " — in pausa fino a domani" : ""} ·
-        ricerca attiva:{" "}
-        {context !== null &&
-        (context.grounded || (context.sources?.length ?? 0) > 0)
-          ? "sì"
-          : "no"}
-        {context?.searchProvider !== null && context?.searchProvider !== undefined
-          ? ` (${context.searchProvider})`
-          : ""}
-        {context?.grounded && context?.searchProvider !== "Tavily"
-          ? " (grounding Google)"
-          : ""}{" "}
-        · generato il{" "}
-        {context?.generatedAt !== null && context?.generatedAt !== undefined
-          ? new Date(context.generatedAt).toLocaleString("it-IT", {
-              timeZone: "Europe/Rome",
-              day: "2-digit",
-              month: "2-digit",
-              hour: "2-digit",
-              minute: "2-digit",
-            })
-          : "—"}{" "}
-        (ora italiana {now.toLocaleString("it-IT", {
-          timeZone: "Europe/Rome",
-          day: "2-digit",
-          month: "2-digit",
-          hour: "2-digit",
-          minute: "2-digit",
-        })}).
-      </p>
     </section>
   );
 }

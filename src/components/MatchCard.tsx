@@ -38,7 +38,7 @@ export function MatchCard({
         />
       </div>
       {group.others.length > 0 ? (
-        <details className="mt-1 rounded-b-lg border border-t-0 border-slate-200 bg-slate-50 px-3 py-1.5">
+        <details className="mt-2 rounded-xl border border-slate-200 bg-white px-3 py-2 shadow-sm">
           <summary className="cursor-pointer text-xs font-medium text-slate-700 hover:text-slate-900">
             {othersLabel(group.others.length)}
           </summary>
