@@ -51,7 +51,8 @@
     "backtest:r15": "tsx scripts/backtest-r15.ts",
     "test:repo-analysis": "tsx --env-file-if-exists=.env src/lib/repo/__tests__/analysis.test.ts",
     "study:finished": "tsx scripts/study-finished.ts",
-    "audit:finished": "tsx --env-file-if-exists=.env src/scripts/audit-finished.ts"
+    "audit:finished": "tsx --env-file-if-exists=.env src/scripts/audit-finished.ts",
+    "audit:value-bets": "tsx --env-file-if-exists=.env src/scripts/audit-value-bets.ts"
   },
   "dependencies": {
     "drizzle-orm": "^0.45.2",

@@ -399,7 +399,7 @@ interface Shot {
   /** true se la selezione ha vinto (push esclusi dal conteggio frequenze) */
   won: boolean;
   push: boolean;
-  /** fair no-vig Pinnacle alla chiusura, se calcolabile */
+  /** fair no-vig della chiusura, se calcolabile (serve per il residuo) */
   fair: number | null;
   /** implicita pagata */
   paid: number;
@@ -430,6 +430,8 @@ function shot(
     band: oddsBand(price),
   };
 }
+
+/** Punto d'appoggio per gli insiemi di puntate che non hanno una fair. */
 
 interface Agg {
   n: number;
@@ -1303,6 +1305,214 @@ function sectionPower(fx: Fixture[], obs: Obs[]): void {
   );
 }
 
+
+/* ================================================================== */
+/* S9 — La formula dello scanner «Value Bet (+EV)», misurata           */
+/* ================================================================== */
+
+/**
+ * `getValueOpportunities` (src/lib/repo/value-bets.ts) costruisce l'edge così:
+ *   fairOdds = prezzoCorrente × 1.045            (margine "ipotizzato", riga 42)
+ *   prezzoValutato = apertura, se apertura > corrente : corrente × 1.05   (riga 46-48)
+ *   edge = (1 / fairOdds) × prezzoValutato − 1
+ *   edgePct mostrato = max(0.5, edge)            (riga 82: pavimento)
+ * Nessun libro sharp, nessuna linea di chiusura altrui: l'«edge» è la
+ * variazione di prezzo già avvenuta, rivestita da valore atteso. Qui la
+ * misuriamo dove i due prezzi esistono davvero (apertura soft e chiusura), e
+ * la confrontiamo con ciò che restava da incassare.
+ */
+interface PageShot {
+  /** edge dichiarato dalla formula della pagina, in frazione */
+  pageEdge: number;
+  /** profitto reale puntando al prezzo che SI POTEVA ottenere (corrente) */
+  profit: number;
+  won: boolean;
+  out: boolean;
+  /** stake frazionale di Kelly calcolato con i numeri della pagina */
+  stake: number;
+}
+
+function parseDmy(d: string): number {
+  const m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(d.trim());
+  if (m === null) return 0;
+  return Date.UTC(Number(m[3]), Number(m[2]) - 1, Number(m[1]), 12, 0, 0);
+}
+
+function pageShots(fx: Fixture[]): PageShot[] {
+  const out: PageShot[] = [];
+  for (const f of fx) {
+    if (f.result === null) continue;
+    for (const side of SIDES) {
+      const open = f.b365Open[side];
+      const cur = f.b365Close[side];
+      if (open === null || cur === null || open <= cur) continue;
+      const fairProb = Math.min(0.95, 1 / cur / 1.045);
+      const evaluated = open > cur ? open : cur * 1.05;
+      const pageEdge = fairProb * evaluated - 1;
+      const won = won1x2(f, side) === true;
+      /* Kelly frazionaria (quarter) con la probabilità della pagina, tetto 5% */
+      const b = evaluated - 1;
+      const full = (fairProb * b - (1 - fairProb)) / b;
+      const stake = full > 0 ? Math.min(0.05, full * 0.25) : 0;
+      out.push({
+        pageEdge,
+        profit: profitOf(cur, won),
+        won,
+        out: isOut(f),
+        stake,
+      });
+    }
+  }
+  return out;
+}
+
+function sectionScanner(fx: Fixture[]): void {
+  console.log("\n## S9 — Che cosa vale davvero l'«edge» dello scanner +EV\n");
+  console.log(
+    "Ricostruzione fedele della formula di `getValueOpportunities` su 12 459 " +
+      "partite reali: due prezzi veri (apertura e chiusura dello stesso libro), " +
+      "la «fair» costruita come corrente × 1,045, l'edge come rapporto fra i " +
+      "due. Poi: che cosa incassa chi quel prezzo lo paga davvero.\n",
+  );
+  const shots = pageShots(fx);
+  const actionable = shots.filter((x) => x.pageEdge >= 0.015);
+  const floored = shots.filter((x) => x.pageEdge < 0.005);
+  console.log(
+    `- Opportunità che la pagina mostrerebbe: ${shots.length} · con edge ≥ +1,5% (soglia ` +
+      `isActionableValue): ${actionable.length} (${pc(
+        actionable.length / Math.max(1, shots.length),
+        1,
+      )}) · edge medio dichiarato: **${signed(
+        (mean(shots.map((x) => x.pageEdge)) as number) * 100,
+        1,
+      )} pp** (la scala dello screenshot legge +19,8%).`,
+  );
+  console.log(
+    `- Con il pavimento a +0,5% ogni selezione scesa diventa un'«opportunità»: quelle con edge sotto lo ` +
+      `0,5% sono ${floored.length} (${pc(floored.length / Math.max(1, shots.length), 1)}) ` +
+      `e comparirebbero in lista comunque, con +0,5% scritto accanto.`,
+  );
+  console.log("");
+  console.log("| Decile dell'edge dichiarato dalla pagina | n | edge medio | Frequent. reale | ROI realizzato sul prezzo ottenibile | ROI solo fuori campione |");
+  console.log("|---|---|---|---|---|---|");
+  const sorted = [...shots].sort((a, b) => a.pageEdge - b.pageEdge);
+  for (let i = 0; i < 10; i += 1) {
+    const part = sorted.slice(Math.floor((i * sorted.length) / 10), Math.floor(((i + 1) * sorted.length) / 10));
+    if (part.length === 0) continue;
+    const a = agg(part.map((x) => shot0(x)));
+    console.log(
+      `| D${i + 1} | ${part.length} | ${pc(mean(part.map((x) => x.pageEdge)), 1)} | ${pc(
+        a.hit,
+      )} | ${pc(a.roi, 2)} | ${pc(mean(part.filter((x) => x.out).map((x) => x.profit)), 2)} |`,
+    );
+  }
+  console.log("");
+  console.log(
+    "Lettura: se l'edge della pagina misurasse valore, il ROI realizzato " +
+      "dovrebbe salire con i decili. Guarda le ultime due colonne: il gradiente " +
+      "è piatto o rovesciato, e il livello resta sotto zero. L'edge è la " +
+      "fotografia di un movimento già chiuso: nessuno può più comprarlo a " +
+      "quel prezzo, e questo lo si vede nel numero, non nell'argomentazione.",
+  );
+
+  for (const th of [0.05, 0.2, 0.5]) {
+    const sub = shots.filter((x) => x.pageEdge >= th);
+    const a = agg(sub.map((x) => shot0(x)));
+    console.log(
+      `- con l'etichetta «Elevato» della pagina (edge ≥ ${(th * 100).toFixed(0)}%): ` +
+        `${sub.length} righe · frequent. reale ${pc(a.hit)} · ROI realizzato ` +
+        `${pc(a.roi, 2)} · righe in utile: ${pc(
+          sub.length === 0 ? 0 : sub.filter((x) => x.profit > 0).length / sub.length,
+        )}.`,
+    );
+  }
+  console.log(
+    "Il codice di ValueScannerTable assegna l'etichetta «Elevato» a partire da +5%: "
+      + "è la fascia col peggior risultato realizzato. La coda estrema (edge ≥ +20%)"
+      + " va invece in utile, ma è un campione piccolo: ordine di grandezza, non "
+      + "intervallo di confidenza.",
+  );
+
+  /* -------------------------------------------------------------- */
+  console.log("\n### 9.1 — Che cosa succede a seguirla, davvero\n");
+  console.log(
+    "Simulazione deterministica, nessun casofortismo: bankroll 1 000 €, " +
+      "puntata = Kelly frazionaria (quarter) con la probabilità dichiarata " +
+      "dalla pagina, tetto 5% del bankroll per giocata — esattamente i numeri " +
+      "che la card mostra («Kelly stake», «€ del bankroll»). Si incassa però al " +
+      "prezzo che era ottenibile (quello corrente), perché l'apertura del " +
+      "venerdì nessuno la compra più. Ordine cronologico, nessuna ribasatura " +
+      "dei prezzi.\n",
+  );
+  const chrono = fx
+    .filter((f) => f.result !== null)
+    .sort((a, b) => parseDmy(a.date) - parseDmy(b.date));
+  let bankroll = 1000;
+  let peak = 1000;
+  let maxDrawdown = 0;
+  let placed = 0;
+  let stakedTotal = 0;
+  const curve: number[] = [];
+  for (const f of chrono) {
+    if (f.result === null) continue;
+    for (const side of SIDES) {
+      const open = f.b365Open[side];
+      const cur = f.b365Close[side];
+      if (open === null || cur === null || open <= cur) continue;
+      const fairProb = Math.min(0.95, 1 / cur / 1.045);
+      const evaluated = open;
+      const b = evaluated - 1;
+      const full = (fairProb * b - (1 - fairProb)) / b;
+      if (full <= 0) continue;
+      const stake = Math.min(0.05, full * 0.25) * bankroll;
+      if (stake < 1 || bankroll < 1) continue;
+      const won = won1x2(f, side) === true;
+      const pnl = won ? stake * (cur - 1) : -stake;
+      bankroll += pnl;
+      placed += 1;
+      stakedTotal += stake;
+      if (bankroll > peak) peak = bankroll;
+      maxDrawdown = Math.max(maxDrawdown, (peak - bankroll) / peak);
+      if (placed % 2000 === 0) curve.push(bankroll);
+    }
+  }
+  console.log(
+    `- puntate eseguite: ${placed.toLocaleString("it-IT")} · capitale totale impegnato: ${Math.round(
+      stakedTotal,
+    ).toLocaleString("it-IT")} € · bankroll finale: **${Math.round(bankroll).toLocaleString(
+      "it-IT",
+    )} €** (partenza 1 000 €) · drawdown massimo: ${pc(maxDrawdown, 1)}.`,
+  );
+  console.log(
+    `- ROI complessivo di chi ha eseguito la pagina: ${pc(
+      (bankroll - 1000) / stakedTotal,
+      2,
+    )} sul capitale impegnato.`,
+  );
+  console.log("");
+  console.log(
+    "Questa è la differenza fra un numero e un consiglio: la pagina calcola " +
+      "l'edge con un prezzo e ne propone la puntata, ma il prezzo eseguibile è " +
+      "l'altro. Su 12 459 partite il risultato è scritto sopra; la parte " +
+      "preoccupante non è il segno, è che il bankroll finale dipenda da una " +
+      "costante (1,045) che nessuno ha misurato.",
+  );
+}
+
+/** Adattatore minimale per riutilizzare agg() su PageShot. */
+function shot0(x: PageShot): Shot {
+  return {
+    profit: x.profit,
+    won: x.won,
+    push: false,
+    fair: null,
+    paid: 1,
+    price: 1,
+    out: x.out,
+    band: "n/d",
+  };
+}
+
 /* ================================================================== */
 /* main                                                                */
 /* ================================================================== */
@@ -1325,6 +1535,7 @@ function main(): void {
   sectionShopping(fx);
   sectionLongshot(fx);
   sectionPower(fx, obs);
+  sectionScanner(fx);
 }
 
 main();
