@@ -21,6 +21,7 @@
  */
 import { teamFeedItems } from "@/lib/news/source";
 import { searchForMatch, TAVILY_DAILY_LIMIT, type TavilyResult } from "./tavily";
+import { matchesFixtureScope } from "./match-scope";
 
 export interface RetrievedDoc {
   titolo: string;
@@ -133,6 +134,9 @@ export async function retrieveSources(
     { budgetLeft, fetchImpl: doFetch, country: options.country ?? null },
   ).catch(() => ({ ok: false as const, reason: "errore" as const, queriesUsed: 0 }));
 
+  const tavilyUrls = new Set(
+    tavily.ok ? tavily.results.map((result) => result.url) : [],
+  );
   if (tavily.ok && tavily.results.length > 0) {
     report.tavilyContributed = true;
     report.docs.push(...toDocs(tavily.results));
@@ -170,13 +174,28 @@ export async function retrieveSources(
     });
   }
 
+  /* Prima del dedupe si protegge l'identità della competizione. «Pumas W» e
+     «Pumas» condividono i token, ma una fonte sulla prima squadra maschile non
+     è contesto della partita femminile. */
+  report.docs = report.docs.filter((doc) =>
+    matchesFixtureScope(
+      `${doc.titolo} ${doc.stralcio} ${doc.url}`,
+      homeTeam,
+      awayTeam,
+      options.league ?? null,
+    ),
+  );
+  report.tavilyContributed = report.docs.some((doc) => tavilyUrls.has(doc.url));
+
   /* dedup per URL, tetto otto */
   const seen = new Set<string>();
-  report.docs = report.docs.filter((d) => {
-    if (seen.has(d.url)) return false;
-    seen.add(d.url);
-    return true;
-  }).slice(0, 8);
+  report.docs = report.docs
+    .filter((d) => {
+      if (seen.has(d.url)) return false;
+      seen.add(d.url);
+      return true;
+    })
+    .slice(0, 8);
 
   return report;
 }

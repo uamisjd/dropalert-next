@@ -22,6 +22,11 @@ import {
   type TavilyResult,
 } from "@/lib/context/tavily";
 import { localQueries, JUNK_DOMAINS } from "@/lib/context/locale-search";
+import {
+  isWomensFixture,
+  matchesFixtureScope,
+  womenSearchTerms,
+} from "@/lib/context/match-scope";
 import type { NewsFeedItem } from "./source";
 
 export const TAVILY_NEWS_SOURCE_LABEL =
@@ -49,7 +54,10 @@ export function newsQueryEnglish(
   homeTeam: string,
   awayTeam: string,
 ): string {
-  return `${homeTeam} ${awayTeam} injuries suspensions lineup team news`;
+  const scope = isWomensFixture(homeTeam, awayTeam)
+    ? ` ${womenSearchTerms("en")}`
+    : "";
+  return `${homeTeam} ${awayTeam}${scope} injuries suspensions lineup team news`;
 }
 
 /**
@@ -159,12 +167,21 @@ export function toNewsItems(
  */
 export function filterRelevantNews<
   T extends { title: string; publishedAt: Date | null; snippet?: string },
->(items: T[], homeTeam: string, awayTeam: string, now: Date): T[] {
-  return items.filter(
-    (i) =>
-      isFreshNews(i.publishedAt, now) &&
-      mentionsBothTeams(`${i.title} ${i.snippet ?? ""}`, homeTeam, awayTeam),
-  );
+>(
+  items: T[],
+  homeTeam: string,
+  awayTeam: string,
+  now: Date,
+  league: string | null = null,
+): T[] {
+  return items.filter((item) => {
+    const text = `${item.title} ${item.snippet ?? ""}`;
+    return (
+      isFreshNews(item.publishedAt, now) &&
+      mentionsBothTeams(text, homeTeam, awayTeam) &&
+      matchesFixtureScope(text, homeTeam, awayTeam, league)
+    );
+  });
 }
 
 /**

@@ -10,11 +10,7 @@
  */
 
 export type ComponentKey =
-  | "magnitude"
-  | "coordination"
-  | "sharp"
-  | "persistence"
-  | "coverage";
+  "magnitude" | "coordination" | "sharp" | "persistence" | "coverage";
 
 /** Ciò che il motore ha scritto in `explanation.components`. */
 export interface RawScoreComponent {
@@ -121,12 +117,16 @@ export function scoreComponentsView(
  * o dal fatto che metà del quadro informativo non è osservabile. Sono due
  * storie diverse e chi legge ha diritto di distinguerle.
  */
-export function scoreReachability(views: ScoreComponentView[]): {
+export interface ScoreReachability {
   earned: number;
   measurableMax: number;
   gapMax: number;
   totalMax: number;
-} {
+}
+
+export function scoreReachability(
+  views: ScoreComponentView[],
+): ScoreReachability {
   let earned = 0;
   let measurableMax = 0;
   let gapMax = 0;
@@ -143,4 +143,22 @@ export function scoreReachability(views: ScoreComponentView[]): {
     gapMax,
     totalMax: measurableMax + gapMax,
   };
+}
+
+/**
+ * Riporta il punteggio effettivo sulla sola base misurabile.
+ *
+ * `effectiveScore` è il valore finale del motore e comprende gli eventuali
+ * moltiplicatori applicati dopo la somma delle componenti. Se non esiste,
+ * resta disponibile la somma delle componenti per i record storici.
+ */
+export function normalizedReachabilityScore(
+  reachability: ScoreReachability,
+  effectiveScore: number | null,
+): number | null {
+  if (reachability.measurableMax <= 0) return null;
+  const earned = effectiveScore ?? reachability.earned;
+  return Math.round(
+    Math.max(0, Math.min(100, (earned / reachability.measurableMax) * 100)),
+  );
 }

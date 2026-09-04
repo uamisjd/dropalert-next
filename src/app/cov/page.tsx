@@ -69,7 +69,7 @@ export default async function CoveragePage() {
   }
 
   return (
-    <main className="mx-auto w-full max-w-3xl flex-1 px-4 py-5">
+    <main className="mx-auto w-full max-w-4xl flex-1 px-4 py-5">
       <header className="mb-5">
         <nav className="mb-2 text-xs text-slate-500">
           <Link href="/" className="underline hover:text-slate-800">

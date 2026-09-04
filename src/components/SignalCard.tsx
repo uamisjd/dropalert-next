@@ -14,7 +14,15 @@ import {
   MetaPill,
   SignalLevelBadge,
 } from "./Badges";
-import { ND, fmtDay, fmtMinutes, fmtPct, fmtPp, fmtPrice, fmtTime } from "./format";
+import {
+  ND,
+  fmtDay,
+  fmtMinutes,
+  fmtPct,
+  fmtPp,
+  fmtPrice,
+  fmtTime,
+} from "./format";
 import { fmtCountdown, isPlayed } from "@/lib/view/timeline";
 import {
   contextSnippet,
@@ -90,7 +98,7 @@ export function SignalCard({
     Math.abs(signal.peakPrice - signal.openingPrice) > 0.0005;
 
   return (
-    <article className="group relative rounded-lg border border-slate-200 bg-white p-4 transition-colors hover:border-slate-400 focus-within:border-slate-500">
+    <article className="group relative rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition-all hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-md focus-within:border-cyan-600 sm:p-5">
       {/* intestazione: chi gioca, quando, in che competizione */}
       <header className="mb-3">
         {/* Riga 1 — identità del segnale: quanto è forte, quando si gioca,
@@ -193,7 +201,10 @@ export function SignalCard({
                 className="rounded border border-slate-200 bg-white px-1.5 py-0.5 text-[11px] font-medium text-slate-600"
                 title="Notizie pubbliche in cache per questa partita (fonte dichiarata nel dettaglio). Non influenzano il punteggio."
               >
-                Notizie: {signal.newsCount === 1 ? "1 notizia" : `${signal.newsCount} notizie`}
+                Notizie:{" "}
+                {signal.newsCount === 1
+                  ? "1 notizia"
+                  : `${signal.newsCount} notizie`}
               </span>
             ) : signal.newsEmpty ? (
               <span
@@ -223,11 +234,11 @@ export function SignalCard({
           hint="Prima quota di consenso osservata dal monitor."
         />
         <PriceStep
-          label="Picco"
+          label="Estremo"
           value={hasPeak ? fmtPrice(signal.peakPrice) : "—"}
           hint={
             hasPeak
-              ? "Quota estrema realmente registrata nella direzione del movimento."
+              ? "Quota più lontana dall'apertura nella direzione del movimento; non è necessariamente il valore massimo."
               : "Nessun estremo distinto dall'apertura fra le rilevazioni disponibili."
           }
         />
@@ -316,15 +327,8 @@ export function SignalCard({
         </div>
       </div>
 
-      {/* spiegazione prodotta dal motore */}
-      {signal.summary && (
-        <p className="mb-3 border-l-2 border-slate-200 pl-3 text-xs leading-relaxed text-slate-600">
-          {signal.summary}
-        </p>
-      )}
-
-      {/* frase piana generata da template sui dati a registro: nessuna AI,
-          nessun giudizio — riformula i numeri già mostrati sopra */}
+      {/* Frase piana deterministica: sostituisce la seconda spiegazione
+          tecnica che prima ripeteva gli stessi numeri. */}
       <p className="mb-3 rounded border border-slate-200 bg-slate-50 px-3 py-2 text-xs leading-relaxed text-slate-700">
         {plainSentence(signal, now)}
       </p>
@@ -334,15 +338,16 @@ export function SignalCard({
         {/* numero principale: indice riportato sulla base misurabile.
             Il grezzo e i punti non osservabili restano visibili sotto. */}
         <MetaPill title="Indice di fiducia calcolato dal motore su ampiezza, conferme, persistenza e copertura dati.">
-          Indice{" "}
-          {signal.normalizedScore ?? signal.confidenceScore ?? ND}/100
+          Indice {signal.normalizedScore ?? signal.confidenceScore ?? ND}/100
           {signal.normalizedScore !== null ? " su base misurabile" : ""} ·{" "}
           {signal.normalizedLabel ?? signal.confidenceLabel}
           <Info term="indice-normalizzato" />
         </MetaPill>
         {signal.openGaps > 0 && (
           <MetaPill title="Informazioni mancanti dichiarate a registro per questa partita.">
-            {signal.openGaps === 1 ? "1 dato mancante" : `${signal.openGaps} dati mancanti`}
+            {signal.openGaps === 1
+              ? "1 dato mancante"
+              : `${signal.openGaps} dati mancanti`}
             <Info term="gap" />
           </MetaPill>
         )}
@@ -357,7 +362,8 @@ export function SignalCard({
           </MetaPill>
         ) : null}
         <MetaPill title={signal.freshnessReason}>
-          Rilevato {signal.ageMinutes === null ? ND : fmtMinutes(signal.ageMinutes)} fa
+          Rilevato{" "}
+          {signal.ageMinutes === null ? ND : fmtMinutes(signal.ageMinutes)} fa
         </MetaPill>
         <span
           aria-hidden

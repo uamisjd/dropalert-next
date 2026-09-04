@@ -39,6 +39,7 @@ import {
 import { SCORE_BUCKETS, scoreBucketOf, type ScoreBucketKey } from "@/lib/drop/novig";
 import { WIDE_DROP_THRESHOLD } from "@/lib/drop/constants";
 import {
+  normalizedReachabilityScore,
   scoreComponentsView,
   scoreReachability,
   type ComponentContext,
@@ -429,11 +430,7 @@ export function normalizedOf(
       gapMax: reach.gapMax,
     };
   }
-  const earned = rawScore ?? reach.earned;
-  const normalizedScore = round(
-    Math.max(0, Math.min(100, (earned / reach.measurableMax) * 100)),
-    0,
-  );
+  const normalizedScore = normalizedReachabilityScore(reach, rawScore);
   const normalizedBand = normalizedBandOf(normalizedScore);
   return {
     normalizedScore,

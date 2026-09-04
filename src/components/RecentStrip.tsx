@@ -21,7 +21,7 @@ export function RecentStrip({
   return (
     <section
       aria-labelledby="ultimi-movimenti"
-      className="rounded-lg border border-slate-200 bg-white p-3"
+      className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"
     >
       <h2
         id="ultimi-movimenti"

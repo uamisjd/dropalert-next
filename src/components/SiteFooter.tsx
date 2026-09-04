@@ -14,10 +14,10 @@ export const HELPLINE = "800 558 822";
 
 export function SiteFooter() {
   return (
-    <footer className="mt-auto border-t border-slate-300 bg-white">
-      <div className="mx-auto w-full max-w-3xl px-4 py-4">
-        <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs font-medium text-slate-800">
-          <span className="rounded border border-slate-800 px-1.5 py-0.5 text-[11px] font-bold">
+    <footer className="mt-auto border-t border-slate-800 bg-slate-950">
+      <div className="mx-auto w-full max-w-4xl px-4 py-6">
+        <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs font-medium text-slate-200">
+          <span className="rounded border border-slate-500 px-1.5 py-0.5 text-[11px] font-bold text-white">
             +18
           </span>
           <span>Il gioco può causare dipendenza</span>
@@ -45,31 +45,31 @@ export function SiteFooter() {
         >
           <Link
             href="/gioco-responsabile"
-            className="text-slate-600 underline underline-offset-2 hover:text-slate-900"
+            className="text-slate-400 underline underline-offset-2 hover:text-white"
           >
             Gioco responsabile
           </Link>
           <Link
             href="/privacy"
-            className="text-slate-600 underline underline-offset-2 hover:text-slate-900"
+            className="text-slate-400 underline underline-offset-2 hover:text-white"
           >
             Privacy
           </Link>
           <Link
             href="/performance"
-            className="text-slate-600 underline underline-offset-2 hover:text-slate-900"
+            className="text-slate-400 underline underline-offset-2 hover:text-white"
           >
             Performance
           </Link>
           <Link
             href="/feed/rss.xml"
-            className="text-slate-600 underline underline-offset-2 hover:text-slate-900"
+            className="text-slate-400 underline underline-offset-2 hover:text-white"
           >
             Feed RSS
           </Link>
           <Link
             href="/metodologia"
-            className="text-slate-600 underline underline-offset-2 hover:text-slate-900"
+            className="text-slate-400 underline underline-offset-2 hover:text-white"
           >
             Metodologia
           </Link>

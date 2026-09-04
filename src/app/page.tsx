@@ -49,7 +49,9 @@ export const revalidate = 300;
 
 const VALID_LEVELS: SignalLevel[] = ["forte", "reale", "debole", "nessuno"];
 
-function parseFilters(sp: Record<string, string | string[] | undefined>): DashboardFilters {
+function parseFilters(
+  sp: Record<string, string | string[] | undefined>,
+): DashboardFilters {
   const one = (k: string): string | undefined => {
     const v = sp[k];
     return Array.isArray(v) ? v[0] : v;
@@ -158,36 +160,44 @@ export default async function Home({
   );
 
   return (
-    <main className="mx-auto w-full max-w-3xl flex-1 px-4 py-5">
-      <header className="mb-5">
-        <h1 className="text-xl font-bold tracking-tight text-slate-900">
-          DropAlert
-        </h1>
-        <p className="mt-1 text-sm leading-relaxed text-slate-600">
-          Osservatorio statistico sui movimenti delle quote nel calcio. Registra
-          come si muove il mercato e quanto è affidabile la misura.{" "}
-          <span className="font-medium text-slate-800">
-            Non fornisce pronostici né consigli di scommessa.
-          </span>
-        </p>
-        {/* scorciatoie alle due letture cronologiche del monitor */}
-        <nav
-          aria-label="Letture del monitor"
-          className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs"
-        >
-          <Link
-            href="/ieri"
-            className="text-slate-600 underline underline-offset-2 hover:text-slate-900"
+    <main className="mx-auto w-full max-w-4xl flex-1 px-4 py-5">
+      <header className="relative mb-5 overflow-hidden rounded-2xl bg-slate-950 px-5 py-7 text-white shadow-sm sm:px-7 sm:py-9">
+        <div
+          aria-hidden
+          className="absolute -top-24 -right-20 h-64 w-64 rounded-full bg-cyan-400/10 blur-3xl"
+        />
+        <div className="relative max-w-2xl">
+          <p className="text-xs font-semibold tracking-[0.16em] text-cyan-300 uppercase">
+            Osservatorio quote calcio
+          </p>
+          <h1 className="mt-2 text-3xl font-semibold tracking-tight sm:text-4xl">
+            Guarda come si muove il mercato.
+          </h1>
+          <p className="mt-3 text-sm leading-relaxed text-slate-300 sm:text-base">
+            DropAlert registra i cambi di quota, ne misura la solidità e
+            dichiara ciò che non riesce a verificare.{" "}
+            <span className="font-medium text-white">
+              Non dà pronostici e non suggerisce giocate.
+            </span>
+          </p>
+          <nav
+            aria-label="Letture del monitor"
+            className="mt-5 flex flex-wrap gap-2 text-xs"
           >
-            Ieri — segnali ed esiti
-          </Link>
-          <Link
-            href="/domani"
-            className="text-slate-600 underline underline-offset-2 hover:text-slate-900"
-          >
-            Domani — programma dall&apos;archivio
-          </Link>
-        </nav>
+            <Link
+              href="/ieri"
+              className="rounded-lg border border-white/15 bg-white/10 px-3 py-2 font-medium text-white hover:bg-white/15"
+            >
+              Cosa è successo ieri
+            </Link>
+            <Link
+              href="/domani"
+              className="rounded-lg border border-white/15 px-3 py-2 font-medium text-slate-300 hover:bg-white/10 hover:text-white"
+            >
+              Partite di domani
+            </Link>
+          </nav>
+        </div>
       </header>
 
       <div className="mb-5">
@@ -209,32 +219,13 @@ export default async function Home({
         </div>
       ) : null}
 
-      <div className="mb-5">
-        <StatusPanel
-          status={data.status}
-          now={now}
-          sharpBudget={sharpBudget}
-          withSignals={
-            /* «oggi» qui è la SOLA giornata civile corrente: `dayBucketOf`
-               mette in «oggi» anche ciò che è già passato, e il conteggio
-               finiva per superare le partite in calendario. */
-            groupByMatch(
-              data.signals.filter((s) => romeDayDiff(now, s.kickoffAt) === 0),
-            ).length
-          }
-        />
-      </div>
-
-      {coverage !== null ? (
-        <div className="mb-5">
-          <CoverageSummary view={coverage} />
-        </div>
-      ) : null}
-
-      <section aria-labelledby="movimenti">
+      <section aria-labelledby="movimenti" className="mt-7">
+        <p className="text-xs font-semibold tracking-[0.16em] text-cyan-700 uppercase">
+          Monitor live
+        </p>
         <h2
           id="movimenti"
-          className="mb-2 text-sm font-semibold tracking-wide text-slate-900 uppercase"
+          className="mt-1 mb-3 text-xl font-semibold tracking-tight text-slate-950"
         >
           Movimenti rilevati
         </h2>
@@ -298,6 +289,31 @@ export default async function Home({
           </div>
         )}
       </section>
+
+      <details className="mt-7 rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
+        <summary className="cursor-pointer text-sm font-medium text-slate-800 hover:text-slate-950">
+          Stato e copertura del monitor
+        </summary>
+        <p className="mt-1 text-xs leading-relaxed text-slate-500">
+          Informazioni tecniche sulla raccolta: utili per verificare la qualità
+          del dato, ma secondarie rispetto ai movimenti.
+        </p>
+        <div className="mt-4 space-y-4">
+          <StatusPanel
+            status={data.status}
+            now={now}
+            sharpBudget={sharpBudget}
+            withSignals={
+              groupByMatch(
+                data.signals.filter(
+                  (signal) => romeDayDiff(now, signal.kickoffAt) === 0,
+                ),
+              ).length
+            }
+          />
+          {coverage !== null ? <CoverageSummary view={coverage} /> : null}
+        </div>
+      </details>
 
       <div className="mt-5">
         <BadgeLegend />

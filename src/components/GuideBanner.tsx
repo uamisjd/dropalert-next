@@ -53,7 +53,7 @@ export function GuideBanner() {
   return (
     <aside
       aria-labelledby="guida-60"
-      className="relative rounded-lg border border-slate-300 bg-white p-4"
+      className="relative rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5"
     >
       <button
         type="button"
@@ -63,18 +63,25 @@ export function GuideBanner() {
       >
         Chiudi
       </button>
-      <h2 id="guida-60" className="mb-2 pr-16 text-sm font-semibold text-slate-900">
+      <h2
+        id="guida-60"
+        className="mb-2 pr-16 text-sm font-semibold text-slate-900"
+      >
         Guida in 60 secondi
       </h2>
       <ul className="space-y-1.5 text-xs leading-relaxed text-slate-700">
         <li>
-          <span className="font-medium text-slate-900">Che cos&apos;è un drop</span>
+          <span className="font-medium text-slate-900">
+            Che cos&apos;è un drop
+          </span>
           <Info term="drop" /> — la quota di un esito scende rispetto a quando
-          il monitor l&apos;ha vista la prima volta. Vuol dire che il mercato sta
-          prezzando quell&apos;esito più caro di prima.
+          il monitor l&apos;ha vista la prima volta. Vuol dire che il mercato
+          sta prezzando quell&apos;esito più caro di prima.
         </li>
         <li>
-          <span className="font-medium text-slate-900">Che cos&apos;è l&apos;indice</span>
+          <span className="font-medium text-slate-900">
+            Che cos&apos;è l&apos;indice
+          </span>
           <Info term="indice" /> — un numero da 0 a 100 che riassume quanto il
           movimento è ampio, confermato da più bookmaker, durato nel tempo e
           coperto da dati completi.
