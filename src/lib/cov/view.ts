@@ -230,7 +230,12 @@ export function buildCoverageView(input: {
     manualRuns: stats.manualPoints,
     runsNeeded: MIN_RUNS_FOR_TREND,
     seriesInsufficient,
-    seriesLabel: `${runs}/${MIN_RUNS_FOR_TREND} giri`,
+    /* Finché la serie si costruisce si mostra il progresso verso la soglia
+       (N/10). Superata la soglia il numeratore non ha senso come frazione:
+       «39/10 giri» sembra una divisione sbagliata, si dice quanti giri ci sono. */
+    seriesLabel: seriesInsufficient
+      ? `${runs}/${MIN_RUNS_FOR_TREND} giri`
+      : `${runs} giri schedulati`,
     depth: input.depth,
     runsWithoutMeasure: input.runsWithoutMeasure,
     /* un orario si dichiara solo se il runner è vivo e credibile */

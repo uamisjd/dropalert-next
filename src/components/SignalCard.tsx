@@ -17,10 +17,10 @@ import {
 import { ND, fmtDay, fmtMinutes, fmtPct, fmtPp, fmtPrice, fmtTime } from "./format";
 import { fmtCountdown, isPlayed } from "@/lib/view/timeline";
 import {
-  PLAIN_STRENGTH_LABELS,
   contextSnippet,
   plainSentence,
   plainStrengthOf,
+  plainStrengthPhrase,
 } from "@/lib/view/plain";
 import { Info } from "./Info";
 import { Sparkline } from "./Sparkline";
@@ -93,6 +93,8 @@ export function SignalCard({
     <article className="group relative rounded-lg border border-slate-200 bg-white p-4 transition-colors hover:border-slate-400 focus-within:border-slate-500">
       {/* intestazione: chi gioca, quando, in che competizione */}
       <header className="mb-3">
+        {/* Riga 1 — identità del segnale: quanto è forte, quando si gioca,
+            quanto è fresco il dato. Le tre cose da leggere al volo, insieme. */}
         <div className="mb-1.5 flex flex-wrap items-center gap-1.5">
           <SignalLevelBadge level={signal.level} label={signal.levelLabel} />
           {/* badge tempo: sempre visibile accanto al livello, così l'ordine
@@ -114,56 +116,40 @@ export function SignalCard({
             label={signal.freshnessLabel}
             reason={signal.freshnessReason}
           />
-          {/* iper-reazione storica: il segnale resta in lista, la fiducia
-              è ridotta dal moltiplicatore e il motivo viaggia con il badge */}
-          {signal.suspicion !== null ? (
-            <span
-              className="rounded border border-amber-300 bg-amber-50 px-1.5 py-0.5 text-[11px] font-medium text-amber-900"
-              title={signal.suspicion.reasons
-                .map((r) => `${r.label}: ${r.detail}`)
-                .join(" — ")}
-            >
-              ⚠ possibile iper-reazione (storico)
-              <Info term="iperreazione" />
-            </span>
-          ) : null}
-          {/* drop ampio: fascia ≥15%, quella con il CLV per campione più
-              alto nel backtest R1.5 (bound pre-movimento, dichiarato) */}
-          {/* Contesto 360° compatto: solo ciò che è in cache, con la
-              dicitura onesta nel tooltip */}
-          {signal.contextCompact !== null ? (
-            <span
-              className="rounded border border-slate-200 bg-white px-1.5 py-0.5 text-[11px] font-medium text-slate-600"
-              title={`Contesto generato automaticamente: non è un pronostico né una garanzia. ${signal.contextCompact} — conoscenza modello, da verificare.`}
-            >
-              Contesto: {contextSnippet(signal.contextCompact)}
-            </span>
-          ) : null}
-          {signal.newsCount !== null && signal.newsCount > 0 ? (
-            <span
-              className="rounded border border-slate-200 bg-white px-1.5 py-0.5 text-[11px] font-medium text-slate-600"
-              title="Notizie pubbliche in cache per questa partita (fonte dichiarata nel dettaglio). Non influenzano il punteggio."
-            >
-              Contesto: {signal.newsCount === 1 ? "1 notizia" : `${signal.newsCount} notizie`}
-            </span>
-          ) : signal.newsEmpty ? (
-            <span
-              className="rounded border border-slate-200 bg-white px-1.5 py-0.5 text-[11px] text-slate-500"
-              title="La fonte notizie è stata interrogata e non ha trovato nulla di pubblico per questa partita: stato valido, non un guasto."
-            >
-              Senza notizie pubbliche
-            </span>
-          ) : null}
-          {signal.wideDrop ? (
-            <span
-              className="rounded border border-slate-300 bg-slate-50 px-1.5 py-0.5 text-[11px] font-medium text-slate-700"
-              title={`La quota è scesa del ${signal.wideDropPct}% dall'apertura: fascia oltre il 15%, la più alta per CLV per campione nel backtest R1.5 (bound pre-movimento, non un rendimento).`}
-            >
-              drop ampio ≥15%
-              <Info term="drop-ampio" />
-            </span>
-          ) : null}
         </div>
+
+        {/* Riga 2 — avvisi sul segnale: iper-reazione e drop ampio. Compaiono
+            solo se ce n'è almeno uno, così non occupano spazio a vuoto e non
+            si mescolano al contesto, che è un'altra cosa. */}
+        {signal.suspicion !== null || signal.wideDrop ? (
+          <div className="mb-1.5 flex flex-wrap items-center gap-1.5">
+            {/* iper-reazione storica: il segnale resta in lista, la fiducia
+                è ridotta dal moltiplicatore e il motivo viaggia col badge */}
+            {signal.suspicion !== null ? (
+              <span
+                className="rounded border border-amber-300 bg-amber-50 px-1.5 py-0.5 text-[11px] font-medium text-amber-900"
+                title={signal.suspicion.reasons
+                  .map((r) => `${r.label}: ${r.detail}`)
+                  .join(" — ")}
+              >
+                ⚠ possibile iper-reazione (storico)
+                <Info term="iperreazione" />
+              </span>
+            ) : null}
+            {/* drop ampio: fascia ≥15%, quella con il CLV per campione più
+                alto nel backtest R1.5 (bound pre-movimento, dichiarato) */}
+            {signal.wideDrop ? (
+              <span
+                className="rounded border border-slate-300 bg-slate-50 px-1.5 py-0.5 text-[11px] font-medium text-slate-700"
+                title={`La quota è scesa del ${signal.wideDropPct}% dall'apertura: fascia oltre il 15%, la più alta per CLV per campione nel backtest R1.5 (bound pre-movimento, non un rendimento).`}
+              >
+                drop ampio ≥15%
+                <Info term="drop-ampio" />
+              </span>
+            ) : null}
+          </div>
+        ) : null}
+
         <h3 className="text-base leading-snug font-semibold text-slate-900">
           {/*
             Il link copre l'intera card (::after esteso) così che tutta l'area
@@ -184,6 +170,41 @@ export function SignalCard({
           <span className="mx-1.5 text-slate-300">|</span>
           {fmtDay(signal.kickoffAt)} ore {fmtTime(signal.kickoffAt)}
         </p>
+
+        {/* Riga 3 — contesto di contorno: separata da una riga leggera perché
+            non è un giudizio sul movimento ma informazione accessoria. Esce
+            solo se c'è qualcosa da dire. */}
+        {signal.contextCompact !== null ||
+        (signal.newsCount !== null && signal.newsCount > 0) ||
+        signal.newsEmpty ? (
+          <div className="mt-1.5 flex flex-wrap items-center gap-1.5 border-t border-slate-100 pt-1.5">
+            {/* Contesto 360° compatto: solo ciò che è in cache, con la
+                dicitura onesta nel tooltip */}
+            {signal.contextCompact !== null ? (
+              <span
+                className="rounded border border-slate-200 bg-white px-1.5 py-0.5 text-[11px] font-medium text-slate-600"
+                title={`Contesto generato automaticamente: non è un pronostico né una garanzia. ${signal.contextCompact} — conoscenza modello, da verificare.`}
+              >
+                Contesto: {contextSnippet(signal.contextCompact)}
+              </span>
+            ) : null}
+            {signal.newsCount !== null && signal.newsCount > 0 ? (
+              <span
+                className="rounded border border-slate-200 bg-white px-1.5 py-0.5 text-[11px] font-medium text-slate-600"
+                title="Notizie pubbliche in cache per questa partita (fonte dichiarata nel dettaglio). Non influenzano il punteggio."
+              >
+                Notizie: {signal.newsCount === 1 ? "1 notizia" : `${signal.newsCount} notizie`}
+              </span>
+            ) : signal.newsEmpty ? (
+              <span
+                className="rounded border border-slate-200 bg-white px-1.5 py-0.5 text-[11px] text-slate-500"
+                title="La fonte notizie è stata interrogata e non ha trovato nulla di pubblico per questa partita: stato valido, non un guasto."
+              >
+                Senza notizie pubbliche
+              </span>
+            ) : null}
+          </div>
+        ) : null}
       </header>
 
       {/* mercato osservato */}
@@ -246,7 +267,7 @@ export function SignalCard({
             <MagnitudeBadge label={signal.magnitudeLabel} />
             {/* stessa informazione, in lingua piana: nessuna metrica nuova */}
             <span className="text-[11px] text-slate-600">
-              {PLAIN_STRENGTH_LABELS[plainStrengthOf(signal)]}
+              {plainStrengthPhrase(plainStrengthOf(signal), played)}
             </span>
           </div>
         </div>

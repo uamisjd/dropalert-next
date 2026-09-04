@@ -43,6 +43,7 @@ import {
   type ScoreBucketKey,
 } from "@/lib/drop/novig";
 import { recordGap } from "./detect";
+import { invalidateAnalysis } from "@/lib/repo/analysis";
 
 /** Finestra all'indietro entro cui una partita passata è ancora chiudibile. */
 export const CLOSING_LOOKBACK_HOURS = 72;
@@ -624,6 +625,7 @@ export async function runClosingJob(
   }
 
   /* --- 2. segnali delle partite iniziate: chiusura di stato e CLV --- */
+  const analysisInvalidated = new Set<number>();
   const signals = await db
     .select({
       signalId: dropSignals.id,
@@ -649,6 +651,12 @@ export async function runClosingJob(
           kind: "closed",
           note: "Partita iniziata: segnale chiuso, si passa alla misura del CLV.",
         });
+        /* La partita è iniziata: il racconto pre-gara in cache non è più
+           attuale, si cancella una sola volta per partita. */
+        if (!analysisInvalidated.has(s.matchId)) {
+          analysisInvalidated.add(s.matchId);
+          await invalidateAnalysis(s.matchId);
+        }
       }
 
       const clv = await computeClvForSignal(s.signalId);

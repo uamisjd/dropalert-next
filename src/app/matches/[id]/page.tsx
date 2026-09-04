@@ -484,15 +484,23 @@ export default async function MatchDetailPage({
         )}
       </header>
 
-      {/* ---------------- contesto 360 ---------------- */}
-      <section aria-labelledby="contesto-360-wrap" className="mb-5">
-        <Context360
-          context={context}
-          news={news}
-          now={now}
-          profile={profile}
-        />
-      </section>
+      {/* ---------------- contesto 360 ----------------
+          La scheda compatta si genera solo per partite con un segnale in
+          essere. Se il contesto compatto manca MA c'è già il CONTENUTO
+          dell'analisi 360° completa, mostrare «contesto non disponibile»
+          sopra un'analisi completa è una contraddizione: la sezione compatta
+          si nasconde. `analysis` è la vista (quasi sempre presente), il
+          contenuto vero è `analysis.analysis`: si guarda quello. */}
+      {context !== null || analysis?.analysis == null ? (
+        <section aria-labelledby="contesto-360-wrap" className="mb-5">
+          <Context360
+            context={context}
+            news={news}
+            now={now}
+            profile={profile}
+          />
+        </section>
+      ) : null}
 
       {/* ---------------- linea sharp ---------------- */}
       {sharp !== null ? (

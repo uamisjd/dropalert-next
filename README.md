@@ -122,6 +122,12 @@ src/
 │   │   ├── engine.ts    ampiezza, coordinazione, sharp, persistenza, fiducia
 │   │   ├── clv.ts       CLV singolo e aggregato con IC 95%
 │   │   └── __tests__/   40 test
+│   ├── push/
+│   │   ├── pure.ts      regole pure: soglia, dedupe, testo dell'avviso
+│   │   └── live.ts      dato vivo con cui si confronta la soglia
+│   ├── tools/
+│   │   ├── margin.ts    margine, trattenuta, quote fair (3 metodi)
+│   │   └── stake.ts     pareggio, rendimento atteso, Kelly, varianza
 │   └── repo/
 │       └── odds.ts      lettura serie storiche dal DB
 └── scripts/
@@ -156,9 +162,11 @@ npm run test             # test del motore (puro, senza DB)
 npm run test:pipeline    # test della pipeline (richiede PostgreSQL)
 npm run test:providers   # test delle fondamenta dei collector
 npm run test:betexplorer # test dell'adapter su HTML reale congelato
-npm run test:all         # tutte e quattro le suite
+npm run test:tools       # strumenti di calcolo (margine, varianza)
+npm run test:client      # componenti in un DOM reale (jsdom + React 19)
+npm run test:all         # tutte le suite (26)
 npm run job:analyze      # solo analisi + chiusura, senza rete
-npm run job:collect      # giro completo: raccolta + analisi + chiusura
+npm run job:collect      # giro completo: raccolta + analisi + chiusura + notifiche
 npm run job:collect -- --force         # ignora l'intervallo minimo
 npm run job:collect -- --no-collect    # solo consolidamento, nessuna rete
 npm run job:collect -- --collect-only --max 10 --no-results
@@ -211,6 +219,58 @@ curl -X POST http://localhost:3000/api/jobs/analyze \
 Il job è **idempotente**: rieseguirlo aggiorna i segnali esistenti senza
 duplicarli e non riscrive mai `detected_price`, il prezzo congelato al primo
 rilevamento che fa da riferimento onesto per il CLV.
+
+## Strumenti di calcolo (`/strumenti`)
+
+È la sola parte del sito che tocca il betting in modo esplicito, e resta dentro
+l'identità dell'osservatorio: **misura, non consiglia**.
+
+| Strumento | Che cosa risponde |
+|---|---|
+| Margine e quota fair | Quanto margine contiene un insieme di quote (overround, margine in punti, trattenuta) e che cosa resta togliendolo, con tre metodi a confronto: proporzionale, additivo, power. |
+| Peso della varianza | Punto di pareggio a una quota, rendimento atteso, frazione di Kelly e distribuzione dei risultati su N sequenze simulate. |
+
+Regole che valgono per entrambi:
+
+- **nessuna selezione indicata**: i numeri li inserisce chi legge, il sito non
+  sceglie partite, mercati né esiti;
+- **nessun operatore**: niente link, bonus, promozioni o confronti fra
+  concessionari, in nessuna pagina;
+- **nessun dato**: tutto il calcolo avviene nel browser;
+- **un metodo non applicabile lo dichiara**: il metodo additivo su un mercato
+  molto sbilanciato può produrre una probabilità non positiva, e allora restituisce
+  il motivo invece di forzare un valore a zero;
+- **la simulazione è deterministica**: seme fisso e dichiarato, quindi il
+  risultato è riproducibile da chiunque e verificabile nei test.
+
+La distinzione fra **margine** e **trattenuta** non è un dettaglio: coprire tutti
+gli esiti alle quote pubblicate restituisce `1 − 1/overround`, cioè la trattenuta,
+non il margine. Il calcolatore mostra entrambi e dice quale è quale.
+
+Dettagli e motivazioni in [`docs/STRUMENTI-BETTING.md`](docs/STRUMENTI-BETTING.md).
+
+---
+
+## Notifiche
+
+L'avviso per una partita seguita che supera la soglia personale è una **fase del
+ciclo di osservazione**, non una rotta separata: lo scheduler che raccoglie è lo
+stesso che notifica.
+
+- la soglia si confronta con l'indice **normalizzato sulla base misurabile**, lo
+  stesso numero della card e di `/preferite` — una sola scala per tutti i canali;
+- massimo una notifica per partita al giorno per iscrizione, con dedupe a
+  registro;
+- senza chiavi VAPID la fase lo dichiara (`configured: false`) invece di fallire:
+  il giro di raccolta non dipende dalle notifiche;
+- l'esito della fase è stampato dal CLI e scritto in `collector_runs.meta`.
+
+| Variabile | Default | Effetto |
+|---|---|---|
+| `VAPID_PUBLIC_KEY` | *(assente)* | senza, le notifiche restano spente e la UI lo dichiara |
+| `VAPID_PRIVATE_KEY` | *(assente)* | idem |
+
+---
 
 ## Stati di un segnale
 

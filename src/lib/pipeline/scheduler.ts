@@ -20,6 +20,8 @@ import { eq } from "drizzle-orm";
 import { db } from "@/db/client";
 import { systemState } from "@/db/schema";
 import { collectBetexplorer } from "@/lib/providers/betexplorer/collect";
+import { dispatchNotifications, pushConfigured } from "@/lib/repo/push";
+import { readLiveValues } from "@/lib/push/live";
 import type { RunTrigger } from "@/lib/cov/instrument";
 import { detectAll } from "./detect";
 import { runClosingJob, pendingClosings } from "./closing";
@@ -333,10 +335,27 @@ export interface CycleOptions {
   /** istante di riferimento, iniettabile */
   now?: Date;
   /**
+   * Non inviare le notifiche dovute. Serve ai test di percorso, che devono
+   * poter eseguire un giro senza toccare il servizio push.
+   */
+  skipNotifications?: boolean;
+  /**
    * Chi ha chiesto il giro. Il runner schedulato passa `scheduled`; CLI,
    * API e pulsante restano `manual`, che è anche il default.
    */
   trigger?: RunTrigger;
+}
+
+/** Esito della fase di notifica, dichiarata anche quando non parte nulla. */
+export interface NotificationsReport {
+  /** false quando le chiavi VAPID mancano o la fase è stata saltata */
+  executed: boolean;
+  /** false quando il server non può inviare: chiavi non configurate */
+  configured: boolean;
+  subscriptions: number;
+  sent: number;
+  skipped: number;
+  removed: number;
 }
 
 export interface CycleReport {
@@ -367,13 +386,64 @@ export interface CycleReport {
     fairLinesCaptured: number;
     clvComputed: number;
   };
+  /** avvisi inviati a chi segue una partita che ha superato la soglia */
+  notifications: NotificationsReport;
   /** partite monitorate che devono ancora superare il kickoff */
   pending: Array<{ key: string; kickoffAt: string }>;
   errors: string[];
 }
 
 /**
- * Esegue un giro completo: raccolta, analisi, chiusura.
+ * Invia gli avvisi dovuti a chi segue una partita.
+ *
+ * Nessuna eccezione esce da qui: una notifica mancata non deve costare il
+ * giro di osservazione, che ha già raccolto e misurato. Se il registro non è
+ * leggibile, il giro lo dichiara fra gli errori invece di fingere che nessuna
+ * soglia fosse stata superata.
+ */
+async function runNotifications(
+  now: Date,
+  errors: string[],
+): Promise<NotificationsReport> {
+  const vuoto: NotificationsReport = {
+    executed: false,
+    configured: false,
+    subscriptions: 0,
+    sent: 0,
+    skipped: 0,
+    removed: 0,
+  };
+
+  if (!pushConfigured()) {
+    /* chiavi VAPID assenti: non è un errore, è una configurazione. La UI
+       delle notifiche lo dichiara già a schermo. */
+    return vuoto;
+  }
+
+  const live = await readLiveValues(now).catch(() => null);
+  if (live === null) {
+    errors.push("notifiche: dato vivo non leggibile, nessun avviso inviato.");
+    return { ...vuoto, configured: true };
+  }
+
+  const report = await dispatchNotifications(live, now).catch(() => null);
+  if (report === null) {
+    errors.push("notifiche: invio interrotto.");
+    return { ...vuoto, configured: true };
+  }
+
+  return {
+    executed: true,
+    configured: report.configured,
+    subscriptions: report.subscriptions,
+    sent: report.sent,
+    skipped: report.skipped,
+    removed: report.removed,
+  };
+}
+
+/**
+ * Esegue un giro completo: raccolta, analisi, chiusura, notifiche.
  *
  * Ogni fase è isolata: se la raccolta fallisce, l'analisi e la chiusura
  * girano comunque sui dati già a registro, e il fallimento resta scritto
@@ -424,6 +494,14 @@ export async function runCycle(options: CycleOptions = {}): Promise<CycleReport>
       linesCaptured: 0,
       fairLinesCaptured: 0,
       clvComputed: 0,
+    },
+    notifications: {
+      executed: false,
+      configured: false,
+      subscriptions: 0,
+      sent: 0,
+      skipped: 0,
+      removed: 0,
     },
     pending: [],
     errors: [],
@@ -481,7 +559,17 @@ export async function runCycle(options: CycleOptions = {}): Promise<CycleReport>
     };
     for (const e of closing.errors) errors.push(`chiusura match ${e.matchId}: ${e.message}`);
 
-    /* --- 4. cosa resta da chiudere ----------------------------------- */
+    /* --- 4. notifiche dovute ------------------------------------------ */
+    /* Stanno DENTRO il ciclo e non in una rotta a parte: lo scheduler che
+       fa girare l'osservatorio è lo stesso che avvisa chi segue una partita.
+       Una rotta separata esisteva già, ma nessuno la chiamava: le
+       iscrizioni si salvavano e nessun avviso partiva mai. Un guasto qui non
+       tocca i dati raccolti — resta dichiarato e il giro prosegue. */
+    if (!options.skipNotifications) {
+      report.notifications = await runNotifications(now, errors);
+    }
+
+    /* --- 5. cosa resta da chiudere ----------------------------------- */
     const pending = await pendingClosings(now);
     report.pending = pending.map((p) => ({
       key: p.key,
@@ -507,6 +595,8 @@ export async function runCycle(options: CycleOptions = {}): Promise<CycleReport>
         fairLinesCaptured: closing.fairLinesCaptured,
         clvComputed: closing.clvComputed,
         pendingClosings: report.pending.length,
+        notificationsSent: report.notifications.sent,
+        notificationsExecuted: report.notifications.executed,
       },
     });
 

@@ -2,6 +2,16 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   /**
+   * Origini ammesse in sviluppo.
+   *
+   * Il server di sviluppo blocca le richieste cross-origin verso i propri
+   * asset: senza questa voce, chi apre il sito da un host di preview
+   * (sottodominio `e2b.app`) si vede rifiutare gli asset di sviluppo e la
+   * pagina resta bianca. Non tocca la produzione, dove il blocco non esiste.
+   */
+  allowedDevOrigins: ["*.e2b.app"],
+
+  /**
    * Gli URL pubblici della copertura restano `/coverage` e
    * `/api/coverage`, ma i file vivono in cartelle `cov/`.
    *

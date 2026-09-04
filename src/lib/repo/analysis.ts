@@ -124,6 +124,21 @@ export async function getDeepAnalysis(
   const used = await readUsedToday(now);
   const usage = { used, limit: CONTEXT_DAILY_LIMIT };
 
+  /* Una partita iniziata non ha più un «prima»: il racconto pre-gara in cache
+     parlerebbe al futuro di un incontro già cominciato, e rigenerarlo ora
+     produrrebbe un testo senza senso (il modello descrive come SI MUOVE il
+     mercato, non come è finita). Quindi a kickoff superato non si serve la
+     cache e non si chiama il modello: si dichiara perché l'analisi non c'è. */
+  const kickoff = new Date(facts.kickoffAt).getTime();
+  if (Number.isFinite(kickoff) && kickoff <= now.getTime()) {
+    return {
+      analysis: null,
+      unavailableReason:
+        "analisi non disponibile: la partita è già iniziata, il racconto pre-gara non descrive più questo incontro",
+      usage,
+    };
+  }
+
   const live = {
     apertura: facts.movimento.apertura,
     corrente: facts.movimento.corrente,
@@ -182,6 +197,15 @@ export async function getDeepAnalysis(
     unavailableReason: null,
     usage: { used: used + 1, limit: CONTEXT_DAILY_LIMIT },
   };
+}
+
+/**
+ * Cancella la cache dell'analisi di una partita. Si chiama quando la partita
+ * inizia (chiusura del segnale): il racconto pre-gara non è più attuale e non
+ * deve restare in `system_state` a essere servito come se lo fosse.
+ */
+export async function invalidateAnalysis(matchId: number): Promise<void> {
+  await db.delete(systemState).where(eq(systemState.key, cacheKey(matchId)));
 }
 
 /** Riesportata per i test di contratto. */

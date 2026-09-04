@@ -28,6 +28,8 @@ import { PushControls } from "@/components/PushControls";
 interface LiveRow {
   matchId: number;
   score: number | null;
+  /** true quando il numero è l'indice normalizzato sulla base misurabile */
+  normalized: boolean;
   dropPct: number | null;
 }
 
@@ -76,8 +78,16 @@ export default function WatchlistPage() {
                 ? r.matchId
                 : null;
           if (id === null) continue;
-          const score =
+          /* L'indice confrontato con la soglia è quello NORMALIZZATO, lo
+             stesso che la card mette in vista e lo stesso che usa la
+             notifica push (`liveValueOf`). Prima qui si leggeva il grezzo:
+             la stessa soglia poteva risultare raggiunta nell'avviso e non
+             raggiunta in questa pagina. */
+          const rawScore =
             typeof r.confidenceScore === "number" ? r.confidenceScore : null;
+          const normalized =
+            typeof r.normalizedScore === "number" ? r.normalizedScore : null;
+          const score = normalized ?? rawScore;
           const apertura =
             typeof r.openingPrice === "number" ? r.openingPrice : null;
           const corrente =
@@ -88,7 +98,12 @@ export default function WatchlistPage() {
               : null;
           const prev = map.get(id);
           if (prev === undefined || (score ?? -1) > (prev.score ?? -1)) {
-            map.set(id, { matchId: id, score, dropPct });
+            map.set(id, {
+              matchId: id,
+              score,
+              normalized: normalized !== null,
+              dropPct,
+            });
           }
         }
         if (!annullato) setLive(map);
@@ -115,10 +130,15 @@ export default function WatchlistPage() {
 
   const rows = sortForDisplay(
     entries.map((e) => {
-      const l = live.get(e.matchId) ?? { score: null, dropPct: null };
+      const l = live.get(e.matchId) ?? {
+        score: null,
+        normalized: false,
+        dropPct: null,
+      };
       return {
         ...e,
         score: l.score,
+        normalized: l.normalized,
         dropPct: l.dropPct,
         reached: thresholdReached(e, { score: l.score, dropPct: l.dropPct }),
         noData: l.score === null && l.dropPct === null,
@@ -185,6 +205,7 @@ export default function WatchlistPage() {
                   <>
                     <span className="tabular-nums">
                       indice {r.score ?? "n/d"}/100
+                      {r.normalized ? " su base misurabile" : ""}
                     </span>
                     <span className="mx-1.5 text-slate-300">|</span>
                     <span className="tabular-nums">

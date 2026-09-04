@@ -8,10 +8,8 @@
  * Protetta come gli altri job: con `JOBS_TOKEN` impostato serve l'header
  * `x-jobs-token`.
  */
-import { getDashboardData } from "@/lib/repo/dashboard";
-import { groupByMatch, matchIdentityKey } from "@/lib/view/plain";
 import { dispatchNotifications } from "@/lib/repo/push";
-import type { LiveValue } from "@/lib/push/pure";
+import { readLiveValues } from "@/lib/push/live";
 
 export const dynamic = "force-dynamic";
 
@@ -28,20 +26,12 @@ export async function POST(request: Request): Promise<Response> {
     return Response.json({ ok: false, reason: "non autorizzato" }, { status: 401 });
   }
   const now = new Date();
-  const data = await getDashboardData({}, now).catch(() => null);
-  if (data === null) {
+  /* il dato vivo per partita: indice e calo, gli stessi numeri che la lista
+     mostra. Nessun ricalcolo, nessuna metrica nuova — la stessa costruzione
+     che usa il ciclo di osservazione, in `lib/push/live`. */
+  const live = await readLiveValues(now);
+  if (live === null) {
     return Response.json({ ok: false, reason: "registro non leggibile" }, { status: 503 });
-  }
-
-  /* il dato vivo per partita: indice normalizzato e calo, gli stessi numeri
-     che la lista mostra. Nessun ricalcolo, nessuna metrica nuova. */
-  const live = new Map<string, LiveValue>();
-  for (const g of groupByMatch(data.signals)) {
-    const s = g.primary;
-    live.set(matchIdentityKey(s), {
-      score: s.normalizedScore ?? s.confidenceScore,
-      dropPct: s.dropPct,
-    });
   }
 
   const report = await dispatchNotifications(live, now).catch(() => null);

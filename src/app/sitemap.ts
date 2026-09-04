@@ -26,6 +26,9 @@ const PRIORITY: Record<string, number> = {
   "/metodologia": 0.6,
   "/privacy": 0.3,
   "/gioco-responsabile": 0.4,
+  "/performance": 0.5,
+  "/preferite": 0.2,
+  "/strumenti": 0.6,
 };
 
 async function upcomingMatchIds(

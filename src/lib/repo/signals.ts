@@ -10,6 +10,7 @@ import {
   dropSignals,
   leagues,
   matches,
+  oddsSnapshots,
   signalEvents,
   teams,
   type ConfidenceBand,
@@ -19,6 +20,8 @@ import {
   type SignalStatus,
 } from "@/db/schema";
 import { num } from "@/lib/drop/math";
+import { normalizedOf } from "@/lib/repo/dashboard";
+import type { RawScoreComponent } from "@/lib/repo/score-view";
 import {
   CONFIDENCE_LABELS_IT,
   MAGNITUDE_LABELS_IT,
@@ -59,6 +62,15 @@ export interface SignalListItem {
   confidenceScore: number | null;
   confidenceBand: ConfidenceBand;
   confidenceLabel: string;
+  /**
+   * Indice riportato sulla base misurabile: LO STESSO numero che mostra la
+   * card e che confronta la notifica push. Chi legge `/preferite` e chi
+   * riceve un avviso devono poter confrontare la propria soglia con un solo
+   * valore, non con due scale diverse.
+   */
+  normalizedScore: number | null;
+  /** punti realmente ottenibili (100 meno quelli non osservabili) */
+  measurableMax: number | null;
   dataCoverage: number | null;
   summary: string;
   detectedAt: string;
@@ -141,9 +153,48 @@ export async function listSignals(
     : [];
   const teamName = new Map(teamRows.map((t) => [t.id, t.name]));
 
+  /* Quante rilevazioni esistono per (partita, mercato, selezione). Serve a
+     decidere se la tenuta nel tempo è misurabile e quindi quanti punti
+     erano davvero ottenibili: senza, l'indice normalizzato qui divergerebbe
+     da quello della dashboard, che questo conteggio lo fa già. */
+  const matchIds = [...new Set(rows.map((r) => r.matchId))];
+  const snapRows = matchIds.length
+    ? await db
+        .select({
+          matchId: oddsSnapshots.matchId,
+          market: oddsSnapshots.market,
+          selection: oddsSnapshots.selection,
+          n: raw<number>`count(*)::int`,
+        })
+        .from(oddsSnapshots)
+        .where(inArray(oddsSnapshots.matchId, matchIds))
+        .groupBy(
+          oddsSnapshots.matchId,
+          oddsSnapshots.market,
+          oddsSnapshots.selection,
+        )
+    : [];
+  const snapCount = new Map(
+    snapRows.map((r) => [`${r.matchId}::${r.market}::${r.selection}`, r.n]),
+  );
+
   const items = rows.map((r) => {
     const s = r.signal;
-    const explanation = (s.explanation ?? {}) as { summary?: string };
+    const explanation = (s.explanation ?? {}) as {
+      summary?: string;
+      components?: RawScoreComponent[];
+    };
+    const normalized = normalizedOf(
+      explanation.components ?? [],
+      num(s.confidenceScore),
+      {
+        booksTotal: s.booksTotal,
+        sharpAvailable: s.sharpAvailable,
+        sharpConfirms: s.sharpConfirms,
+        pointCount:
+          snapCount.get(`${r.matchId}::${s.market}::${s.selection}`) ?? 0,
+      },
+    );
     return {
       id: s.id,
       status: s.status as SignalStatus,
@@ -177,6 +228,8 @@ export async function listSignals(
       confidenceBand: s.confidenceBand as ConfidenceBand,
       confidenceLabel:
         CONFIDENCE_LABELS_IT[s.confidenceBand] ?? s.confidenceBand,
+      normalizedScore: normalized.normalizedScore,
+      measurableMax: normalized.measurableMax,
       dataCoverage: num(s.dataCoverage),
       summary: explanation.summary ?? "",
       detectedAt: toIso(s.detectedAt),
