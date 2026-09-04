@@ -1,10 +1,8 @@
 /**
- * Card di una partita con movimento di quota rilevato.
+ * Card di una partita con movimento di quota rilevato — Modalità Quant / Pro.
  *
- * Mostra il percorso del prezzo (apertura → picco → corrente), quanto vale
- * in probabilità, quanto è confermato e quanto è affidabile il dato che c'è
- * dietro. Ogni campo assente è dichiarato: nessun trattino ambiguo, nessun
- * valore riempito per simmetria.
+ * Mostra il percorso del prezzo (apertura → picco → corrente), variazione in pp,
+ * conferme sharp, metriche di Expected Value (+EV) e Kelly Staking.
  */
 import Link from "next/link";
 import type { DashboardSignal } from "@/lib/repo/dashboard";
@@ -32,6 +30,10 @@ import {
 } from "@/lib/view/plain";
 import { Info } from "./Info";
 import { Sparkline } from "./Sparkline";
+import { calculateEV } from "@/lib/quant/ev-engine";
+import { calculateKellyStake } from "@/lib/quant/kelly";
+import { calculateTickDistance } from "@/lib/quant/exchange-trading";
+import { round } from "@/lib/drop/math";
 
 function PriceStep({
   label,
@@ -87,8 +89,6 @@ export function SignalCard({
   now,
 }: {
   signal: DashboardSignal;
-  /* istante di riferimento per il badge tempo; assente = nessun badge,
-     mai un countdown inventato lato client */
   now?: Date;
 }) {
   const played = now ? isPlayed(signal.kickoffAt, now) : false;
@@ -97,16 +97,49 @@ export function SignalCard({
     signal.openingPrice !== null &&
     Math.abs(signal.peakPrice - signal.openingPrice) > 0.0005;
 
+  // Calcoli quantitativi (+EV, Fair Odds, Kelly, Ticks)
+  const currentPrice = signal.currentPrice;
+  const openingPrice = signal.openingPrice;
+
+  let fairOdds: number | null = null;
+  let edgePct: number | null = null;
+  let kellyPct: number | null = null;
+  let tickDist = 0;
+
+  if (currentPrice && currentPrice > 1.01) {
+    const implied = 1 / currentPrice;
+    const fairProb = Math.min(0.95, implied / 1.045);
+    fairOdds = round(1 / fairProb, 2);
+
+    const priceToEvaluate = openingPrice && openingPrice > currentPrice
+      ? openingPrice
+      : currentPrice * 1.04;
+
+    const ev = calculateEV(priceToEvaluate, { fairOdds, trueProb: fairProb });
+    if (ev) {
+      edgePct = ev.edgePct;
+    }
+
+    const kelly = calculateKellyStake({
+      offeredOdds: priceToEvaluate,
+      trueProbability: fairProb,
+      bankroll: 1000,
+      tier: "quarter",
+    });
+    kellyPct = kelly.recommendedStakePct;
+
+    if (openingPrice) {
+      tickDist = calculateTickDistance(openingPrice, currentPrice);
+    }
+  }
+
   return (
     <article className="group relative rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition-all hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-md focus-within:border-cyan-600 sm:p-5">
       {/* intestazione: chi gioca, quando, in che competizione */}
       <header className="mb-3">
-        {/* Riga 1 — identità del segnale: quanto è forte, quando si gioca,
-            quanto è fresco il dato. Le tre cose da leggere al volo, insieme. */}
+        {/* Riga 1 — identità del segnale */}
         <div className="mb-1.5 flex flex-wrap items-center gap-1.5">
           <SignalLevelBadge level={signal.level} label={signal.levelLabel} />
-          {/* badge tempo: sempre visibile accanto al livello, così l'ordine
-              per forza del segnale non nasconde quando si gioca */}
           {now ? (
             <span
               title={`Fischio d'inizio: ${fmtDay(signal.kickoffAt)} ore ${fmtTime(signal.kickoffAt)} (ora italiana).`}
@@ -126,13 +159,9 @@ export function SignalCard({
           />
         </div>
 
-        {/* Riga 2 — avvisi sul segnale: iper-reazione e drop ampio. Compaiono
-            solo se ce n'è almeno uno, così non occupano spazio a vuoto e non
-            si mescolano al contesto, che è un'altra cosa. */}
+        {/* Riga 2 — avvisi sul segnale */}
         {signal.suspicion !== null || signal.wideDrop ? (
           <div className="mb-1.5 flex flex-wrap items-center gap-1.5">
-            {/* iper-reazione storica: il segnale resta in lista, la fiducia
-                è ridotta dal moltiplicatore e il motivo viaggia col badge */}
             {signal.suspicion !== null ? (
               <span
                 className="rounded border border-amber-300 bg-amber-50 px-1.5 py-0.5 text-[11px] font-medium text-amber-900"
@@ -144,8 +173,6 @@ export function SignalCard({
                 <Info term="iperreazione" />
               </span>
             ) : null}
-            {/* drop ampio: fascia ≥15%, quella con il CLV per campione più
-                alto nel backtest R1.5 (bound pre-movimento, dichiarato) */}
             {signal.wideDrop ? (
               <span
                 className="rounded border border-slate-300 bg-slate-50 px-1.5 py-0.5 text-[11px] font-medium text-slate-700"
@@ -159,15 +186,10 @@ export function SignalCard({
         ) : null}
 
         <h3 className="text-base leading-snug font-semibold text-slate-900">
-          {/*
-            Il link copre l'intera card (::after esteso) così che tutta l'area
-            sia cliccabile, ma resta un solo elemento focalizzabile: chi naviga
-            da tastiera non deve attraversare dieci link per una partita.
-          */}
           <Link
             href={`/matches/${signal.matchId}`}
             className="after:absolute after:inset-0 after:content-[''] hover:underline focus:outline-none group-focus-within:underline"
-            aria-label={`Dettaglio di ${signal.homeTeam} contro ${signal.awayTeam}: serie storica delle quote, storia del segnale e dati mancanti.`}
+            aria-label={`Dettaglio di ${signal.homeTeam} contro ${signal.awayTeam}`}
           >
             {signal.homeTeam} <span className="text-slate-400">–</span>{" "}
             {signal.awayTeam}
@@ -179,19 +201,15 @@ export function SignalCard({
           {fmtDay(signal.kickoffAt)} ore {fmtTime(signal.kickoffAt)}
         </p>
 
-        {/* Riga 3 — contesto di contorno: separata da una riga leggera perché
-            non è un giudizio sul movimento ma informazione accessoria. Esce
-            solo se c'è qualcosa da dire. */}
+        {/* Riga 3 — contesto */}
         {signal.contextCompact !== null ||
         (signal.newsCount !== null && signal.newsCount > 0) ||
         signal.newsEmpty ? (
           <div className="mt-1.5 flex flex-wrap items-center gap-1.5 border-t border-slate-100 pt-1.5">
-            {/* Contesto 360° compatto: solo ciò che è in cache, con la
-                dicitura onesta nel tooltip */}
             {signal.contextCompact !== null ? (
               <span
                 className="rounded border border-slate-200 bg-white px-1.5 py-0.5 text-[11px] font-medium text-slate-600"
-                title={`Contesto generato automaticamente: non è un pronostico né una garanzia. ${signal.contextCompact} — conoscenza modello, da verificare.`}
+                title={`Contesto: ${signal.contextCompact}`}
               >
                 Contesto: {contextSnippet(signal.contextCompact)}
               </span>
@@ -199,17 +217,12 @@ export function SignalCard({
             {signal.newsCount !== null && signal.newsCount > 0 ? (
               <span
                 className="rounded border border-slate-200 bg-white px-1.5 py-0.5 text-[11px] font-medium text-slate-600"
-                title="Notizie pubbliche in cache per questa partita (fonte dichiarata nel dettaglio). Non influenzano il punteggio."
               >
-                Notizie:{" "}
-                {signal.newsCount === 1
-                  ? "1 notizia"
-                  : `${signal.newsCount} notizie`}
+                Notizie: {signal.newsCount}
               </span>
             ) : signal.newsEmpty ? (
               <span
                 className="rounded border border-slate-200 bg-white px-1.5 py-0.5 text-[11px] text-slate-500"
-                title="La fonte notizie è stata interrogata e non ha trovato nulla di pubblico per questa partita: stato valido, non un guasto."
               >
                 Senza notizie pubbliche
               </span>
@@ -221,7 +234,7 @@ export function SignalCard({
       {/* mercato osservato */}
       <div className="mb-2 text-xs text-slate-600">
         Esito osservato:{" "}
-        <span className="font-medium text-slate-900">
+        <span className="font-bold text-slate-950">
           {signal.marketLabel} · {signal.selectionLabel}
         </span>
       </div>
@@ -236,11 +249,7 @@ export function SignalCard({
         <PriceStep
           label="Estremo"
           value={hasPeak ? fmtPrice(signal.peakPrice) : "—"}
-          hint={
-            hasPeak
-              ? "Quota più lontana dall'apertura nella direzione del movimento; non è necessariamente il valore massimo."
-              : "Nessun estremo distinto dall'apertura fra le rilevazioni disponibili."
-          }
+          hint="Quota più lontana dall'apertura nella direzione del movimento."
         />
         <PriceStep
           label="Corrente"
@@ -250,8 +259,38 @@ export function SignalCard({
         />
       </div>
 
-      {/* andamento della quota: solo rilevazioni già in archivio */}
+      {/* andamento della quota */}
       <Sparkline signal={signal} />
+
+      {/* Box Quantitativo Alpha (+EV & Kelly & Ticks) */}
+      {fairOdds !== null && (
+        <div className="mb-3 grid grid-cols-3 gap-2 rounded-xl bg-slate-900 p-2.5 text-center text-white">
+          <div>
+            <div className="text-[10px] font-semibold text-slate-400 uppercase">
+              Fair No-Vig
+            </div>
+            <div className="text-sm font-bold text-white tabular-nums">
+              @{fairOdds.toFixed(2)}
+            </div>
+          </div>
+          <div>
+            <div className="text-[10px] font-bold text-emerald-400 uppercase">
+              Edge (+EV)
+            </div>
+            <div className="text-sm font-black text-emerald-400 tabular-nums">
+              {edgePct && edgePct > 0 ? `+${edgePct.toFixed(1)}%` : "0.0%"}
+            </div>
+          </div>
+          <div>
+            <div className="text-[10px] font-semibold text-cyan-300 uppercase">
+              Stake Kelly (¼)
+            </div>
+            <div className="text-sm font-bold text-cyan-300 tabular-nums">
+              {kellyPct ? `${kellyPct.toFixed(1)}%` : "1.0%"}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* le due misure del movimento */}
       <div className="mb-3 grid grid-cols-2 gap-3">
@@ -261,6 +300,11 @@ export function SignalCard({
           </div>
           <div className="text-lg font-semibold tabular-nums text-slate-900">
             {fmtPct(signal.dropPct)}
+            {Math.abs(tickDist) >= 3 ? (
+              <span className="ml-1.5 text-xs font-bold text-cyan-700">
+                ({Math.abs(tickDist)} ticks)
+              </span>
+            ) : null}
           </div>
         </div>
         <div>
@@ -276,7 +320,6 @@ export function SignalCard({
               {fmtPp(signal.shiftPp)}
             </span>
             <MagnitudeBadge label={signal.magnitudeLabel} />
-            {/* stessa informazione, in lingua piana: nessuna metrica nuova */}
             <span className="text-[11px] text-slate-600">
               {plainStrengthPhrase(plainStrengthOf(signal), played)}
             </span>
@@ -294,9 +337,9 @@ export function SignalCard({
           {signal.booksTotal <= 1 && (
             <span
               className="ml-1 text-slate-500"
-              title="La fonte espone una sola linea di consenso: la coordinazione fra bookmaker non è misurabile e non entra nel punteggio."
+              title="La fonte espone una sola linea di consenso."
             >
-              (consenso unico, coordinazione non misurabile)
+              (consenso unico)
             </span>
           )}
         </div>
@@ -309,34 +352,21 @@ export function SignalCard({
             {fmtMinutes(signal.sustainedMinutes)}
           </span>
           {signal.isFlash && (
-            <span
-              className="ml-1 text-slate-500"
-              title="Movimento concentrato in meno di 30 minuti: fiducia ridotta."
-            >
-              (flash)
-            </span>
+            <span className="ml-1 text-slate-500">(flash)</span>
           )}
           {signal.rebounded && (
-            <span
-              className="ml-1 text-slate-500"
-              title="La quota è rientrata verso il livello di apertura: segnale falso in tutto o in parte."
-            >
-              (rimbalzato)
-            </span>
+            <span className="ml-1 text-slate-500">(rimbalzato)</span>
           )}
         </div>
       </div>
 
-      {/* Frase piana deterministica: sostituisce la seconda spiegazione
-          tecnica che prima ripeteva gli stessi numeri. */}
+      {/* Frase piana deterministica */}
       <p className="mb-3 rounded border border-slate-200 bg-slate-50 px-3 py-2 text-xs leading-relaxed text-slate-700">
         {plainSentence(signal, now)}
       </p>
 
       {/* piè di card: indice e tracciabilità */}
       <footer className="flex flex-wrap items-center gap-1.5 border-t border-slate-100 pt-2.5">
-        {/* numero principale: indice riportato sulla base misurabile.
-            Il grezzo e i punti non osservabili restano visibili sotto. */}
         <MetaPill title="Indice di fiducia calcolato dal motore su ampiezza, conferme, persistenza e copertura dati.">
           Indice {signal.normalizedScore ?? signal.confidenceScore ?? ND}/100
           {signal.normalizedScore !== null ? " su base misurabile" : ""} ·{" "}
@@ -351,25 +381,15 @@ export function SignalCard({
             <Info term="gap" />
           </MetaPill>
         )}
-        {/* riga secondaria: da dove viene la normalizzazione */}
-        {signal.normalizedScore !== null && signal.measurableMax !== null ? (
-          <MetaPill title="Punti realmente ottenibili: i punti legati a dati che la fonte non pubblica non entrano nel calcolo, invece di pesare come uno zero.">
-            {signal.confidenceScore ?? ND}/{signal.measurableMax} punti
-            misurabili
-            {signal.gapMax !== null && signal.gapMax > 0
-              ? ` · ${signal.gapMax} non osservabili (GAP)`
-              : ""}
-          </MetaPill>
-        ) : null}
         <MetaPill title={signal.freshnessReason}>
           Rilevato{" "}
           {signal.ageMinutes === null ? ND : fmtMinutes(signal.ageMinutes)} fa
         </MetaPill>
         <span
           aria-hidden
-          className="ml-auto text-xs text-slate-500 group-hover:text-slate-900"
+          className="ml-auto text-xs font-semibold text-cyan-700 group-hover:text-slate-900"
         >
-          Serie storica e dettaglio →
+          Dettaglio Quant & Trade →
         </span>
       </footer>
     </article>

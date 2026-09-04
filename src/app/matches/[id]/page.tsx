@@ -34,6 +34,7 @@ import { isLowInformationCompetition } from "@/lib/context/pure";
 import { SharpLineBlock } from "@/components/SharpLineBlock";
 import { SignalTimeline } from "@/components/SignalTimeline";
 import { MatchSummary } from "@/components/MatchSummary";
+import { MatchQuantPanel } from "@/components/MatchQuantPanel";
 import { normalizedReachabilityScore } from "@/lib/repo/score-view";
 import {
   ND,
@@ -613,6 +614,7 @@ export default async function MatchDetailPage({
       >
         {[
           ["#movimento", "Movimento"],
+          ["#quant-alpha", "Quant & Value (+EV)"],
           ["#contesto", "Contesto"],
           ["#affidabilita", "Affidabilità"],
           ["#dati", "Qualità dati"],
@@ -626,6 +628,15 @@ export default async function MatchDetailPage({
           </a>
         ))}
       </nav>
+
+      {/* Sezione Quantitativa & Alpha */}
+      <MatchQuantPanel
+        signal={lead}
+        series={leadSeries}
+        allSeries={detail.series}
+        homeTeam={match.homeTeam}
+        awayTeam={match.awayTeam}
+      />
 
       <section
         id="movimento"

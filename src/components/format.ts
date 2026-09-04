@@ -33,19 +33,22 @@ const dayFmt = new Intl.DateTimeFormat("it-IT", {
 });
 
 /** Data e ora italiane, es. "18/08 22:00". */
-export function fmtDateTime(iso: string | null): string {
-  if (!iso) return ND;
-  return dateTimeFmt.format(new Date(iso));
+export function fmtDateTime(dateOrIso: string | Date | null | undefined): string {
+  if (!dateOrIso) return ND;
+  const d = dateOrIso instanceof Date ? dateOrIso : new Date(dateOrIso);
+  return Number.isNaN(d.getTime()) ? ND : dateTimeFmt.format(d);
 }
 
-export function fmtTime(iso: string | null): string {
-  if (!iso) return ND;
-  return timeFmt.format(new Date(iso));
+export function fmtTime(dateOrIso: string | Date | null | undefined): string {
+  if (!dateOrIso) return ND;
+  const d = dateOrIso instanceof Date ? dateOrIso : new Date(dateOrIso);
+  return Number.isNaN(d.getTime()) ? ND : timeFmt.format(d);
 }
 
-export function fmtDay(iso: string | null): string {
-  if (!iso) return ND;
-  return dayFmt.format(new Date(iso));
+export function fmtDay(dateOrIso: string | Date | null | undefined): string {
+  if (!dateOrIso) return ND;
+  const d = dateOrIso instanceof Date ? dateOrIso : new Date(dateOrIso);
+  return Number.isNaN(d.getTime()) ? ND : dayFmt.format(d);
 }
 
 /** Quota decimale a tre cifre, es. "3.290". */
