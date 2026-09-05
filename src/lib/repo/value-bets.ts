@@ -96,12 +96,67 @@ const EMPTY: ValueScannerResult["skipped"] = {
  * La linea è il gruppo di selezioni rilevate ALLO STESSO ISTANTE dallo STESSO
  * bookmaker: mescolare letture di momenti diversi darebbe un margine inventato.
  */
+export interface LineRow {
+  matchId: number;
+  bookmakerId: number;
+  market: MarketType;
+  selection: SelectionCode;
+  price: string | number;
+  collectedAt: Date | string;
+  source: string;
+}
+
+/**
+ * Raggruppa le letture in linee candidate: una riga per
+ * (partita, mercato, bookmaker), con le sole selezioni rilevate ALLO STESSO ISTANTE.
+ *
+ * La regola è tutta qui, ed è il motivo per cui la funzione è separata dalla query:
+ * mescolare selezioni letture a minuti diversi darebbe un margine che nessuno ha
+ * mai offerto. La lettura più recente vince e non eredita nulla dalla precedente —
+ * se è arrivata a metà, la linea resta a metà e chi chiama il divario lo dichiara.
+ *
+ * Input ordinato come viene dalla banca dati (non è richiesto: l'ordine è ricostruito).
+ */
+export function groupLatestLines(rows: LineRow[]): Map<string, LineReading[]> {
+  const newest = new Map<string, LineReading>();
+  for (const r of rows) {
+    const key = `${r.matchId}|${r.market}|${r.bookmakerId}`;
+    const at = new Date(r.collectedAt);
+    const price = Number(r.price);
+    const cur = newest.get(key);
+    if (!cur) {
+      newest.set(key, {
+        bookmakerId: r.bookmakerId,
+        collectedAt: at,
+        source: r.source,
+        prices: { [r.selection]: price },
+      });
+      continue;
+    }
+    if (at.getTime() > cur.collectedAt.getTime()) {
+      cur.collectedAt = at;
+      cur.source = r.source;
+      cur.prices = { [r.selection]: price };
+    } else if (at.getTime() === cur.collectedAt.getTime()) {
+      cur.prices[r.selection] = price;
+    }
+  }
+
+  const byMarket = new Map<string, LineReading[]>();
+  for (const [key, reading] of newest) {
+    const marketKey = key.slice(0, key.lastIndexOf("|"));
+    const list = byMarket.get(marketKey) ?? [];
+    list.push(reading);
+    byMarket.set(marketKey, list);
+  }
+  return byMarket;
+}
+
 async function loadLines(
   matchIds: number[],
   since: Date,
 ): Promise<Map<string, LineReading[]>> {
-  const byMarket = new Map<string, LineReading[]>();
-  if (matchIds.length === 0) return byMarket;
+  if (matchIds.length === 0) return new Map();
 
   const rows = await db
     .select({
@@ -120,39 +175,7 @@ async function loadLines(
     .orderBy(desc(oddsSnapshots.collectedAt))
     .limit(LINE_ROW_CAP);
 
-  /** chiave (partita, mercato, bookmaker) → lettura più recente vista */
-  const newest = new Map<string, LineReading>();
-  for (const r of rows) {
-    const key = `${r.matchId}|${r.market}|${r.bookmakerId}`;
-    const at = new Date(r.collectedAt);
-    const cur = newest.get(key);
-    if (!cur) {
-      newest.set(key, {
-        bookmakerId: r.bookmakerId,
-        collectedAt: at,
-        source: r.source,
-        prices: { [r.selection]: Number(r.price) },
-      });
-      continue;
-    }
-    if (at.getTime() > cur.collectedAt.getTime()) {
-      // lettura più recente: la precedente non rappresenta più "il presente"
-      cur.collectedAt = at;
-      cur.source = r.source;
-      cur.prices = { [r.selection]: Number(r.price) };
-    } else if (at.getTime() === cur.collectedAt.getTime()) {
-      // stesso istante: completa la terna
-      cur.prices[r.selection] = Number(r.price);
-    }
-  }
-
-  for (const [key, reading] of newest) {
-    const marketKey = key.slice(0, key.lastIndexOf("|"));
-    const list = byMarket.get(marketKey) ?? [];
-    list.push(reading);
-    byMarket.set(marketKey, list);
-  }
-  return byMarket;
+  return groupLatestLines(rows as LineRow[]);
 }
 
 /**

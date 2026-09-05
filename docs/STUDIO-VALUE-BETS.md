@@ -254,6 +254,7 @@ Tre cose trovate **durante** l'applicazione, che l'audit non elencava:
 npm run audit:value-bets    # VERIFICA a 6 controlli della pagina, oggi: dopo la patch è un guard
                             # (esito OK/ATTENZIONE per proprietà), non più una radiografia
 npm run test:quant          # include [2b]: «linea incompleta → nessun numero», «nessun pavimento»
+npm run test:value-lines    # 12 asserzioni sulla costruzione della linea (stessa ora, stesso libro)
 npm run study:finished > /tmp/studio.md && sed -n '/## S9/,$p' /tmp/studio.md   # la misura della §3
 npm run lint && npm run typecheck && npm run build
 ```

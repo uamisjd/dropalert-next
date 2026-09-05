@@ -163,8 +163,9 @@ npm run test:pipeline    # test della pipeline (richiede PostgreSQL)
 npm run test:providers   # test delle fondamenta dei collector
 npm run test:betexplorer # test dell'adapter su HTML reale congelato
 npm run test:tools       # strumenti di calcolo (margine, varianza)
+npm run test:value-lines   # come si costruisce una linea di prezzo per il divario (puro)
 npm run test:client      # componenti in un DOM reale (jsdom + React 19)
-npm run test:all         # tutte le suite (26)
+npm run test:all         # tutte le suite (27)
 npm run job:analyze      # solo analisi + chiusura, senza rete
 npm run job:collect      # giro completo: raccolta + analisi + chiusura + notifiche
 npm run job:collect -- --force         # ignora l'intervallo minimo
