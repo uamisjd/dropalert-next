@@ -14,6 +14,12 @@
  *
  * Funzioni PURE: nessun database, nessuna rete, nessun orologio implicito.
  */
+import {
+  ABANDONED_RUN_AFTER_MINUTES,
+  resolveRunStatus,
+} from "@/lib/pipeline/run-status";
+
+export { ABANDONED_RUN_AFTER_MINUTES, resolveRunStatus };
 
 /**
  * Cron del workflow `.github/workflows/collect.yml`.
@@ -49,7 +55,7 @@ export const ACTIONS_CRON = "7,22,37,52 * * * *";
  * saltata.
  */
 export const RUNNER_NOTE =
-  "La raccolta gira su GitHub Actions (runner esterno, indipendente da chi apre il sito) e scrive direttamente sul database. Una seconda gamba — il cron giornaliero di Vercel e uno scheduler esterno che bussano allo stesso percorso — copre i turni che lo scheduler di Actions salta: non raddoppia il traffico, perché la spaziatura minima resta decisa dal codice e un giro troppo vicino esce senza toccare la fonte. Il battito della seconda gamba è leggibile su /api/cron/status.";
+  "GitHub Actions esegue il giro completo (raccolta, analisi, chiusure e notifiche). La seconda gamba — cron giornaliero di Vercel più scheduler esterno — esegue soltanto la raccolta entro un budget dichiarato; non avvia le fasi che supererebbero i 300 secondi. Entrambe rispettano lo stesso gate, quindi non raddoppiano il traffico. Il battito della seconda gamba è leggibile su /api/cron/status.";
 
 /** Intervallo nominale fra due giri del cron, in minuti. */
 export const ACTIONS_INTERVAL_MINUTES = 45;
@@ -81,37 +87,6 @@ export const RUN_STATUS_LABELS: Record<string, string> = {
   running: "in corso",
   aborted: "troncato",
 };
-
-/**
- * Oltre questo tempo una riga `running` non descrive un giro in corso:
- * descrive un giro interrotto.
- *
- * Il tetto di 15 minuti non è un numero a caso: il job di GitHub Actions ha
- * `timeout-minutes: 10`, quindi un giro legittimo non può essere vivo più di
- * così, e 430 secondi è la durata misurata di uno riuscito. Una riga rimasta
- * aperta a 15 minuti da un giro *finito* (è il caso della seconda gamba,
- * interrotta dal budget di 300 s della funzione) è un'interruzione, e
- * lasciarla scritta «in corso» significa raccontare al lettore che sta
- * arrivando un dato che non arriverà.
- */
-export const ABANDONED_RUN_AFTER_MINUTES = 15;
-
-/**
- * Corregge l'etichetta di un run in base al tempo trascorso.
- *
- * Pura e volutamente ignorante del database: riceve lo stato com'è salvato e
- * i minuti passati, e restituisce lo stato da mostrare. Non tocca
- * l'archivio: il registro resta la fotografia di come è andata, la pagina
- * dice cosa quella fotografia vuol dire adesso.
- */
-export function resolveRunStatus(
-  status: string,
-  minutesSince: number | null,
-): string {
-  if (status !== "running") return status;
-  if (minutesSince === null) return status;
-  return minutesSince > ABANDONED_RUN_AFTER_MINUTES ? "aborted" : status;
-}
 
 export function runStatusLabel(status: string): string {
   return RUN_STATUS_LABELS[status] ?? status;

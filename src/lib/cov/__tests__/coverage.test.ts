@@ -45,6 +45,7 @@ import {
 } from "../instrument";
 import {
   EXCLUSION_CODES,
+  onlyOwnChoiceExclusions,
   parseExclusion,
   taggedExclusion,
 } from "@/lib/providers/exclusion-codes";
@@ -627,6 +628,27 @@ function main(): void {
 
   test("dettaglio non visitato (tetto/budget) è una nostra scelta, non perdita", () => {
     assertEqual(reasonForCode(EXCLUSION_CODES.DETAIL_BUDGET), "our_choice");
+  });
+
+  test("un parziale di solo budget non degrada la salute della fonte", () => {
+    assert(
+      onlyOwnChoiceExclusions([
+        taggedExclusion("a", EXCLUSION_CODES.DETAIL_BUDGET, "tetto"),
+        taggedExclusion("b", EXCLUSION_CODES.OUT_OF_WINDOW, "finestra"),
+      ]),
+      "tutte omissioni nostre",
+    );
+  });
+
+  test("un errore reale mescolato al budget resta un parziale della fonte", () => {
+    assert(
+      !onlyOwnChoiceExclusions([
+        taggedExclusion("a", EXCLUSION_CODES.DETAIL_BUDGET, "tetto"),
+        taggedExclusion("b", EXCLUSION_CODES.PAGE_UNREACHABLE, "timeout"),
+      ]),
+      "la pagina irraggiungibile non va neutralizzata",
+    );
+    assert(!onlyOwnChoiceExclusions([]), "un elenco vuoto non è un parziale atteso");
   });
 
   test("'altro' resta solo per l'esclusione senza codice dichiarato", () => {

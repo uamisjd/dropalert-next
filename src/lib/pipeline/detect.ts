@@ -58,6 +58,36 @@ export interface DetectionOutcome {
   reason: string | null;
 }
 
+/**
+ * Parallelismo conservativo della scansione: ogni partita è indipendente,
+ * mentre il pool PostgreSQL ha dieci connessioni. Quattro worker eliminano la
+ * lunga coda seriale senza saturare Neon né far concorrere la stessa partita.
+ */
+export const DETECTION_CONCURRENCY = 4;
+
+/** Esegue lavori indipendenti con un tetto, conservando l'ordine in uscita. */
+export async function mapWithConcurrency<T, R>(
+  items: readonly T[],
+  concurrency: number,
+  task: (item: T, index: number) => Promise<R>,
+): Promise<R[]> {
+  if (items.length === 0) return [];
+  const limit = Math.max(1, Math.min(items.length, Math.floor(concurrency) || 1));
+  const results = new Array<R>(items.length);
+  let cursor = 0;
+
+  const worker = async (): Promise<void> => {
+    while (cursor < items.length) {
+      const index = cursor;
+      cursor += 1;
+      results[index] = await task(items[index], index);
+    }
+  };
+
+  await Promise.all(Array.from({ length: limit }, () => worker()));
+  return results;
+}
+
 export interface DetectionSummary {
   matchesProcessed: number;
   marketsAnalyzed: number;
@@ -498,28 +528,48 @@ export async function detectAll(
     errors: [],
   };
 
-  for (const m of rows) {
-    try {
-      const { outcomes, gapsRecorded } = await detectForMatch(
-        m.id,
-        m.kickoffAt,
-        now,
-      );
-      summary.matchesProcessed += 1;
-      summary.marketsAnalyzed += outcomes.length;
-      summary.gapsRecorded += gapsRecorded;
-      for (const o of outcomes) {
-        summary.outcomes.push(o);
-        if (o.action === "created") summary.created += 1;
-        else if (o.action === "updated") summary.updated += 1;
-        else if (o.action === "unchanged") summary.unchanged += 1;
-        else summary.skipped += 1;
+  type WorkResult =
+    | {
+        ok: true;
+        outcomes: DetectionOutcome[];
+        gapsRecorded: number;
       }
-    } catch (err) {
-      summary.errors.push({
-        matchId: m.id,
-        message: err instanceof Error ? err.message : String(err),
-      });
+    | { ok: false; message: string };
+
+  /* Ogni partita va a un solo worker. L'helper conserva l'ordine della query,
+     quindi il report è stabile anche se query indipendenti finiscono in ordine
+     differente. */
+  const results = await mapWithConcurrency(
+    rows,
+    DETECTION_CONCURRENCY,
+    async (match): Promise<WorkResult> => {
+      try {
+        const detected = await detectForMatch(match.id, match.kickoffAt, now);
+        return { ok: true, ...detected };
+      } catch (err) {
+        return {
+          ok: false,
+          message: err instanceof Error ? err.message : String(err),
+        };
+      }
+    },
+  );
+
+  for (let index = 0; index < results.length; index += 1) {
+    const result = results[index];
+    if (!result.ok) {
+      summary.errors.push({ matchId: rows[index].id, message: result.message });
+      continue;
+    }
+    summary.matchesProcessed += 1;
+    summary.marketsAnalyzed += result.outcomes.length;
+    summary.gapsRecorded += result.gapsRecorded;
+    for (const outcome of result.outcomes) {
+      summary.outcomes.push(outcome);
+      if (outcome.action === "created") summary.created += 1;
+      else if (outcome.action === "updated") summary.updated += 1;
+      else if (outcome.action === "unchanged") summary.unchanged += 1;
+      else summary.skipped += 1;
     }
   }
 

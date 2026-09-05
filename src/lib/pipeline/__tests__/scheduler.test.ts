@@ -8,11 +8,14 @@
  * coperto dai test di pipeline.
  */
 import {
+  collectionPolicyFor,
   minutesUntil,
   readSchedulerConfig,
   schedulerHealth,
   shouldRunNow,
   DEFAULT_INTERVAL_MINUTES,
+  SERVERLESS_DETAIL_BUDGET_MS,
+  SERVERLESS_DETAIL_ROW_CAP,
   MAX_INTERVAL_MINUTES,
   MIN_INTERVAL_MINUTES,
   STALE_INTERVAL_MULTIPLIER,
@@ -111,6 +114,43 @@ function main(): void {
       assertEqual(c.intervalMinutes, DEFAULT_INTERVAL_MINUTES);
       assertEqual(c.source, "default", "il fallback è dichiarato");
     });
+  });
+
+  /* ---------------- profilo serverless ---------------- */
+
+  console.log("\n-- Profilo serverless --\n");
+
+  const config = {
+    intervalMinutes: 45,
+    horizonHours: 72,
+    maxFixtures: 60,
+    withResults: true,
+    source: "default" as const,
+  };
+
+  test("il giro completo conserva risultati e retry", () => {
+    const p = collectionPolicyFor("full", config);
+    assertEqual(p.withResults, true);
+    assertEqual(p.retryNotReached, true);
+    assertEqual(p.fixtureFetchLimits, undefined);
+  });
+
+  test("il fallback serverless non avvia le fasi di rete non essenziali", () => {
+    const p = collectionPolicyFor("collect_only", config);
+    assertEqual(p.withResults, false);
+    assertEqual(p.retryNotReached, false);
+  });
+
+  test("il fallback riserva più di metà budget a quote e chiusura", () => {
+    const p = collectionPolicyFor("collect_only", config);
+    assertEqual(p.fixtureFetchLimits?.budgetMs, SERVERLESS_DETAIL_BUDGET_MS);
+    assert(SERVERLESS_DETAIL_BUDGET_MS <= 120_000, "il dettaglio non può occupare i 300 s");
+    assertEqual(p.fixtureFetchLimits?.maxRows, SERVERLESS_DETAIL_ROW_CAP);
+  });
+
+  test("il tetto serverless non allarga un maxFixtures più prudente", () => {
+    const p = collectionPolicyFor("collect_only", { ...config, maxFixtures: 12 });
+    assertEqual(p.fixtureFetchLimits?.maxRows, 12);
   });
 
   /* ---------------- interruttore ---------------- */

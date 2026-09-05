@@ -691,6 +691,20 @@ async function main(): Promise<void> {
     assert(stats.detail.includes("PARZIALE"), "resta visibile");
   });
 
+  await test("un parziale atteso resta visibile senza degradare la fonte", async () => {
+    resetRateLimitState();
+    const p = makeProvider({ key: "budget-atteso" });
+    const { result, stats } = await runProviderCall(
+      p,
+      "fetchFixtures",
+      async () => partial([1], 30, ["tetto dichiarato"]),
+      { persist: false, expectedPartial: () => true },
+    );
+    assert(result.ok && result.partial, "il dato resta parziale nel report");
+    assertEqual(stats.outcome, "ok", "source_health non va degradata");
+    assert(stats.detail.includes("omissioni"), "la neutralizzazione è dichiarata");
+  });
+
   await test("il rate limiter è condiviso per chiave di fonte", () => {
     resetRateLimitState();
     const a = getRateLimiter("stessa", { requestsPerMinute: 10, minIntervalMs: 100 });

@@ -19,7 +19,12 @@
 import { eq } from "drizzle-orm";
 import { db } from "@/db/client";
 import { systemState } from "@/db/schema";
-import { collectBetexplorer } from "@/lib/providers/betexplorer/collect";
+import {
+  collectBetexplorer,
+  type CollectOptions,
+  type CollectReport,
+} from "@/lib/providers/betexplorer/collect";
+import type { CycleMode } from "./cycle-mode";
 import { dispatchNotifications, pushConfigured } from "@/lib/repo/push";
 import { readLiveValues } from "@/lib/push/live";
 import type { RunTrigger } from "@/lib/cov/instrument";
@@ -50,18 +55,29 @@ export const DEFAULT_INTERVAL_MINUTES = 45;
 export const MIN_INTERVAL_MINUTES = 5;
 export const MAX_INTERVAL_MINUTES = 24 * 60;
 
-/** Chiave di stato che conserva l'esito dell'ultimo giro. */
+/**
+ * Ultimo ciclo completo. È la chiave storica letta dal gate pre-install di
+ * Actions: il fallback non deve aggiornarla, altrimenti potrebbe impedire per
+ * sempre l'esecuzione di analisi, chiusure e notifiche.
+ */
 export const LAST_CYCLE_KEY = "scheduler:last_cycle";
+
+/**
+ * Ultima raccolta conclusa, indipendentemente dal runner che l'ha eseguita.
+ * Il gate della fonte usa questa chiave insieme al claim; Actions e fallback
+ * possono così avere due cadenze distinte senza duplicare richieste esterne.
+ */
+export const LAST_COLLECTION_KEY = "scheduler:last_collection";
 
 /**
  * Chiave di stato che marca il TENTATIVO di giro, scritto prima di toccare
  * la fonte e non dopo la chiusura.
  *
- * Perché esiste: `scheduler:last_cycle` viene scritto solo a giro chiuso
- * (`writeLastCycle`, in fondo a `runCycle`). Un giro interrotto a metà — è
- * il caso del chiamante esterno, che su Vercel dispone di 300 secondi mentre
- * un giro completo ne misura ~430 — non lo scrive mai. Il gate quindi resta
- * a guardare un registro che non avanza e lascia passare ogni battuta
+ * Perché esiste: `scheduler:last_collection` viene scritto solo a raccolta
+ * chiusa. Un giro interrotto a metà — è il caso storico del chiamante esterno,
+ * che su Vercel dispone di 300 secondi mentre un giro completo ne misura ~430
+ * — non lo scrive mai. Il gate quindi resterebbe a guardare un registro che
+ * non avanza e lascerebbe passare ogni battuta
  * successiva: misurato il 05/09/2026, la seconda gamba ha raccolto alle
  * 12:15, 12:30 e 12:45 (ora italiana) invece che ogni 45 minuti, cioè ~11
  * richieste in più alla fonte ogni quarto d'ora. Il tentativo, non
@@ -121,13 +137,17 @@ export function readSchedulerConfig(): SchedulerConfig {
 export interface LastCycleState {
   at: string;
   status: "success" | "partial" | "failed";
+  /** assente nelle righe storiche; distingue chi ha prodotto lo stato */
+  mode?: CycleMode;
+  /** assente = vecchio stato, quando ogni ciclo comprendeva la raccolta */
+  collectionExecuted?: boolean;
   snapshotsWritten: number;
   signalsTouched: number;
   closingLinesCaptured: number;
   clvComputed: number;
 }
 
-/** Ultimo giro registrato, null se il sistema non ha mai girato. */
+/** Ultimo ciclo full registrato, null se il sistema non ha mai girato. */
 export async function readLastCycle(): Promise<LastCycleState | null> {
   const [row] = await db
     .select({ value: systemState.value })
@@ -138,7 +158,7 @@ export async function readLastCycle(): Promise<LastCycleState | null> {
   return row.value as LastCycleState;
 }
 
-/** Registra l'esito dell'ultimo giro (upsert). */
+/** Registra l'esito dell'ultimo ciclo full (upsert). */
 export async function writeLastCycle(state: LastCycleState): Promise<void> {
   await db
     .insert(systemState)
@@ -150,9 +170,38 @@ export async function writeLastCycle(state: LastCycleState): Promise<void> {
 }
 
 /**
+ * Ultima raccolta conclusa. Prima dell'introduzione della chiave dedicata,
+ * `last_cycle` rappresentava anche questo fatto: il fallback mantiene la
+ * compatibilità soltanto per gli stati legacy o con raccolta eseguita.
+ */
+export async function readLastCollection(): Promise<LastCycleState | null> {
+  const [row] = await db
+    .select({ value: systemState.value })
+    .from(systemState)
+    .where(eq(systemState.key, LAST_COLLECTION_KEY))
+    .limit(1);
+  if (row) return row.value as LastCycleState;
+
+  const legacy = await readLastCycle();
+  return legacy?.collectionExecuted === false ? null : legacy;
+}
+
+/** Registra una raccolta realmente terminata, qualunque sia il runner. */
+export async function writeLastCollection(state: LastCycleState): Promise<void> {
+  const value = { ...state, collectionExecuted: true };
+  await db
+    .insert(systemState)
+    .values({ key: LAST_COLLECTION_KEY, value, updatedAt: new Date() })
+    .onConflictDoUpdate({
+      target: systemState.key,
+      set: { value, updatedAt: new Date() },
+    });
+}
+
+/**
  * Marca l'inizio del giro, prima di qualsiasi richiesta alla fonte.
  *
- * È il gemello «sincero» di `writeLastCycle`: quello registra un fatto
+ * È il gemello «sincero» di `writeLastCollection`: quello registra un fatto
  * compiuto, questo registra un'intenzione. Serve perché la chiusura può non
  * arrivare mai (funzione interrotta dal budget del piano) e il gate non può
  * permettersi di comportarsi come se il giro non fosse mai partito.
@@ -183,8 +232,8 @@ export async function readCycleClaim(): Promise<Date | null> {
 }
 
 /**
- * L'istante che il gate deve rispettare: il più recente fra l'ultimo giro
- * chiuso e l'ultimo giro tentato.
+ * L'istante che il gate deve rispettare: il più recente fra l'ultima raccolta
+ * chiusa e l'ultimo tentativo verso la fonte.
  *
  * Pura, perché la regola «un tentativo conta quanto una chiusura per far
  * aspettare il giro dopo» è il punto intero del fix e va verificata senza
@@ -210,7 +259,7 @@ export function latestRunMoment(
  */
 export async function readGateMoment(): Promise<Date | null> {
   const [closed, claim] = await Promise.all([
-    readLastCycle()
+    readLastCollection()
       .then((l) => (l === null ? null : new Date(l.at)))
       .catch(() => null),
     readCycleClaim().catch(() => null),
@@ -412,7 +461,49 @@ export function schedulerHealth(
 /* Il giro                                                             */
 /* ------------------------------------------------------------------ */
 
+/**
+ * Profilo della seconda gamba serverless.
+ *
+ * La funzione ha 300 s totali. Il dettaglio della fonte ne può usare al
+ * massimo 120 e arricchire 15 righe: restano almeno 180 s per il rate limiter
+ * delle quote, le scritture e la chiusura del run. Il retry da 60 s e i
+ * risultati restano al giro completo di Actions: farli partire qui renderebbe
+ * di nuovo possibile un timeout senza `finished_at`.
+ */
+export const SERVERLESS_DETAIL_BUDGET_MS = 120_000;
+export const SERVERLESS_DETAIL_ROW_CAP = 15;
+
+export interface CycleCollectionPolicy {
+  withResults: boolean;
+  retryNotReached: boolean;
+  fixtureFetchLimits: CollectOptions["fixtureFetchLimits"];
+}
+
+/** Pura: rende verificabile che il fallback non possa ereditare il profilo lungo. */
+export function collectionPolicyFor(
+  mode: CycleMode,
+  config: SchedulerConfig,
+): CycleCollectionPolicy {
+  if (mode === "full") {
+    return {
+      withResults: config.withResults,
+      retryNotReached: true,
+      fixtureFetchLimits: undefined,
+    };
+  }
+  return {
+    withResults: false,
+    retryNotReached: false,
+    fixtureFetchLimits: {
+      maxRows: Math.min(config.maxFixtures, SERVERLESS_DETAIL_ROW_CAP),
+      budgetMs: SERVERLESS_DETAIL_BUDGET_MS,
+    },
+  };
+}
+
 export interface CycleOptions {
+  /** `full` per Actions; `collect_only` per la seconda gamba entro 300 s */
+  mode?: CycleMode;
   /** salta la raccolta e analizza soltanto ciò che è già a registro */
   skipCollect?: boolean;
   /** ignora l'intervallo minimo (uso manuale e test di percorso) */
@@ -431,6 +522,8 @@ export interface CycleOptions {
    * API e pulsante restano `manual`, che è anche il default.
    */
   trigger?: RunTrigger;
+  /** dipendenza iniettabile nei test di persistenza; in esercizio resta quella reale */
+  collector?: (options: CollectOptions) => Promise<CollectReport>;
 }
 
 /** Esito della fase di notifica, dichiarata anche quando non parte nulla. */
@@ -447,10 +540,12 @@ export interface NotificationsReport {
 
 export interface CycleReport {
   status: "success" | "partial" | "failed" | "skipped";
+  mode: CycleMode;
   runId: number;
   startedAt: string;
   durationMs: number;
   config: SchedulerConfig;
+  collectionPolicy: CycleCollectionPolicy;
   gate: { run: boolean; reason: string; waitedMinutes: number | null };
   collect: {
     executed: boolean;
@@ -461,6 +556,7 @@ export interface CycleReport {
     problems: string[];
   };
   detection: {
+    executed: boolean;
     matchesProcessed: number;
     marketsAnalyzed: number;
     created: number;
@@ -468,6 +564,7 @@ export interface CycleReport {
     gapsRecorded: number;
   };
   closing: {
+    executed: boolean;
     matchesProcessed: number;
     linesCaptured: number;
     fairLinesCaptured: number;
@@ -539,6 +636,9 @@ async function runNotifications(
 export async function runCycle(options: CycleOptions = {}): Promise<CycleReport> {
   const now = options.now ?? new Date();
   const config = readSchedulerConfig();
+  const mode = options.mode ?? "full";
+  const collectionPolicy = collectionPolicyFor(mode, config);
+  const collector = options.collector ?? collectBetexplorer;
   const handle = await startRun("scheduler-cycle");
   const errors: string[] = [];
 
@@ -554,10 +654,12 @@ export async function runCycle(options: CycleOptions = {}): Promise<CycleReport>
 
   const report: CycleReport = {
     status: "success",
+    mode,
     runId: handle.id,
     startedAt: now.toISOString(),
     durationMs: 0,
     config,
+    collectionPolicy,
     gate: {
       run: gate.run,
       reason: gate.reason,
@@ -572,6 +674,7 @@ export async function runCycle(options: CycleOptions = {}): Promise<CycleReport>
       problems: [],
     },
     detection: {
+      executed: false,
       matchesProcessed: 0,
       marketsAnalyzed: 0,
       created: 0,
@@ -579,6 +682,7 @@ export async function runCycle(options: CycleOptions = {}): Promise<CycleReport>
       gapsRecorded: 0,
     },
     closing: {
+      executed: false,
       matchesProcessed: 0,
       linesCaptured: 0,
       fairLinesCaptured: 0,
@@ -607,10 +711,13 @@ export async function runCycle(options: CycleOptions = {}): Promise<CycleReport>
          comportamento precedente */
       await writeCycleClaim(now).catch(() => undefined);
       try {
-        const collected = await collectBetexplorer({
+        const collected = await collector({
           horizonHours: config.horizonHours,
           maxFixtures: config.maxFixtures,
-          withResults: config.withResults,
+          withResults: collectionPolicy.withResults,
+          retryNotReached: collectionPolicy.retryNotReached,
+          fixtureFetchLimits: collectionPolicy.fixtureFetchLimits,
+          cycleMode: mode,
           /* il giro porta la firma di chi lo ha chiesto: solo i giri
              schedulati fanno profondità di serie */
           trigger: options.trigger ?? "manual",
@@ -624,19 +731,75 @@ export async function runCycle(options: CycleOptions = {}): Promise<CycleReport>
           problems: collected.problems.slice(0, 20),
         };
         if (collected.status === "failed") {
-          report.status = "partial";
-          errors.push("raccolta fallita: analisi eseguita sui soli dati già a registro.");
+          report.status = mode === "collect_only" ? "failed" : "partial";
+          errors.push(
+            mode === "collect_only"
+              ? "raccolta fallita: il fallback non esegue fasi locali."
+              : "raccolta fallita: analisi eseguita sui soli dati già a registro.",
+          );
         }
       } catch (err) {
-        report.status = "partial";
+        report.status = mode === "collect_only" ? "failed" : "partial";
         const message = err instanceof Error ? err.message : String(err);
         errors.push(`raccolta interrotta: ${message}`);
       }
     }
 
+    /* Il fallback serverless ha finito qui il proprio lavoro. Chiuderlo
+       esplicitamente è il punto della modalità: niente zeri spacciati per
+       analisi eseguite e nessuna riga `running` lasciata dal timeout. */
+    if (mode === "collect_only") {
+      if (!report.collect.executed && errors.length === 0) {
+        report.status = "skipped";
+      } else if (report.collect.status === "partial") {
+        report.status = "partial";
+      }
+      report.errors = errors;
+      report.durationMs = Date.now() - now.getTime();
+
+      await finishRun(handle, {
+        status: report.status === "skipped" ? "success" : report.status,
+        matchesSeen: report.collect.fixturesSeen,
+        snapshotsWritten: report.collect.snapshotsWritten,
+        signalsTouched: 0,
+        errors,
+        meta: {
+          mode,
+          trigger: options.trigger ?? "manual",
+          intervalMinutes: config.intervalMinutes,
+          intervalSource: config.source,
+          collectExecuted: report.collect.executed,
+          collectionPolicy,
+          analysisExecuted: false,
+          closingExecuted: false,
+          notificationsExecuted: false,
+          gate: gate.reason,
+        },
+      });
+
+      if (report.collect.executed) {
+        /* Non toccare `last_cycle`: il gate pre-install di Actions lo usa
+           come heartbeat del ciclo completo. Se il fallback lo avanzasse a
+           ogni raccolta, analisi/chiusure/notifiche potrebbero non partire
+           mai. La pressione sulla fonte è regolata da questa chiave dedicata
+           e dal claim. */
+        await writeLastCollection({
+          at: now.toISOString(),
+          status: report.status === "skipped" ? "success" : report.status,
+          mode,
+          snapshotsWritten: report.collect.snapshotsWritten,
+          signalsTouched: 0,
+          closingLinesCaptured: 0,
+          clvComputed: 0,
+        });
+      }
+      return report;
+    }
+
     /* --- 2. analisi -------------------------------------------------- */
     const detection = await detectAll(now, { matchIds: options.matchIds });
     report.detection = {
+      executed: true,
       matchesProcessed: detection.matchesProcessed,
       marketsAnalyzed: detection.marketsAnalyzed,
       created: detection.created,
@@ -648,6 +811,7 @@ export async function runCycle(options: CycleOptions = {}): Promise<CycleReport>
     /* --- 3. chiusura e CLV ------------------------------------------- */
     const closing = await runClosingJob(now, { matchIds: options.matchIds });
     report.closing = {
+      executed: true,
       matchesProcessed: closing.matchesProcessed,
       linesCaptured: closing.linesCaptured,
       fairLinesCaptured: closing.fairLinesCaptured,
@@ -683,9 +847,14 @@ export async function runCycle(options: CycleOptions = {}): Promise<CycleReport>
       signalsTouched: detection.created + detection.updated,
       errors,
       meta: {
+        mode,
+        trigger: options.trigger ?? "manual",
         intervalMinutes: config.intervalMinutes,
         intervalSource: config.source,
         collectExecuted: report.collect.executed,
+        collectionPolicy,
+        analysisExecuted: report.detection.executed,
+        closingExecuted: report.closing.executed,
         gate: gate.reason,
         closingLinesCaptured: closing.linesCaptured,
         fairLinesCaptured: closing.fairLinesCaptured,
@@ -696,16 +865,24 @@ export async function runCycle(options: CycleOptions = {}): Promise<CycleReport>
       },
     });
 
+    const completedState: LastCycleState = {
+      at: now.toISOString(),
+      status: report.status === "skipped" ? "success" : report.status,
+      mode,
+      collectionExecuted: report.collect.executed,
+      snapshotsWritten: report.collect.snapshotsWritten,
+      signalsTouched: detection.created + detection.updated,
+      closingLinesCaptured: closing.linesCaptured,
+      clvComputed: closing.clvComputed,
+    };
+
     if (report.collect.executed) {
-      await writeLastCycle({
-        at: now.toISOString(),
-        status: report.status === "skipped" ? "success" : report.status,
-        snapshotsWritten: report.collect.snapshotsWritten,
-        signalsTouched: detection.created + detection.updated,
-        closingLinesCaptured: closing.linesCaptured,
-        clvComputed: closing.clvComputed,
-      });
+      await writeLastCollection(completedState);
     }
+    /* Il ciclo completo avanza il proprio heartbeat anche se una raccolta
+       recente è stata saltata: le fasi DB sono state realmente eseguite e il
+       gate pre-install non deve reinstallarle quattro volte l'ora. */
+    await writeLastCycle(completedState);
 
     return report;
   } catch (err) {

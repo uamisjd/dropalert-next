@@ -28,6 +28,7 @@ import {
   detectForMatch,
   gapsFromAnalysis,
   getSignalRow,
+  mapWithConcurrency,
   nextStatus,
   recordGap,
 } from "../detect";
@@ -43,13 +44,16 @@ import {
 import {
   readCycleClaim,
   readGateMoment,
+  readLastCollection,
   readLastCycle,
   readSchedulerConfig,
   runCycle,
   shouldRunNow,
   writeCycleClaim,
+  writeLastCollection,
   writeLastCycle,
   CYCLE_CLAIM_KEY,
+  LAST_COLLECTION_KEY,
   LAST_CYCLE_KEY,
   type LastCycleState,
 } from "../scheduler";
@@ -62,6 +66,8 @@ import {
 } from "../runs";
 import { num } from "@/lib/drop/math";
 import type { DropAnalysis } from "@/lib/drop/types";
+import { getCoverageHistory } from "@/lib/repo/coverage-history";
+import { COLLECTOR_KEY } from "@/lib/providers/betexplorer/collect";
 
 /* ------------------------------------------------------------------ */
 /* Runner                                                              */
@@ -154,15 +160,16 @@ async function cleanup(): Promise<void> {
 /* ------------------------------------------------------------------ */
 
 /**
- * I test del gate devono scrivere `scheduler:last_cycle`, che è lo stesso
- * record su cui si regge il runner in produzione. Senza ripristino, una
- * corsa di test lascia scritto "ultimo giro: adesso" e il primo giro
- * schedulato reale trova il gate chiuso per l'intera durata
- * dell'intervallo: la serie non avanza e sembra un difetto dello
- * scheduler. Qui lo stato viene salvato prima di toccarlo e rimesso
- * com'era alla fine.
+ * I test toccano sia l'heartbeat full sia l'ultima raccolta, gli stessi
+ * registri usati in produzione. Senza ripristino, una corsa lascerebbe
+ * scritto «adesso» e terrebbe chiusi i rispettivi gate. Gli stati vengono
+ * quindi presi in prestito e rimessi esattamente com'erano.
  */
 let savedLastCycle: { present: boolean; value: LastCycleState | null } | null = null;
+let savedLastCollection: {
+  present: boolean;
+  value: LastCycleState | null;
+} | null = null;
 
 /* Il tentativo di giro (`scheduler:cycle_claim`) va trattato come l'esito:
    è la chiave che il gate rispetta, e una corsa di test che la lasciasse
@@ -174,6 +181,17 @@ async function borrowCycleState(): Promise<void> {
   if (savedLastCycle === null) {
     const value = await readLastCycle();
     savedLastCycle = { present: value !== null, value };
+  }
+  if (savedLastCollection === null) {
+    const [row] = await db
+      .select({ value: systemState.value })
+      .from(systemState)
+      .where(eq(systemState.key, LAST_COLLECTION_KEY))
+      .limit(1);
+    savedLastCollection = {
+      present: row !== undefined,
+      value: (row?.value as LastCycleState | undefined) ?? null,
+    };
   }
   if (savedClaim === null) {
     const at = await readCycleClaim();
@@ -189,6 +207,15 @@ async function restoreCycleState(): Promise<void> {
       await writeLastCycle(saved.value);
     } else {
       await db.delete(systemState).where(eq(systemState.key, LAST_CYCLE_KEY));
+    }
+  }
+  if (savedLastCollection !== null) {
+    const saved = savedLastCollection;
+    savedLastCollection = null;
+    if (saved.present && saved.value !== null) {
+      await writeLastCollection(saved.value);
+    } else {
+      await db.delete(systemState).where(eq(systemState.key, LAST_COLLECTION_KEY));
     }
   }
   if (savedClaim !== null) {
@@ -781,6 +808,22 @@ async function main(): Promise<void> {
     assert(summary.total >= 0 && summary.unclassified >= 0, "conteggi coerenti");
   });
 
+  group("Scansione concorrente");
+
+  await test("la coda limita i worker e conserva tutti i risultati in ordine", async () => {
+    let active = 0;
+    let maxActive = 0;
+    const result = await mapWithConcurrency([30, 10, 20, 5], 2, async (delay) => {
+      active += 1;
+      maxActive = Math.max(maxActive, active);
+      await new Promise<void>((resolve) => setTimeout(resolve, delay));
+      active -= 1;
+      return delay;
+    });
+    assertEqual(result.join(","), "30,10,20,5");
+    assertEqual(maxActive, 2);
+  });
+
   group("Scheduler — giro senza rete");
 
   await test("il giro salta la raccolta se l'intervallo non è trascorso", async () => {
@@ -807,6 +850,141 @@ async function main(): Promise<void> {
     assert(row !== undefined, "run non registrato");
     assertEqual(row.collectorKey, "scheduler-cycle");
     assert(row.finishedAt !== null, "run non chiuso");
+  });
+
+  await test("il fallback collect-only chiude senza affamare il ciclo completo", async () => {
+    await borrowCycleState();
+    const previousFullAt = "2026-01-01T00:00:00.000Z";
+    await writeLastCycle({
+      at: previousFullAt,
+      status: "success",
+      mode: "full",
+      collectionExecuted: true,
+      snapshotsWritten: 1,
+      signalsTouched: 1,
+      closingLinesCaptured: 1,
+      clvComputed: 1,
+    });
+    let received: Record<string, unknown> = {};
+    const report = await runCycle({
+      mode: "collect_only",
+      force: true,
+      trigger: "scheduled",
+      collector: async (options) => {
+        received = options as unknown as Record<string, unknown>;
+        return {
+          status: "success",
+          fixturesSeen: 3,
+          matchesUpserted: 3,
+          matchesCreated: 0,
+          snapshotsWritten: 9,
+          snapshotsSkipped: 0,
+          resultsUpdated: 0,
+          resultsPending: 0,
+          problems: [],
+          latencyMs: 10,
+          payloadBytes: 100,
+          trigger: "scheduled",
+          retry: { attempted: 0, recovered: 0, stillMissing: 0, refs: [] },
+        };
+      },
+    });
+
+    assertEqual(report.mode, "collect_only");
+    assertEqual(report.status, "success");
+    assertEqual(report.collect.executed, true);
+    assertEqual(report.detection.executed, false);
+    assertEqual(report.closing.executed, false);
+    assertEqual(report.notifications.executed, false);
+    assertEqual(received.withResults, false);
+    assertEqual(received.retryNotReached, false);
+    assertEqual(
+      (received.fixtureFetchLimits as { budgetMs?: number } | undefined)?.budgetMs,
+      120_000,
+    );
+
+    const [row] = await db
+      .select()
+      .from(collectorRuns)
+      .where(eq(collectorRuns.id, report.runId));
+    assert(row.finishedAt !== null, "il fallback deve chiudere finished_at");
+    assertEqual((row.meta as { mode?: string } | null)?.mode, "collect_only");
+
+    const fullCycle = await readLastCycle();
+    assertEqual(
+      fullCycle?.at,
+      previousFullAt,
+      "il fallback non deve far saltare il prossimo ciclo completo di Actions",
+    );
+    const collection = await readLastCollection();
+    assert(collection !== null, "il fallback concluso deve avanzare il gate della fonte");
+    assertEqual(collection!.mode, "collect_only");
+    assertEqual(collection!.snapshotsWritten, 9);
+    assertEqual(collection!.collectionExecuted, true);
+  });
+
+  await test("un full senza nuova raccolta avanza solo l'heartbeat Actions", async () => {
+    const collectionBefore = await readLastCollection();
+    assert(collectionBefore !== null, "manca la raccolta preparata dal test precedente");
+
+    const report = await runCycle({
+      skipCollect: true,
+      trigger: "scheduled",
+      matchIds: [fullMkt.matchId],
+    });
+    assertEqual(report.mode, "full");
+    assertEqual(report.collect.executed, false);
+    assertEqual(report.detection.executed, true);
+    assertEqual(report.closing.executed, true);
+
+    const fullCycle = await readLastCycle();
+    assertEqual(fullCycle?.mode, "full");
+    assertEqual(fullCycle?.collectionExecuted, false);
+    const collectionAfter = await readLastCollection();
+    assertEqual(collectionAfter?.at, collectionBefore!.at);
+    assertEqual(collectionAfter?.mode, "collect_only");
+  });
+
+  await test("la profondità esclude collector non conclusi", async () => {
+    const coverage = { football: 1, imported: 1, lost: 0, coverage: 1 };
+    const inserted = await db
+      .insert(collectorRuns)
+      .values([
+        {
+          collectorKey: COLLECTOR_KEY,
+          startedAt: new Date("2099-01-01T00:00:00.000Z"),
+          finishedAt: new Date("2099-01-01T00:00:01.000Z"),
+          status: "success",
+          meta: { trigger: "scheduled", coverage },
+        },
+        {
+          collectorKey: COLLECTOR_KEY,
+          startedAt: new Date("2099-01-01T00:01:00.000Z"),
+          status: "running",
+          meta: { trigger: "scheduled", coverage },
+        },
+      ])
+      .returning({ id: collectorRuns.id, finishedAt: collectorRuns.finishedAt });
+    const closedId = inserted.find((row) => row.finishedAt !== null)?.id;
+    const openId = inserted.find((row) => row.finishedAt === null)?.id;
+    assert(closedId !== undefined && openId !== undefined, "fixture run non create");
+
+    try {
+      const history = await getCoverageHistory(2, new Date("2099-01-01T00:02:00.000Z"));
+      assert(
+        history.points.some((point) => point.runId === closedId),
+        "la raccolta conclusa deve entrare nella serie",
+      );
+      assert(
+        !history.points.some((point) => point.runId === openId),
+        "la raccolta ancora aperta non deve entrare nella serie",
+      );
+      assertEqual(history.lastScheduledRun?.runId, closedId);
+    } finally {
+      await db
+        .delete(collectorRuns)
+        .where(inArray(collectorRuns.id, inserted.map((row) => row.id)));
+    }
   });
 
   await test("lo stato dell'ultimo giro è persistito e rileggibile", async () => {
@@ -838,6 +1016,7 @@ async function main(): Promise<void> {
        chiusure il gate lasciava passare ogni battuta: era così che la fonte
        veniva raccolta ogni quarto d'ora invece che ogni 45 minuti. */
     await writeLastCycle(esito(minutiFa(46).toISOString()));
+    await writeLastCollection(esito(minutiFa(46).toISOString()));
     await writeCycleClaim(minutiFa(15));
 
     const moment = await readGateMoment();
@@ -849,11 +1028,12 @@ async function main(): Promise<void> {
     );
     assertEqual(shouldRunNow(moment, now, interval, false).run, false);
 
-    /* Un giro che si chiude come si deve scrive lo stesso istante su entrambe
-       le chiavi: la cadenza dichiarata non si allunga di un minuto. */
+    /* Una raccolta che si chiude scrive lo stesso istante su stato dedicato
+       e claim: la cadenza dichiarata non si allunga di un minuto. */
     await db.delete(systemState).where(eq(systemState.key, CYCLE_CLAIM_KEY));
     const at = minutiFa(46);
     await writeLastCycle(esito(at.toISOString()));
+    await writeLastCollection(esito(at.toISOString()));
     await writeCycleClaim(at);
     assertEqual(shouldRunNow(await readGateMoment(), now, interval, false).run, true);
   });

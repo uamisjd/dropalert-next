@@ -46,6 +46,24 @@ export default function MetodologiaPage() {
 
       <section className="mt-5">
         <h2 className="mb-1.5 text-sm font-semibold text-slate-900">
+          Copertura e giri automatici
+        </h2>
+        <p className="text-sm leading-relaxed text-slate-700">
+          La profondità pubblicata in{" "}
+          <Link href="/coverage" className="font-semibold text-cyan-700 hover:underline">
+            copertura
+          </Link>{" "}
+          conta soltanto raccolte automatiche concluse e distanziate dal gate.
+          Misura quante righe della fonte sono state viste e importate: per
+          questo una raccolta conclusa dalla seconda gamba conta anche quando
+          analisi e chiusure restano al giro completo di GitHub Actions. Un
+          collector ancora aperto non entra nella serie, e i giri chiesti a
+          mano restano fuori dalla soglia di profondità.
+        </p>
+      </section>
+
+      <section className="mt-5">
+        <h2 className="mb-1.5 text-sm font-semibold text-slate-900">
           L&apos;indice di fiducia
         </h2>
         <p className="text-sm leading-relaxed text-slate-700">

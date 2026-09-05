@@ -430,6 +430,38 @@ async function main(): Promise<void> {
     }
   });
 
+  await test("il chiamante può solo stringere il tetto di dettaglio", async () => {
+    const p = createBetexplorerProvider({
+      enabled: true,
+      fetchImpl: routedFetch("2026-08-18T22:00:00+02:00"),
+      detailRowCap: 6,
+    });
+    const res = await p.fetchFixtures(WIDE_WINDOW, { maxRows: 2 });
+    assert(res.ok, "la chiamata riesce");
+    if (!res.ok) return;
+    assertEqual(res.data.length, 2, "il limite della singola chiamata vince");
+    assertEqual(res.partial, true);
+    if (res.partial) {
+      assertEqual(
+        res.missing.filter((m) => m.includes("[dettaglio-non-visitato]")).length,
+        4,
+      );
+    }
+  });
+
+  await test("il chiamante può riservare tempo alla chiusura del proprio run", async () => {
+    const p = createBetexplorerProvider({
+      enabled: true,
+      fetchImpl: routedFetch("2026-08-18T22:00:00+02:00"),
+      detailBudgetMs: 300_000,
+    });
+    const res = await p.fetchFixtures(WIDE_WINDOW, { budgetMs: -1 });
+    assert(res.ok, "la chiamata riesce");
+    if (!res.ok) return;
+    assertEqual(res.data.length, 0, "il budget per chiamata è più stretto");
+    assertEqual(res.partial, true);
+  });
+
   await test("a budget esaurito niente si visita e tutto è dichiarato", async () => {
     const p = createBetexplorerProvider({
       enabled: true,

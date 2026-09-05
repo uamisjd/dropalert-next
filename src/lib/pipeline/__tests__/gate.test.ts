@@ -10,6 +10,11 @@
  * Eseguire con: npm run test:gate
  */
 import { latestRunMoment, shouldRunNow } from "../scheduler";
+import {
+  ABANDONED_RUN_AFTER_MINUTES,
+  publicRunStatus,
+  resolveRunStatus,
+} from "../run-status";
 
 let passed = 0;
 const failures: string[] = [];
@@ -128,6 +133,29 @@ check(
   ),
 );
 passed += 1;
+
+/* --- stato pubblico: un timeout non resta «in corso» per sempre --- */
+eq(
+  "running alla soglia esatta: resta in corso",
+  resolveRunStatus("running", ABANDONED_RUN_AFTER_MINUTES),
+  "running",
+);
+eq(
+  "running oltre soglia: diventa troncato in lettura",
+  resolveRunStatus("running", ABANDONED_RUN_AFTER_MINUTES + 0.1),
+  "aborted",
+);
+eq("uno stato chiuso resta intatto", resolveRunStatus("partial", 999), "partial");
+eq(
+  "l'API usa gli istanti per riconoscere il run troncato",
+  publicRunStatus("running", minutiFa(20), now),
+  "aborted",
+);
+eq(
+  "un orologio anticipato non produce un'età negativa",
+  publicRunStatus("running", new Date(now.getTime() + 60_000), now),
+  "running",
+);
 
 if (failures.length > 0) {
   console.error(`✗ ${failures.length} test falliti su ${passed + failures.length}`);

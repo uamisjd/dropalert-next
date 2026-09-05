@@ -5,8 +5,11 @@ qualcuno glielo chiedeva: da riga di comando, dal pulsante, via HTTP. La
 ripetizione nel tempo era delegata a uno scheduler esterno, e finché non se
 ne configurava uno la serie storica non avanzava mai da sola.
 
-Adesso la ripetizione è **una funzione del prodotto**: un runner in-process
-che sveglia `runCycle()` a intervallo fisso finché l'applicazione è viva.
+Su un host persistente la ripetizione è **una funzione del prodotto**: un
+runner in-process sveglia `runCycle()` a intervallo fisso finché l'applicazione
+è viva. In produzione serverless quel runner è volutamente spento: Actions e
+la seconda gamba descritta in §12 svolgono lo stesso compito senza fingere che
+un processo Vercel sopravviva fra le richieste.
 
 > Questo documento sostituisce la versione che dichiarava «nessun demone,
 > nessun `setInterval`». Quell'affermazione non è più vera ed è stata
@@ -89,8 +92,9 @@ Un valore illeggibile (`COLLECT_INTERVAL_MINUTES=presto`) **non spegne lo
 scheduler**: torna al default e lo dichiara in `config.source = "default"`.
 
 **Il timer propone, il gate dispone.** Ogni sveglia chiama `runCycle`, che
-rilegge `shouldRunNow()` contro `system_state['scheduler:last_cycle']`. Un
-giro manuale appena effettuato, due processi partiti per errore o un retry
+rilegge `shouldRunNow()` contro l'ultima raccolta conclusa
+(`scheduler:last_collection`, con fallback legacy) e l'ultimo claim. Un giro
+manuale appena effettuato, due processi partiti per errore o un retry
 non si traducono in traffico aggiuntivo verso la fonte: il gate risponde
 `run = false`, la raccolta viene saltata e si passa ad analisi e chiusura,
 che sono operazioni locali sul database.
@@ -248,7 +252,9 @@ Gli stessi campi sono in `GET /api/coverage`, sotto `scheduler` e dentro
 | Chiave | Contenuto |
 |---|---|
 | `system_state['scheduler:loop']` | `LoopState{running, intervalMinutes, startedAt, lastTickAt, nextRunAt, cyclesCompleted, lastStatus}` |
-| `system_state['scheduler:last_cycle']` | istante dell'ultima raccolta **effettiva**: è su questo che si regge il gate |
+| `system_state['scheduler:last_cycle']` | ultimo ciclo **full** concluso; il pre-gate Actions lo usa per non reinstallare inutilmente |
+| `system_state['scheduler:last_collection']` | ultima raccolta conclusa, full o collect-only; insieme al claim regola la pressione sulla fonte |
+| `system_state['scheduler:cycle_claim']` | ultimo tentativo verso la fonte, anche se il processo viene interrotto |
 | `collector_runs` | una riga per giro, con `meta.coverage`, `meta.trigger`, `meta.retry` |
 | `source_health` | latenza, stato della fonte, `blocked` dopo 3 errori consecutivi |
 | `data_gaps` | ogni buco dichiarato, mai colmato con stime |
@@ -279,14 +285,13 @@ utile per verificare l'intervallo reale senza eseguire nulla.
 
 ---
 
-## 9. Scheduler esterni: perché non servono più
+## 9. Scheduler esterni su un host persistente
 
-`.github/workflows/collect.yml` resta nel repository ma **non è il
-meccanismo in uso** e non va considerato la risposta alla domanda «come parte
-lo scheduler». Se il progetto finisse su GitHub con quel workflow attivo,
-girerebbe *in aggiunta* al runner in-process; il gate dell'intervallo
-impedirebbe il doppio carico sulla fonte, ma la cosa pulita è tenerne acceso
-uno solo.
+Quando l'app gira su un host persistente, il runner in-process è sufficiente e
+un secondo scheduler sarebbe ridondante. Il gate impedirebbe comunque il
+doppio carico sulla fonte. **Questa non è la topologia Production:** su Vercel
+il runner è spento e `.github/workflows/collect.yml` è il meccanismo principale,
+affiancato dalla rotta collect-only; configurazione e motivazione sono in §12.
 
 Limiti che avevano motivato l'abbandono degli scheduler esterni, tutti
 verificati e tutti ancora veri:
@@ -350,13 +355,13 @@ Nei log del server, una riga per giro:
 
 ## 11. Test
 
-`npm run test:scheduler` — 26 casi, parti pure soltanto: nessun timer acceso,
-nessuna scrittura in archivio. Coprono intervallo e clamp, lettura
-dell'ambiente e fallback dichiarato, interruttore, gate (incluso «un giro
-manuale appena fatto ferma il giro schedulato»), conto alla rovescia e
-credibilità dello stato (`schedulerHealth`: spento, vivo, silenzio oltre due
-intervalli, processo morto che non resta «in esecuzione», soglia esatta a
-90 minuti, istanti illeggibili).
+`npm run test:scheduler` — parti pure soltanto: nessun timer acceso, nessuna
+scrittura in archivio. Copre intervallo e clamp, profilo serverless (niente
+risultati/retry, tetto 15 righe e 120 s), interruttore, gate, conto alla
+rovescia e credibilità dello stato. `npm run test:pipeline`, eseguito anche da
+`test:all` su PostgreSQL di servizio, verifica inoltre che il profilo
+`collect_only` chiuda `finished_at`, non esegua analisi/chiusure, aggiorni il
+gate della fonte con `mode = "collect_only"` e non avanzi l'heartbeat full.
 
 Il secondo tentativo e il conteggio per origine sono in
 `npm run test:coverage`; le varianti della riga sullo stato del runner e
@@ -365,15 +370,16 @@ della riga della raccolta via GitHub Actions — incluso l'avviso oltre i
 
 ---
 
-## 8. Produzione (dal 19/08/2026)
+## 12. Produzione (dal 19/08/2026)
 
 Tre pezzi gratuiti, ognuno per ciò che sa fare:
 
 | Pezzo | Ruolo | Perché |
 |---|---|---|
-| Vercel Hobby | serve le pagine | il piano gratuito consente **un solo cron al giorno**: inadatto a 45 minuti |
-| GitHub Actions | esegue la raccolta | cron ogni 45 min, scrive direttamente su Neon |
-| Neon free | PostgreSQL | nessuna carta, nessuna scadenza |
+| Vercel Hobby | serve le pagine e ospita la rotta di fallback | ogni funzione ha un tetto di 300 s |
+| GitHub Actions | esegue il giro completo | raccolta, analisi, chiusure e notifiche; scrive su Neon |
+| Scheduler esterno | bussa a `/api/cron/collect` ogni 15 min | seconda gamba; il gate lascia passare al massimo una raccolta ogni 45 min |
+| Neon free | PostgreSQL | archivio condiviso dai due runner |
 
 **Il runner interno è spento in produzione** (`SCHEDULER_ENABLED=false`). Su
 Vercel il processo non sopravvive fra due richieste: un loop in-process
@@ -398,25 +404,70 @@ scarta i giri troppo ravvicinati.
 
 ### Il gate rispetta il tentativo, non solo la chiusura
 
-Il gate legge `scheduler:last_cycle`, che `runCycle` scrive **a giro chiuso**.
-Se il giro non si chiude mai — è ciò che accade alla seconda gamba quando il
-budget del chiamante (300 s su Vercel) è più corto del giro (~430 s misurati)
-— il registro non avanza e ogni battuta successiva è libera di raccogliere:
-il 05/09/2026 la fonte è stata raccolta alle 12:15, 12:30 e 12:45 (ora
-italiana) con intervallo reale di 15 minuti invece di 45, ~11 richieste in più
-a ogni quarto d'ora. Per questo `runCycle` marca anche un **tentativo**
-(`scheduler:cycle_claim`) *prima* di toccare la fonte, e il gate — sia nel
-codice sia nell'uscita anticipata di `/api/cron/collect` — rispetta il più
-recente dei due istanti. Un giro chiuso regolarmente scrive lo stesso istante
-su entrambe le chiavi, quindi la cadenza dichiarata non si allunga di un
-minuto: cambia solo che un giro interrotto non vale più come un permesso.
+Il gate della fonte legge `scheduler:last_collection`, scritto a raccolta
+chiusa. Se il processo non si chiude mai — era ciò che accadeva alla seconda
+gamba quando tentava il giro completo da ~430 s dentro i 300 s di Vercel — il
+registro non avanza e ogni battuta successiva sarebbe libera di raccogliere:
+il 05/09/2026 la fonte è stata interrogata alle 12:15, 12:30 e 12:45 (ora
+italiana), cioè ogni quarto d'ora. Per questo `runCycle` marca anche un
+**tentativo** (`scheduler:cycle_claim`) *prima* di toccare la fonte, e il gate
+rispetta il più recente fra raccolta conclusa e claim. Una raccolta conclusa
+scrive lo stesso istante su stato e claim; un'interruzione non diventa un
+nuovo permesso.
+
+`scheduler:last_cycle` ha invece un compito separato: è l'heartbeat del ciclo
+**full** letto dal pre-gate di Actions. Il collect-only non lo aggiorna. Se lo
+facesse, uno scheduler esterno puntuale potrebbe far saltare ogni run Actions
+e lasciare per sempre ferme analisi, chiusure e notifiche. Un full aggiorna
+questo heartbeat anche quando salta la rete perché una raccolta è recente: le
+sue fasi locali sono state davvero eseguite.
+
+### La seconda gamba chiude entro i 300 secondi
+
+`/api/cron/collect` non chiama più il giro completo. Usa
+`runCycle({ mode: "collect_only" })`: raccoglie fixture e quote, poi chiude la
+riga `scheduler-cycle` e aggiorna `scheduler:last_collection`. Analisi,
+chiusure, notifiche, risultati e il retry da 60 secondi restano al giro completo
+di GitHub Actions; il suo heartbeat `scheduler:last_cycle` non viene toccato.
+
+Il profilo non si limita a sperare di essere più veloce: stringe la fase di
+dettaglio a **15 righe e 120 secondi**. Dei 300 secondi della funzione ne
+restano quindi almeno 180 per rate limiter delle quote, scritture e
+finalizzazione. Le righe non visitate sono etichettate
+`dettaglio-non-visitato`; non spariscono e non diventano dati stimati. Un
+parziale composto **solo** da limiti nostri resta parziale nel report di
+copertura, ma non degrada `source_health`: lo stato della fonte deve reagire a
+errori della fonte, non alla deadline scelta dal chiamante. L'esito espone
+`mode`, `collectionPolicy` e i flag `executed` delle
+fasi, così uno zero di analisi non può essere scambiato per un'analisi fatta.
+
+Il registro del tentativo resta necessario come ultima difesa se la funzione
+viene terminata prima della propria chiusura. In condizioni normali, però,
+`lastCycleAt` (ultima raccolta) e `lastClaimAt` coincidono e
+`/api/cron/status` espone `lastCycleMode: "collect_only"` con
+`lastCycleTruncated: false`; `lastFullCycleAt` resta l'orologio separato di
+Actions.
+
+### Il full non serializza centinaia di partite
+
+Il run Actions del 05/09 alle 15:00 italiane è arrivato al tetto di 10 minuti
+senza aver interrogato la fonte: i segnali avanzavano, ma la scansione di tutte
+le partite era seriale. `detectAll` usa quindi quattro worker indipendenti,
+contro un pool PostgreSQL da dieci connessioni. Ogni partita è assegnata una
+sola volta e il report viene ricomposto nell'ordine originale: si riduce la
+latenza di rete del DB senza cambiare conteggi, regole o perimetro.
 
 ### Cosa conta per la serie N/10
 
-Solo `meta.trigger = "scheduled"`. `triggerOfRun` tratta ogni altro valore come
-`manual`. Il workflow passa `npm run job:collect -- --scheduled`: senza quel
-flag i giri del cron sarebbero contati come manuali e la serie resterebbe a
-zero per sempre.
+Solo una riga `betexplorer-collect` **conclusa** e con
+`meta.trigger = "scheduled"`. `triggerOfRun` tratta ogni altro valore come
+`manual`; la query esclude esplicitamente `finished_at is null`. Il workflow
+passa `npm run job:collect -- --scheduled`, mentre la seconda gamba passa lo
+stesso trigger al profilo `collect_only`: entrambe sono osservazioni temporali
+valide della copertura perché il collector ha finito di misurare righe viste e
+importate. Che analisi e chiusure siano fasi separate non cambia quella
+misura. Senza il trigger, invece, i giri sarebbero manuali e non farebbero
+profondità.
 
 ### Due trappole già pagate
 

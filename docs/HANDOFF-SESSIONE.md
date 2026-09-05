@@ -3,8 +3,12 @@
 > Documento di continuità fra sessioni di lavoro. Ultimo aggiornamento: 2026-09-05.
 > PR #11 (ramo `arena/01a0707a-dropalert-next` → `main`): MERGIATA.
 > PR #12 (ramo `arena/01a07101-dropalert-next` → `main`): MERGIATA su richiesta
-> dell'utente in questa sessione — è il fix descritto in §8, e il piano per
-> ripartire è in §9. Gli orari di questo
+> dell'utente in questa sessione — è il primo fix descritto in §8.
+> PR #13 (ramo `arena/01a0717b-dropalert-next` → `main`): merge autorizzato
+> dall'utente il 05.09; contiene profilo collect-only, diagnostica health,
+> separazione dei due heartbeat e scansione concorrente descritti in §8–§9.
+> Stato canonico: `https://github.com/uamisjd/dropalert-next/pull/13`.
+> Gli orari di questo
 > documento sono in UTC quando hanno la `Z`; le pagine del sito li mostrano in
 > ora italiana (estate = UTC+2) — non confondere i due, il «giro delle 10:22»
 > è le 12:22 a Napoli.
@@ -64,6 +68,8 @@ niente link a bookmaker, niente stime spacciate per dati.
 
 ## 5. Istruzioni per la prossima sessione (in ordine)
 
+> ⚠ questo elenco è del 05.09 mattina ed è in parte superato: i punti 1 e 2 sono eseguiti (esito in §8) e il punto 2 (RPM 12→8) non va eseguito d'ufficio, vedi §9.4.
+
 1. **Post-merge (subito)**: deploy Production verde? Prossimi 2–3 run
    `Osservazione DropAlert` in `success` (non `cancelled`)? `/coverage` con
    giri recenti? `/api/health` raggiungibile? Comando:
@@ -90,16 +96,18 @@ niente link a bookmaker, niente stime spacciate per dati.
 - `npm run test:all` (exit 0 = tutto verde) · `npx tsc --noEmit` ·
   `npm run build` · singole suite: `test:client test:feed test:filters
   test:quant test:tools test:betexplorer test:coverage test:view ...`
--_countingultura di lavoro_: un edit per file alla volta + `grep` di
+- Cultura di lavoro: un edit per file alla volta + `grep` di
   riverifica (edit multipli sullo stesso file possono perdersi); commenti in
   italiano; stati onesti mai zeri di ripiego; test per ogni fix UI in
   `src/components/__tests__/tools.test.tsx` (jsdom; c'è lo shim di `self`).
 
 ## 7. URL e riferimenti
 
-- Produzione: deployment `dropalert-next-i31uaax6b-sima14.vercel.app`
-  (l'alias/canonical sta in `SITE_URL` / `NEXT_PUBLIC_SITE_URL`).
-- PR #11: `https://github.com/uamisjd/dropalert-next/pull/11`.
+- Produzione: alias canonico `https://dropalert-next.vercel.app`; il deploy di
+  #12 verificato è `dropalert-next-69uclcngb-sima14.vercel.app`. Non usare il
+  vecchio URL `i31uaax6b`: è un deployment immutabile precedente al fix.
+- PR #11: `https://github.com/uamisjd/dropalert-next/pull/11`; PR #13:
+  `https://github.com/uamisjd/dropalert-next/pull/13`.
 - Workflow: `Osservazione DropAlert` (.github/workflows/collect.yml),
   `Verifica`, `Verifica dati reali (manuale)`.
 - Doc di metodo: `docs/STUDIO-VALUE-BETS.md`, `docs/STUDIO-PARTITE-FINITE.md`,
@@ -144,8 +152,9 @@ l'opposto; (d) `clvRecords` fermo: analisi e chiusure le fa solo chi arriva in f
    occasioni; ora il test legge il cron **dal file**, quindi la copia non può più
    invecchiare in silenzio. `RUNNER_NOTE` dice anche della seconda gamba esterna e
    punta a `/api/cron/status`.
-4. `scripts/gate-check.sh` (non cablato nel workflow) allineato alla stessa regola;
-   `docs/SCHEDULING.md` aggiornato con la sezione «Il gate rispetta il tentativo».
+4. In #12 `scripts/gate-check.sh` (non cablato) rispettava anche il claim;
+   #13 lo riallinea all'heartbeat **full** per evitare starvation di Actions,
+   mentre il gate della fonte continua a rispettare il tentativo.
 
 **Baseline registrata alle 13:13 (ora italiana), prima del merge**: fonte passata
 da `ok` a **`degraded`** in ~40 minuti (latenza media 151 → 426 ms, circuito
@@ -160,74 +169,177 @@ fuori cadenza, `lastPingSkipped: true` e `gate.minutesUntilNextRun > 0`; a regim
 (non a ogni giro, come accadeva). Un `npm run test:pipeline` su Postgres di servizio
 copre il caso «46 min chiuso + 15 min tentato ⇒ non si raccoglie».
 
-**Cosa resta aperto** non è elencato qui per non fare doppia contabilità: sta tutto
-in §9, che è il punto di ripartenza per la prossima sessione (verifica a caldo,
-profondità della serie, 300 s contro ~430 s, e le due mosse che solo l'owner può
-fare: cadenza del chiamante esterno e workflow).
+**Verifica aggiuntiva del 05.09, ore 14:13–14:33 italiane.** Il deploy corretto
+(di #12, URL `69uclcngb`, non il vecchio `i31uaax6b`) è verde. Il gate nuovo è
+vivo: ping esterni saltati e claim effettivi alle 13:30 e 14:30, quindi la fonte
+non è più stata interrogata ogni 15 minuti. Actions, invece, non ha prodotto un
+nuovo run dopo #297 delle 11:29: la verifica dei 2–3 successi resta aperta.
+Alle 14:13 la fonte era `ok`, alle 14:33 era tornata `degraded`, mentre
+`dataGaps.byReason.rate_limited` è rimasto **95** in entrambe le letture. Questa
+oscillazione è precisamente il motivo per cui non si può anticipare il verdetto
+fissato al 06.09 ore 13:30: oggi manca comunque la seconda condizione (`> 95`).
 
-## 9. Piano per la prossima sessione (in ordine, con i comandi)
+**Intervento preparato in PR #13 (da considerare live solo dopo il merge).**
 
-Stato al merge di #12: `main` porta il gate sul tentativo, il workflow di
-raccolta è intatto, nessuna soglia di pressione toccata.
+1. `/api/cron/collect` usa ora un vero profilo `collect_only`: termina dopo la
+   raccolta e lascia analisi, risultati, chiusure e notifiche al giro completo
+   di Actions. Chiude `scheduler-cycle` e aggiorna
+   `scheduler:last_collection`; il claim tiene chiuso il gate della fonte,
+   quindi non lascia più un outer-run condannato a restare `running`.
+   `scheduler:last_cycle` resta invece l'heartbeat del giro completo: separarli
+   impedisce al fallback puntuale di affamare Actions per sempre.
+2. Il profilo serverless impone 15 righe/120 s alla fase di dettaglio e disattiva
+   il retry da 60 s: dei 300 s ne restano almeno 180 per quote, DB e
+   finalizzazione. Le esclusioni restano dichiarate come nostra scelta.
+3. Un parziale dovuto soltanto a tetto/deadline nostri resta parziale nella
+   copertura ma non degrada `source_health`; errori, parse failure e 429
+   continuano invece a degradarla. Così il misuratore del §9.4 non viene falsato
+   dalla cura stessa.
+4. `/api/health` proietta una riga `running` oltre 15 minuti come `aborted`,
+   conserva anche `storedStatus` e mostra `mode`/`finishedAt`. Il DB storico non
+   viene riscritto.
+5. Decisione sulla profondità: restano validi i punti di raccolta automatica il
+   cui **collector è concluso**, anche se l'outer-cycle precedente è stato
+   troncato; la misura riguarda righe viste/importate, non analisi o CLV. Le
+   query ora escludono esplicitamente `finished_at is null`, e la metodologia
+   pubblica lo dichiara.
+6. `test:pipeline` è entrato in `test:all` ed è stato eseguito davvero su una
+   PostgreSQL effimera: 45/45 casi verdi, incluso il fallback che chiude il run,
+   non finge fasi eseguite, avanza il gate della fonte e non affama il full.
+   Anche l'intera `test:all`,
+   typecheck, lint e build compilata sono verdi.
 
-1. **Verifica a caldo (primi 30 min, dal browser o con `curl`)**
-   - `GET /api/cron/status` → `gate.lastClaimAt` deve comparire **solo dopo il
-     primo giro col codice nuovo** (prima è `null` ed è corretto, non un guasto);
-     sui ping fuori cadenza ci si aspetta `lastPingSkipped: true` con
-     `gate.minutesUntilNextRun > 0`.
-   - `GET /api/health` → `recentRuns`: nuovi `scheduler-cycle` devono risultare
-     `success`/`partial`, non `running` oltre 15 minuti; `/coverage` deve dire
-     «troncato» dove prima diceva «in corso».
-   - `gh run list --workflow "Osservazione DropAlert" --limit 5` → il punto 1
-     dell'handoff è **ancora aperto**: serve vedere 2–3 run di Actions in
-     `success` (alle 13:13 ne era arrivato uno solo post-merge, #297).
-   - Nota: `/coverage` è in ISR con `revalidate = 300` e la prima richiesta dopo
-     la scadenza riceve la copia precedente: non leggere il ritardo come gelo.
-2. **La profondità della serie va decisa, non subìta** — scelta editoriale, ora
-   che i dati ci sono. I giri troncati hanno `meta.trigger = "scheduled"` e quindi
-   fanno `scheduledPoints`: il «47 giri schedulati» in pagina include giri che non
-   hanno mai eseguito analisi e chiusure, mentre `instrument.ts:74` dichiara
-   l'opposto («la stessa fotografia ripetuta»). Se si decide di filtrare, si tocca
-   il conteggio in `src/lib/cov/instrument.ts` (sui soli giri **chiusi**) e i test
-   in `src/lib/cov/__tests__/coverage.test.ts` + `view.test.ts`. Da dichiarare anche
-   in `src/app/metodologia/page.tsx`, che è la fonte di verità pubblica.
-3. **Il nodo irrisolto: 300 s di budget contro ~430 s di giro.** Finché resta
-   così, la seconda gamba non chiuderà mai un giro e la serie dipende al 100% da
-   Actions (che ne serve 4 su 16). Tre strade, in ordine di preferibilità:
-   (a) percorso *collect-only* per la rotta Vercel, lasciando analisi e chiusure ad
-   Actions; (b) *soft deadline* dentro `runCycle`, che chiuda il run come `partial`
-   prima del tetto invece di farlo uccidere; (c) ridurre lavoro per giro
-   (`COLLECT_MAX_FIXTURES`, `COLLECT_HORIZON_HOURS`) per far stare il giro in 300 s.
-   (a) e (b) si sommano bene. Misurare prima: un giro completo è 433 s con 12
-   righe di calcio importate.
-4. **Soglie di pressione: NON toccare niente per 24 h.** Il punto 2 dell'handoff
-   (`BETEXPLORER_RPM` 12→8, `BETEXPLORER_MIN_INTERVAL_MS` 4000→6000) nasce da 429
-   osservati quando il ritmo reale era 15 minuti, non 45: ora va rivalutato a
-   gate corretto. Misuratori: `dataGaps.byReason.rate_limited` (95, fermo da giorni),
-   gli episodi 429 dichiarati in `/coverage` (154, ultimo 05:01) e
-   `sources[0].status` (`ok` / `degraded`). Se dopo 24 h a regime resta
-   `degraded`, allora si rallenta — sono variabili del workflow, non codice.
-5. **Due cose che richiedono mani umane (l'agente non può):**
-   - cablare il gate del workflow su `scripts/gate-check.sh` (oggi il passo
-     «Serve raccogliere?» ha il `psql` scritto in linea e legge solo
-     `scheduler:last_cycle`: è coerente lato fonte ma non lato minuti di runner;
-     lo script è già allineato alla regola del tentativo). Serve modificare
-     `.github/workflows/collect.yml` da interfaccia GitHub: il token dell'agente
-     non ha scope `workflow` (punto 4).
-   - decidere la cadenza dello scheduler esterno (15 min è innocuo ora; 60 min
-     fa risparmiare funzione-invocation sul piano Hobby). Non è nel repo.
-6. **Pulizia dei residui (opzionale, e con una trappola).** Le righe
-   `collector_runs` lasciate a `running` dal vecchio comportamento restano in
-   archivio per sempre; `resolveRunStatus` le etichetta «troncato» **in lettura**,
-   e va bene così: non scrivere `aborted` a mano nell'archivio, perché il codice
-   non lo produce e avremmo due verità. Se proprio si vuole ripulire, è un
-   `update collector_runs set status = 'partial'` dove `finished_at is null` — da
-   fare solo decidendo di sacrificare la prova storica del taglio.
-7. **Il test che nessuna macchina esegue.** `test:pipeline` (dove sta il test
-   «un giro tentato e non chiuso tiene chiuso il gate») non è né in `test:all` né
-   in `Verifica`: va corso almeno una volta contro una Postgres di servizio
-   (`DATABASE_URL` + `npx drizzle-kit migrate`, come fa il workflow) e solo dopo
-   aggiungerlo a `test:all` in `package.json`. Non serve toccare i workflow.
+**Verifica della preview di PR #13, ore 14:47 italiane.** `/api/health` ha
+proiettato correttamente l'outer-run orfano delle 14:30 come
+`status: "aborted"`, conservando `storedStatus: "running"` e
+`finishedAt: null`; `/api/cron/status` espone già `lastCycleMode` (correttamente
+`null` finché non gira il nuovo profilo). La fonte era `degraded`, ma
+`rate_limited` ancora **95**: anche quest'ultimo campione non autorizza il
+12→8 e non sostituisce la lettura prescritta per domani.
+
+**Nuovo campione Actions, ore 15:00–15:11 italiane.** Il run schedulato
+#33967658782 è arrivato spontaneamente ma è stato cancellato al tetto di 10
+minuti: quindi non vale come secondo successo. Non ha scritto nuove quote né
+aggiornato la fonte, mentre i segnali sono avanzati durante il run: evidenza
+coerente con la lunga scansione DB seriale, non con pressione BetExplorer. PR
+#13 esegue ora `detectAll` con quattro worker indipendenti (pool DB da dieci),
+con ordine del report conservato e test esplicito sul tetto di concorrenza.
+Va verificata la durata del primo full dopo il merge; il fallimento live non
+viene trasformato retroattivamente in successo.
+
+**Cosa resta aperto:** il solo esito temporale del §9.4, i 2–3 run spontanei di
+Actions e le operazioni esterne al repository. Il lavoro di codice sui 300 s,
+sulla profondità e sul test di pipeline è svolto in questa sessione.
+
+## 9. Stato e ripartenza della prossima sessione
+
+Stato sul ramo della sessione: il lavoro tecnico verificabile dei vecchi punti
+2, 3 e 7 è completato; il workflow Actions resta intatto e completo, e nessuna
+soglia di pressione è stata toccata. Restano i controlli che richiedono il nuovo
+deploy o il trascorrere della finestra temporale.
+
+### Istruzioni vincolanti per il nuovo agente dopo il merge di #13
+
+Eseguire questa checklist in ordine e riportare gli esiti in §8 con timestamp in
+ora italiana. Non confondere un check CI, una raccolta Vercel e un ciclo Actions:
+sono tre prove diverse.
+
+1. **Confermare merge e deploy del commit di #13.** Usare
+   `gh pr view 13 --json state,mergedAt,mergeCommit,url`, poi controllare che
+   `Verifica` su `main` e il deploy Production Vercel siano verdi. Verificare il
+   sito tramite l'alias canonico `https://dropalert-next.vercel.app`, non tramite
+   vecchi deployment immutabili.
+2. **Verificare il primo fallback realmente ammesso dal gate.** Non basta un ping
+   saltato. Dopo un `lastPingSkipped: false`, `/api/cron/status` deve mostrare
+   `lastCycleMode: "collect_only"`, `lastCollectionAt` recente,
+   `lastCycleTruncated: false` e `lastFullCycleAt` invariato fino al successivo
+   Actions. In `/api/health` il relativo `scheduler-cycle` deve avere
+   `finishedAt` valorizzato entro 300 s, con `mode: "collect_only"`; nella
+   risposta della rotta o nel `meta` del run, analisi, chiusure e notifiche
+   devono risultare `executed: false`, non zeri spacciati per lavoro svolto.
+3. **Verificare il full Actions corretto, senza lanciarlo manualmente per
+   sostituire la prova.** Servono 2–3 run schedulati spontanei consecutivi in
+   `success`, ciascuno sotto i 10 minuti. Il run deve essere `mode: "full"`,
+   avanzare `lastFullCycleAt` ed eseguire analisi/chiusure/notifiche anche quando
+   il gate salta una raccolta recente. Il run 33967658782 del 05.09 è
+   `cancelled` e non conta. Se un nuovo run scade ancora, individuare dai log la
+   fase lenta e annotare il fallimento: non promuoverlo a successo e non
+   trasformare Actions in collect-only.
+4. **Controllare la diagnostica degli orfani.** In `/api/health`, ogni stato DB
+   `running` vecchio di oltre 15 minuti deve essere esposto come
+   `status: "aborted"`, con `storedStatus: "running"` e `finishedAt: null`. Non
+   aggiornare manualmente quelle righe: sono prova storica del timeout.
+5. **Applicare il gate RPM una sola volta, non prima del 06.09.2026 ore 13:30
+   italiane.** Nello stesso campione registrare `sources[0].status` e
+   `dataGaps.byReason.rate_limited`. Rallentare 12→8 soltanto se lo stato è
+   ancora `degraded` **AND** il contatore è `> 95`. Se manca una delle due
+   condizioni, non cambiare alcuna variabile e scrivere in §8 esattamente
+   **«valutata e respinta»**. I campioni precedenti, fermi a 95, non autorizzano
+   una decisione anticipata.
+6. **Non modificare `.github/workflows/collect.yml` durante questa verifica.**
+   Actions deve restare il ciclo completo; il fallback deve restare
+   collect-only. Non cablare `scripts/gate-check.sh` e non cambiare cadenze o
+   limiti finché i campioni sopra non indicano un problema specifico.
+
+### Dettaglio tecnico di riferimento
+
+1. **Verifica a caldo dopo il prossimo deploy (primi 30 min).**
+   - `GET /api/cron/status` → un giro esterno concluso deve avere
+     `lastCycleMode: "collect_only"`, `lastCollectionAt` valorizzato,
+     `lastPingSkipped: false` e outer-run chiuso; `lastFullCycleAt` deve avanzare
+     solo col giro Actions. I ping fuori cadenza restano `lastPingSkipped: true`.
+   - `GET /api/health` → `recentRuns`: nessun `scheduler-cycle` deve essere
+     presentato come `running` oltre 15 minuti; per i vecchi orfani ci si aspetta
+     `status: "aborted"` e `storedStatus: "running"`.
+   - `gh run list --workflow "Osservazione DropAlert" --limit 5` → resta da
+     vedere 2–3 run spontanei di Actions in `success`; devono avere modalità
+     `full`, con analisi/chiusure/notifiche eseguite.
+   - `/coverage` è in ISR con `revalidate = 300`: la prima richiesta dopo la
+     scadenza può ancora ricevere la copia precedente.
+2. **Profondità della serie — DECISA E IMPLEMENTATA.** Conta ogni raccolta
+   schedulata il cui provider-run è realmente concluso (`finished_at is not
+   null`), anche se il vecchio outer-cycle è stato poi troncato: la fotografia
+   ripetuta è quella della fonte, non l'analisi. Un run ancora aperto non conta.
+   `coverage-history.ts`, i test e `/metodologia` sono allineati; non cambiare
+   `instrument.ts` per filtrare in base al successo dell'outer-cycle.
+3. **Budget 300 s — RISOLTO SUL RAMO.** La rotta Vercel usa `collect_only`,
+   massimo 15 dettagli e 120 s di dettaglio, senza retry; finalizza outer-run e
+   gate e non esegue le fasi complete. Actions continua a chiamare `runCycle`
+   senza override e quindi resta `full`. Dopo il deploy verificare la durata
+   reale, ma non ridurre ulteriormente `COLLECT_MAX_FIXTURES` o orizzonte senza
+   una nuova misura.
+4. **Soglie di pressione: NON toccare niente prima del 06.09.2026 alle 13:30
+   (ora italiana).** Il punto 2 dell'handoff (`BETEXPLORER_RPM` 12→8,
+   `BETEXPLORER_MIN_INTERVAL_MS` 4000→6000) nasce da 429 osservati quando il ritmo
+   reale era 15 minuti, non 45: ora va rivalutato a gate corretto. Misuratori:
+   `dataGaps.byReason.rate_limited` (baseline 95, ferma da giorni), gli episodi 429
+   dichiarati in `/coverage` (154, ultimo 05:01) e `sources[0].status` (`ok` /
+   `degraded`). La finestra di 24 h scade il **06.09.2026 alle 13:30 (ora
+   italiana)**. A quell'ora il rallentamento si fa **solo se entrambe** queste
+   condizioni sono vere: `sources[0].status` è ancora `degraded` **e**
+   `dataGaps.byReason.rate_limited` è salito sopra 95 (`> 95`). In tal caso si
+   applica il 12→8 (o 4000→6000): sono variabili del workflow, non codice. Se
+   anche una sola condizione non è soddisfatta, non si modifica nulla e si
+   riporta l'esito in §8 come **«valutata e respinta»**.
+5. **Operazioni esterne residue.**
+   - Non trasformare Actions in collect-only: `.github/workflows/collect.yml`
+     deve continuare a eseguire il ciclo `full`. L'inline gate può restare:
+     legge `scheduler:last_cycle`, riservato all'ultimo full concluso, mentre il
+     fallback usa `scheduler:last_collection` + claim. `scripts/gate-check.sh`
+     è ora allineato alla stessa separazione; cablarlo resta un'ottimizzazione
+     opzionale che richiede una modifica esplicita del workflow.
+   - La cadenza dello scheduler esterno non è nel repository: 15 min è innocuo
+     per la fonte grazie al gate; 60 min riduce le sole function invocation.
+6. **Pulizia dei residui (non necessaria).** Le righe `collector_runs`
+   lasciate a `running` dal vecchio comportamento restano come prova storica;
+   `publicRunStatus` le espone come `aborted` **solo in lettura**, insieme allo
+   `storedStatus`. Non scrivere `aborted`/`partial` a mano nel DB: la proiezione
+   risolve la diagnostica senza fabbricare una chiusura mai avvenuta.
+7. **Test pipeline — RISOLTO.** Eseguito contro PostgreSQL effimera dopo le
+   migrazioni (45/45) e aggiunto a `test:all`; di conseguenza anche `Verifica`,
+   che prepara PostgreSQL 17 e lancia `test:all`, lo eseguirà. Non rimuoverlo per
+   rendere verde un ambiente locale senza DB: avviare invece PostgreSQL e usare
+   una `DATABASE_URL` esplicita.
 8. **Vincoli sempre validi**: lavorare e pushare solo sul ramo della sessione
    attiva, PR verso `main` (punto 5); mai `.github/workflows/` (punto 4); un edit
    per file + `grep` di riverifica; commenti in italiano; stati onesti, mai zeri

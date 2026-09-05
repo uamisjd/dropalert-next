@@ -64,6 +64,13 @@ export interface RunProviderCallOptions {
   breaker?: CircuitBreaker;
   /** false per non scrivere su DB (test di unità) */
   persist?: boolean;
+  /**
+   * Riconosce un parziale dovuto soltanto a limiti dichiarati del chiamante
+   * (tetto/deadline), non a un guasto della fonte. In quel caso la chiamata
+   * resta parziale nel report ma non degrada `source_health` e non apre un
+   * gap `provider_unavailable`.
+   */
+  expectedPartial?: (missing: string[]) => boolean;
 }
 
 export interface SupervisedResult<T> {
@@ -207,8 +214,14 @@ export async function runProviderCall<T>(
 
   /* `last` è sempre valorizzato: il ciclo gira almeno una volta */
   const result = last as ProviderResult<T>;
-  const outcome = outcomeOf(result);
-  const detail = describeResult(result);
+  const expectedPartial =
+    result.ok &&
+    result.partial &&
+    options.expectedPartial?.(result.missing) === true;
+  const outcome = expectedPartial ? "ok" : outcomeOf(result);
+  const detail = expectedPartial
+    ? `${describeResult(result)} — omissioni dovute soltanto al budget dichiarato del chiamante.`
+    : describeResult(result);
 
   const stats: CallStats = {
     providerKey: provider.key,
@@ -243,7 +256,7 @@ export async function runProviderCall<T>(
         reason: gapReasonFor(result.error.kind),
         detail: `${provider.label} — ${operation}: ${result.error.message}`,
       });
-    } else if (result.partial) {
+    } else if (result.partial && !expectedPartial) {
       await recordGap({
         matchId,
         reason: "provider_unavailable",

@@ -46,7 +46,11 @@ import {
 import { isStableQuote, RESULTS_LEAGUE_TTL_MIN } from "../pressure";
 import { matchKeyFor } from "./parse";
 import { num } from "@/lib/drop/math";
-import { parseExclusion, EXCLUSION_CODES } from "../exclusion-codes";
+import {
+  parseExclusion,
+  EXCLUSION_CODES,
+  onlyOwnChoiceExclusions,
+} from "../exclusion-codes";
 import {
   buildRunCoverage,
   selectRetryTargets,
@@ -55,7 +59,13 @@ import {
   type RunTrigger,
 } from "@/lib/cov/instrument";
 import { scanSourceRows } from "@/lib/cov/scan";
-import type { FixtureDTO, OddsQuoteDTO, ResultDTO } from "../types";
+import type {
+  FixtureDTO,
+  FixtureFetchLimits,
+  OddsQuoteDTO,
+  ResultDTO,
+} from "../types";
+import type { CycleMode } from "@/lib/pipeline/cycle-mode";
 
 export const COLLECTOR_KEY = "betexplorer-collect";
 
@@ -84,8 +94,12 @@ export interface CollectOptions {
    * schedulato non viene contato nella profondità della serie.
    */
   trigger?: RunTrigger;
+  /** tipo di ciclo che contiene la raccolta, salvato per l'osservabilità */
+  cycleMode?: CycleMode;
+  /** limiti più stretti per un runner con deadline; mai allargano il provider */
+  fixtureFetchLimits?: FixtureFetchLimits;
   /**
-   * true per ignorare il cooldown sui 429: soloRichiesta esplicita
+   * true per ignorare il cooldown sui 429: solo richiesta esplicita
    * dell'operatore (il --force di job:collect). Il cron non lo usa mai.
    */
   force?: boolean;
@@ -143,10 +157,16 @@ export async function collectBetexplorer(
   const withResults = options.withResults ?? true;
   const maxFixtures = options.maxFixtures ?? 25;
   const trigger: RunTrigger = options.trigger ?? "manual";
+  const cycleMode: CycleMode = options.cycleMode ?? "full";
   const retryEnabled = options.retryNotReached ?? true;
   const sleep =
     options.sleep ??
     ((ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)));
+  const collectionProfile = {
+    withResults,
+    retryNotReached: retryEnabled,
+    fixtureFetchLimits: options.fixtureFetchLimits ?? null,
+  };
 
   initProviders();
   const provider = getProvider(BETEXPLORER_KEY);
@@ -211,6 +231,8 @@ export async function collectBetexplorer(
           errors: [],
           meta: {
             trigger,
+            cycleMode,
+            collectionProfile,
             cooldown: { skipped: true, minutesLeft: cooldownLeft },
           } as Record<string, unknown>,
         },
@@ -227,7 +249,8 @@ export async function collectBetexplorer(
     const fixturesCall = await runProviderCall<FixtureDTO[]>(
       provider,
       "fetchFixtures",
-      () => provider.fetchFixtures(window),
+      () => provider.fetchFixtures(window, options.fixtureFetchLimits),
+      { expectedPartial: onlyOwnChoiceExclusions },
     );
 
     payloadBytes += fixturesCall.stats.payloadBytes;
@@ -255,7 +278,13 @@ export async function collectBetexplorer(
         stats: {
           status: "failed" as const,
           errors: [message],
-          meta: { phase: "fetchFixtures", trigger, ...fixturesCall.stats },
+          meta: {
+            phase: "fetchFixtures",
+            trigger,
+            cycleMode,
+            collectionProfile,
+            ...fixturesCall.stats,
+          },
         },
       };
     }
@@ -504,7 +533,8 @@ export async function collectBetexplorer(
         const retryCall = await runProviderCall<FixtureDTO[]>(
           provider,
           "fetchFixtures",
-          () => provider.fetchFixtures(window),
+          () => provider.fetchFixtures(window, options.fixtureFetchLimits),
+          { expectedPartial: onlyOwnChoiceExclusions },
         );
 
         payloadBytes += retryCall.stats.payloadBytes;
@@ -754,6 +784,8 @@ export async function collectBetexplorer(
           /* chi ha chiesto il giro: la profondità della serie si conta
              sui soli giri schedulati */
           trigger,
+          cycleMode,
+          collectionProfile,
           latencyMs,
           payloadBytes,
           matchesCreated,
