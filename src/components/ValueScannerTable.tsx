@@ -3,6 +3,13 @@
 import { useState, useMemo } from "react";
 import Link from "next/link";
 import type { ValueScannerResult } from "@/lib/repo/value-bets";
+import {
+  DEFAULT_SCANNER_FILTERS,
+  SHOW_ALL_EDGES,
+  applyScannerFilters,
+  describeEmptyScanner,
+  type OddsBand,
+} from "@/lib/view/scanner-filters";
 import { fmtDay, fmtTime } from "@/components/format";
 
 interface Props {
@@ -21,36 +28,27 @@ const signed = (v: number, d = 2): string =>
  * cui il monitor serve di più.
  */
 export function ValueScannerTable({ scanner }: Props) {
-  const [minEdge, setMinEdge] = useState<number>(0);
-  const [positiveOnly, setPositiveOnly] = useState<boolean>(false);
-  const [oddsRange, setOddsRange] = useState<string>("all");
+  const [minEdge, setMinEdge] = useState<number>(DEFAULT_SCANNER_FILTERS.minEdge);
+  const [positiveOnly, setPositiveOnly] = useState<boolean>(
+    DEFAULT_SCANNER_FILTERS.positiveOnly,
+  );
+  const [oddsRange, setOddsRange] = useState<OddsBand>(
+    DEFAULT_SCANNER_FILTERS.oddsRange,
+  );
   const [searchTerm, setSearchTerm] = useState<string>("");
 
   const items = scanner.opportunities;
 
-  const filtered = useMemo(() => {
-    return items.filter((item) => {
-      if (item.edgePct < minEdge) return false;
-      if (positiveOnly && item.edgePct <= 0) return false;
-
-      if (oddsRange === "low" && item.currentOdds >= 2.0) return false;
-      if (
-        oddsRange === "medium" &&
-        (item.currentOdds < 2.0 || item.currentOdds > 3.5)
-      )
-        return false;
-      if (oddsRange === "high" && item.currentOdds <= 3.5) return false;
-
-      if (searchTerm.trim() !== "") {
-        const q = searchTerm.toLowerCase();
-        const hay = `${item.homeTeam} ${item.awayTeam} ${item.league} ${item.selectionLabel}`.toLowerCase();
-        if (!hay.includes(q)) return false;
-      }
-      return true;
-    });
-  }, [items, minEdge, positiveOnly, oddsRange, searchTerm]);
+  // I filtri sono una funzione pura (`src/lib/view/scanner-filters.ts`) e sono testati
+  // lì: «Mostra tutto, anche i negativi» deve voler dire proprio quello.
+  const filters = useMemo(
+    () => ({ minEdge, positiveOnly, oddsRange, searchTerm }),
+    [minEdge, positiveOnly, oddsRange, searchTerm],
+  );
+  const filtered = useMemo(() => applyScannerFilters(items, filters), [items, filters]);
 
   const negative = filtered.filter((o) => o.edgePct <= 0).length;
+  const empty = describeEmptyScanner(items, filtered, filters);
 
   return (
     <div className="space-y-4">
@@ -66,7 +64,7 @@ export function ValueScannerTable({ scanner }: Props) {
               onChange={(e) => setMinEdge(Number(e.target.value))}
               className="mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-900 focus:border-cyan-500 focus:outline-none"
             >
-              <option value={0}>Mostra tutto, anche i negativi</option>
+              <option value={SHOW_ALL_EDGES}>Mostra tutto, anche i negativi</option>
               <option value={0.5}>Da +0,5 pp</option>
               <option value={1}>Da +1,0 pp</option>
               <option value={2}>Da +2,0 pp</option>
@@ -79,7 +77,7 @@ export function ValueScannerTable({ scanner }: Props) {
             </label>
             <select
               value={oddsRange}
-              onChange={(e) => setOddsRange(e.target.value)}
+              onChange={(e) => setOddsRange(e.target.value as OddsBand)}
               className="mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-900 focus:border-cyan-500 focus:outline-none"
             >
               <option value="all">Tutte le quote lette</option>
@@ -121,18 +119,10 @@ export function ValueScannerTable({ scanner }: Props) {
 
       {filtered.length === 0 ? (
         <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-8 text-center">
-          <p className="text-sm font-medium text-slate-700">
-            {items.length === 0
-              ? "Nessun divario calcolabile, in questo momento."
-              : "Nessuna riga passa i filtri scelti."}
-          </p>
+          <p className="text-sm font-medium text-slate-700">{empty.title}</p>
           <p className="mx-auto mt-1 max-w-xl text-xs leading-relaxed text-slate-500">
-            {items.length === 0
-              ? `Segnali letti: ${scanner.signalsRead}. Un divario si calcola solo su una ` +
-                `partita non ancora al kickoff, con la terna completa dello stesso bookmaker ` +
-                `alla stessa ora di lettura. ${scanner.dataNote}.`
-              : "Il divario negativo non è un errore della pagina: è il margine che resta " +
-                "dentro la quota. Prova ad abbassare la soglia."}
+            Segnali letti: {scanner.signalsRead}. {empty.note}
+            {items.length === 0 ? ` ${scanner.dataNote}.` : ""}
           </p>
         </div>
       ) : (

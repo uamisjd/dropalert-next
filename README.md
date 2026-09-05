@@ -165,8 +165,9 @@ npm run test:betexplorer # test dell'adapter su HTML reale congelato
 npm run test:tools       # strumenti di calcolo (margine, varianza)
 npm run test:value-lines   # come si costruisce una linea di prezzo per il divario (puro)
 npm run test:line-shape    # la forma reale delle linee 1X2, sull'HTML congelato del provider
+npm run test:filters       # i filtri di /value-bets: «mostra i negativi» non è un pavimento
 npm run test:client      # componenti in un DOM reale (jsdom + React 19)
-npm run test:all         # tutte le suite (28)
+npm run test:all         # tutte le suite (29)
 npm run job:analyze      # solo analisi + chiusura, senza rete
 npm run job:collect      # giro completo: raccolta + analisi + chiusura + notifiche
 npm run job:collect -- --force         # ignora l'intervallo minimo
