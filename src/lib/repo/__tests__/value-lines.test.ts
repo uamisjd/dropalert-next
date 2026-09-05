@@ -8,7 +8,7 @@
  * rilevate alla STESSA ora, non della più recente di ciascuna — merita di essere
  * bloccata da un test e non dalla buona volontà di chi legge il codice.
  */
-import { groupLatestLines, type LineRow } from "../value-bets";
+import { groupLatestLines, toInstant, type LineRow } from "../value-bets";
 
 let passed = 0;
 let failed = 0;
@@ -109,6 +109,21 @@ console.log("\nLinee di prezzo per il divario (`groupLatestLines`)\n");
     Object.keys(lines.get("7|btts")?.[0].prices ?? {}).length === 2,
     "la terna del mercato non contamina la coppia GG",
   );
+}
+
+// 4b — gli istanti che escono da un aggregato vanno normalizzati
+{
+  // È il difetto che ha fatto cadere la pagina su dati reali: `max(collected_at)`
+  // arriva come testo e, rimandato a Postgres come parametro, fa chiamare
+  // `.toISOString()` a una stringa.
+  const d = toInstant("2026-09-05 01:30:00+00");
+  assert(d !== null && d.toISOString() === "2026-09-05T01:30:00.000Z", "testo pg → Date");
+  assert(typeof d?.toISOString === "function", "il risultato è un Date, non una stringa");
+  const same = toInstant(new Date("2026-09-05T01:30:00.000Z"));
+  assert(same?.toISOString() === "2026-09-05T01:30:00.000Z", "Date passa invariato");
+  assert(toInstant(new Date("non-data")) === null, "Date marcio → null (riga scartata)");
+  assert(toInstant("") === null && toInstant(null) === null, "stringa vuota e null → null");
+  assert(toInstant(1_757_038_200_000)?.toISOString() === "2025-09-05T02:10:00.000Z", "epoch ms → Date");
 }
 
 // 5 — nessuna riga, nessuna linea (mai un finto "mercato completo")
