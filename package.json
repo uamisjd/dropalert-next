@@ -17,7 +17,7 @@
     "validate": "npm run typegen && npm run typecheck && npm run test && npm run build",
     "test:quant": "tsx src/lib/quant/__tests__/quant.test.ts",
     "test:pipeline": "tsx --env-file-if-exists=.env src/lib/pipeline/__tests__/pipeline.test.ts",
-    "test:all": "npm run test && npm run test:quant && npm run test:view && npm run test:value-lines && npm run test:timeline && npm run test:plain && npm run test:why && npm run test:locale && npm run test:analysis && npm run test:odds-budget && npm run test:watchlist && npm run test:feed && npm run test:calendar && npm run test:push && npm run test:gate && npm run test:providers && npm run test:betexplorer && npm run test:line-shape && npm run test:coverage && npm run test:cov-view && npm run test:scheduler && npm run test:settle && npm run test:shape && npm run test:context && npm run test:news && npm run test:backoff && npm run test:tools && npm run test:client",
+    "test:all": "npm run test && npm run test:quant && npm run test:view && npm run test:value-lines && npm run test:filters && npm run test:timeline && npm run test:plain && npm run test:why && npm run test:locale && npm run test:analysis && npm run test:odds-budget && npm run test:watchlist && npm run test:feed && npm run test:calendar && npm run test:push && npm run test:gate && npm run test:providers && npm run test:betexplorer && npm run test:line-shape && npm run test:coverage && npm run test:cov-view && npm run test:scheduler && npm run test:settle && npm run test:shape && npm run test:context && npm run test:news && npm run test:backoff && npm run test:tools && npm run test:client",
     "test:coverage": "tsx src/lib/cov/__tests__/coverage.test.ts",
     "report:coverage": "tsx --env-file=.env src/scripts/run-coverage.ts",
     "job:analyze": "tsx --env-file-if-exists=.env src/scripts/run-analyze.ts",
@@ -54,7 +54,8 @@
     "audit:finished": "tsx --env-file-if-exists=.env src/scripts/audit-finished.ts",
     "audit:value-bets": "tsx --env-file-if-exists=.env src/scripts/audit-value-bets.ts",
     "test:value-lines": "tsx src/lib/repo/__tests__/value-lines.test.ts",
-    "test:line-shape": "tsx src/lib/providers/__tests__/line-shape.test.ts"
+    "test:line-shape": "tsx src/lib/providers/__tests__/line-shape.test.ts",
+    "test:filters": "tsx src/lib/view/__tests__/scanner-filters.test.ts"
   },
   "dependencies": {
     "drizzle-orm": "^0.45.2",

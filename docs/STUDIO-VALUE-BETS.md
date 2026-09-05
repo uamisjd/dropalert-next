@@ -289,6 +289,19 @@ dichiarato) il difetto non era osservabile: solo il DB reale lo mostra. Corretto
 `toInstant()` in `src/lib/repo/value-bets.ts` (normalizza testo pg / epoch / `Date`,
 scarta ciò che non è interpretabile) + 6 asserzioni in `npm run test:value-lines`.
 
+**Secondo difetto trovato, stessa origine (nessun fixture lo vede).** La pagina, letta di
+nuovo dopo la correzione, rispondeva «Nessuna riga passa i filtri scelti» con 0 righe — ma
+i divari c'erano: erano tutti negativi, e l'opzione **«Mostra tutto, anche i negativi»
+valeva `0`** mentre il filtro scartava `edgePct < 0`. Un pavimento travestito da filtro,
+cioè esattamente la classe di difetto che §2 rimproverava al codice vecchio: la promessa
+dell'etichetta non era scritta da nessuna parte in forma verificabile. Corretto
+estrarrendo i filtri in `src/lib/view/scanner-filters.ts` (funzione pura) e bloccandola
+con `npm run test:filters` (21 asserzioni: default = tutti e tre i negativi restano,
+soglia sentinella `−∞`, e i messaggi di elenco vuoto distinguono «nessuna misura» da
+«misura filtrata via»). Il messaggio vuoto ora dice anche *quanti* divari sono stati
+esclusi e quanto valevano in media: «non c'è nulla» e «non te lo faccio vedere» non
+devono somigliarsi.
+
 **Lezione per chi toccherà queste pagine:** qualunque valore esca da una funzione SQL
 (aggregati, `case`, cast) va trattato come testo anche se il tipo dichiarato è un altro,
 e non va rimandato a Postgres senza normalizzarlo.
