@@ -288,15 +288,18 @@ function parseSharpOddsResponse(data: SharpApiMatch): SharpMatchOdds | null {
       return null;
     }
 
-    const findSelection = (sel: string) => {
+    const findSelection = (sel: string): SharpOdds | null => {
       const selection = odds1X2.selections?.find((s: SharpApiSelection) => s.name === sel || s.label === sel);
       if (!selection) return null;
+
+      const odds = selection.odds ?? selection.price;
+      if (!odds) return null;
 
       return {
         bookmaker: selection.bookmaker || "Pinnacle",
         market: "1X2",
         selection: sel,
-        odds: round(selection.odds || selection.price, 3),
+        odds: round(odds, 3),
         fairOdds: selection.fairOdds ? round(selection.fairOdds, 3) : undefined,
         trueProbability: selection.trueProbability ? round(selection.trueProbability, 4) : undefined,
         evPercent: selection.evPercent ? round(selection.evPercent, 2) : undefined,
@@ -304,12 +307,22 @@ function parseSharpOddsResponse(data: SharpApiMatch): SharpMatchOdds | null {
       };
     };
 
+    const matchId = match.id || match.matchId;
+    const homeTeam = match.homeTeam || match.home_team;
+    const awayTeam = match.awayTeam || match.away_team;
+    const league = match.league || match.competition;
+    const kickoffTime = match.kickoffAt || match.kickoff_at || match.startTime;
+
+    if (!matchId || !homeTeam || !awayTeam || !league || !kickoffTime) {
+      return null;
+    }
+
     return {
-      matchId: match.id || match.matchId,
-      homeTeam: match.homeTeam || match.home_team,
-      awayTeam: match.awayTeam || match.away_team,
-      league: match.league || match.competition,
-      kickoffAt: new Date(match.kickoffAt || match.kickoff_at || match.startTime),
+      matchId,
+      homeTeam,
+      awayTeam,
+      league,
+      kickoffAt: new Date(kickoffTime),
       odds: {
         "1": findSelection("1") || findSelection("Home"),
         X: findSelection("X") || findSelection("Draw"),

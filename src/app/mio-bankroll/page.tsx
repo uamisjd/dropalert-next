@@ -161,8 +161,21 @@ function calculateStats(bets: PersonalBet[], initialBankroll: number): BankrollS
 }
 
 export default function MioBankrollPage() {
-  const [bets, setBets] = useState<PersonalBet[]>([]);
-  const [bankroll, setBankroll] = useState(1000);
+  // Carica i dati iniziali una sola volta al mount del componente
+  const [bets, setBets] = useState<PersonalBet[]>(() => {
+    if (typeof window !== "undefined") {
+      return loadBets();
+    }
+    return [];
+  });
+
+  const [bankroll, setBankroll] = useState<number>(() => {
+    if (typeof window !== "undefined") {
+      return loadBankroll();
+    }
+    return 1000;
+  });
+
   const [showForm, setShowForm] = useState(false);
   const [showExport, setShowExport] = useState(false);
   const [filterStatus, setFilterStatus] = useState<"all" | "pending" | "won" | "lost">("all");
@@ -179,25 +192,6 @@ export default function MioBankrollPage() {
   const [formKelly, setFormKelly] = useState("");
   const [formKickoff, setFormKickoff] = useState("");
   const [formNotes, setFormNotes] = useState("");
-
-  // Carica i dati iniziali una sola volta al mount del componente
-  const [bets] = useState<PersonalBet[]>(() => {
-    if (typeof window !== "undefined") {
-      return loadBets();
-    }
-    return [];
-  });
-  const [, setBetsState] = useState(bets);
-  const setBets = (newBets: PersonalBet[]) => setBetsState(newBets);
-
-  const [bankroll] = useState<number>(() => {
-    if (typeof window !== "undefined") {
-      return loadBankroll();
-    }
-    return 1000;
-  });
-  const [, setBankrollState] = useState(bankroll);
-  const setBankroll = (newBankroll: number) => setBankrollState(newBankroll);
 
   const persistBets = useCallback((newBets: PersonalBet[]) => {
     setBets(newBets);
