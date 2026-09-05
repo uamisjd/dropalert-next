@@ -12,7 +12,7 @@
  * dalla navigazione pubblica: solo chi conosce l'URL la raggiunge.
  */
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useCallback } from "react";
 import { BankrollChart } from "@/components/BankrollChart";
 
 interface PersonalBet {
@@ -180,10 +180,24 @@ export default function MioBankrollPage() {
   const [formKickoff, setFormKickoff] = useState("");
   const [formNotes, setFormNotes] = useState("");
 
-  useEffect(() => {
-    setBets(loadBets());
-    setBankroll(loadBankroll());
-  }, []);
+  // Carica i dati iniziali una sola volta al mount del componente
+  const [bets] = useState<PersonalBet[]>(() => {
+    if (typeof window !== "undefined") {
+      return loadBets();
+    }
+    return [];
+  });
+  const [, setBetsState] = useState(bets);
+  const setBets = (newBets: PersonalBet[]) => setBetsState(newBets);
+
+  const [bankroll] = useState<number>(() => {
+    if (typeof window !== "undefined") {
+      return loadBankroll();
+    }
+    return 1000;
+  });
+  const [, setBankrollState] = useState(bankroll);
+  const setBankroll = (newBankroll: number) => setBankrollState(newBankroll);
 
   const persistBets = useCallback((newBets: PersonalBet[]) => {
     setBets(newBets);

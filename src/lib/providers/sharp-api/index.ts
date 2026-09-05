@@ -244,19 +244,52 @@ export function calculateArbitrage(
  * Parser per la risposta di SharpAPI.
  * Adatta il formato JSON dell'API alla nostra interfaccia SharpMatchOdds.
  */
-function parseSharpOddsResponse(data: any): SharpMatchOdds | null {
+interface SharpApiSelection {
+  name?: string;
+  label?: string;
+  bookmaker?: string;
+  odds?: number;
+  price?: number;
+  fairOdds?: number;
+  trueProbability?: number;
+  evPercent?: number;
+  lastUpdate?: string;
+}
+
+interface SharpApiMarket {
+  market?: string;
+  selections?: SharpApiSelection[];
+}
+
+interface SharpApiMatch {
+  id?: string;
+  matchId?: string;
+  homeTeam?: string;
+  home_team?: string;
+  awayTeam?: string;
+  away_team?: string;
+  league?: string;
+  competition?: string;
+  kickoffAt?: string;
+  kickoff_at?: string;
+  startTime?: string;
+  odds?: SharpApiMarket[];
+  match?: SharpApiMatch;
+}
+
+function parseSharpOddsResponse(data: SharpApiMatch): SharpMatchOdds | null {
   try {
     // Adatta in base al formato reale di SharpAPI
     // Questa è una struttura ipotetica, va adattata quando si vede la risposta reale
     const match = data.match || data;
 
-    const odds1X2 = match.odds?.find((o: any) => o.market === "1X2" || o.market === "moneyline");
+    const odds1X2 = match.odds?.find((o: SharpApiMarket) => o.market === "1X2" || o.market === "moneyline");
     if (!odds1X2) {
       return null;
     }
 
     const findSelection = (sel: string) => {
-      const selection = odds1X2.selections?.find((s: any) => s.name === sel || s.label === sel);
+      const selection = odds1X2.selections?.find((s: SharpApiSelection) => s.name === sel || s.label === sel);
       if (!selection) return null;
 
       return {

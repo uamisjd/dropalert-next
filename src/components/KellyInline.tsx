@@ -10,7 +10,7 @@
  * mostra quanto sarebbe la puntata ottimale SE l'edge fosse reale.
  */
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { calculateKellyStake } from "@/lib/quant/kelly";
 
 const BANKROLL_KEY = "dropalert_personal_bankroll_amount";
@@ -23,17 +23,18 @@ interface Props {
 }
 
 export function KellyInline({ offeredOdds, trueProbPct, edgePct, compact = false }: Props) {
-  const [bankroll, setBankroll] = useState<number>(1000);
-  const [editing, setEditing] = useState(false);
-
-  useEffect(() => {
-    try {
-      const stored = localStorage.getItem(BANKROLL_KEY);
-      if (stored) setBankroll(Number(stored));
-    } catch {
-      // ignore
+  const [bankroll, setBankroll] = useState<number>(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const stored = localStorage.getItem(BANKROLL_KEY);
+        if (stored) return Number(stored);
+      } catch {
+        // ignore
+      }
     }
-  }, []);
+    return 1000;
+  });
+  const [editing, setEditing] = useState(false);
 
   const saveBankroll = (value: number) => {
     setBankroll(value);
