@@ -37,10 +37,17 @@ if ! command -v psql >/dev/null 2>&1; then
   exit 0
 fi
 
-# `scheduler:last_cycle` è la stessa chiave che il codice aggiorna a fine
-# giro: leggerla non richiede lo schema, solo una riga di system_state.
+# Si legge il più recente fra i due registri che il codice tiene:
+# `scheduler:last_cycle` (giro CHIUSO) e `scheduler:cycle_claim` (giro
+# TENTATO, scritto prima di toccare la fonte). È la stessa regola di
+# `readGateMoment`: leggere solo le chiusure fa ripartire la raccolta a ogni
+# battuta del chiamante quando un giro viene interrotto prima della fine —
+# misurato il 05/09/2026: giri reali a 15 minuti invece che a 45.
+# Max su stringhe ISO-8601 in UTC = max cronologico, e un formato inattivo
+# fallisce il `date -u -d` qui sotto, che risponde `true` (si esegue).
 LAST_AT="$(psql "$DATABASE_URL" -At -c \
-  "select value->>'at' from system_state where key = 'scheduler:last_cycle' limit 1" \
+  "select max(value->>'at') from system_state \
+     where key in ('scheduler:last_cycle', 'scheduler:cycle_claim')" \
   2>/dev/null || true)"
 
 if [ -z "$LAST_AT" ]; then

@@ -23,9 +23,15 @@
  * e un giro troppo ravvicinato esce senza toccare la fonte. Le occasioni in
  * più servono contro i SALTI dello scheduler di GitHub, che è best-effort:
  * il 27/08/2026 la raccolta è rimasta ferma quasi nove ore con il workflow
- * regolarmente attivo.
+ * regolarmente attivo; il 05/09/2026 ne sono state servite 4 su 16.
+ *
+ * Il valore è una copia del workflow, e una copia può invecchiare: il test
+ * `npm run test:cov-view` lo confronta con il cron letto da
+ * `.github/workflows/collect.yml`, quindi modificare il cron senza aggiornare
+ * anche qui diventa un test rosso invece di una pagina che racconta un orario
+ * falso a chi legge.
  */
-export const ACTIONS_CRON = "7,52 * * * *";
+export const ACTIONS_CRON = "7,22,37,52 * * * *";
 
 /**
  * Dove gira la raccolta, e perché lì.
@@ -33,9 +39,17 @@ export const ACTIONS_CRON = "7,52 * * * *";
  * Dichiarato in pagina perché «da qualche parte nel cloud» non è una
  * risposta: chi legge un dato fermo deve sapere quale macchina avrebbe
  * dovuto aggiornarlo.
+ *
+ * Le gambe sono due, e la seconda non è «una volta al giorno»: il cron di
+ * Vercel lo è (Hobby non consente di più), ma lo stesso percorso viene
+ * bussato da uno scheduler esterno ogni quarto d'ora — è il motivo per cui
+ * `/coverage` può mostrare giri a 12:15, 12:30 e 12:45 senza che GitHub
+ * Actions abbia eseguito nulla. Il battito reale è osservabile, non
+ * presupposto: `/api/cron/status` dice l'ultima battuta e se il gate l'ha
+ * saltata.
  */
 export const RUNNER_NOTE =
-  "La raccolta gira su GitHub Actions (runner esterno, indipendente da chi apre il sito) e scrive direttamente sul database. Una seconda gamba su cron Vercel, una volta al giorno, funge da rete di sicurezza quando lo scheduler di Actions salta i turni: non raddoppia il traffico, perché la spaziatura minima resta decisa dal codice.";
+  "La raccolta gira su GitHub Actions (runner esterno, indipendente da chi apre il sito) e scrive direttamente sul database. Una seconda gamba — il cron giornaliero di Vercel e uno scheduler esterno che bussano allo stesso percorso — copre i turni che lo scheduler di Actions salta: non raddoppia il traffico, perché la spaziatura minima resta decisa dal codice e un giro troppo vicino esce senza toccare la fonte. Il battito della seconda gamba è leggibile su /api/cron/status.";
 
 /** Intervallo nominale fra due giri del cron, in minuti. */
 export const ACTIONS_INTERVAL_MINUTES = 45;
@@ -65,7 +79,39 @@ export const RUN_STATUS_LABELS: Record<string, string> = {
   partial: "parziale",
   failed: "fallito",
   running: "in corso",
+  aborted: "troncato",
 };
+
+/**
+ * Oltre questo tempo una riga `running` non descrive un giro in corso:
+ * descrive un giro interrotto.
+ *
+ * Il tetto di 15 minuti non è un numero a caso: il job di GitHub Actions ha
+ * `timeout-minutes: 10`, quindi un giro legittimo non può essere vivo più di
+ * così, e 430 secondi è la durata misurata di uno riuscito. Una riga rimasta
+ * aperta a 15 minuti da un giro *finito* (è il caso della seconda gamba,
+ * interrotta dal budget di 300 s della funzione) è un'interruzione, e
+ * lasciarla scritta «in corso» significa raccontare al lettore che sta
+ * arrivando un dato che non arriverà.
+ */
+export const ABANDONED_RUN_AFTER_MINUTES = 15;
+
+/**
+ * Corregge l'etichetta di un run in base al tempo trascorso.
+ *
+ * Pura e volutamente ignorante del database: riceve lo stato com'è salvato e
+ * i minuti passati, e restituisce lo stato da mostrare. Non tocca
+ * l'archivio: il registro resta la fotografia di come è andata, la pagina
+ * dice cosa quella fotografia vuol dire adesso.
+ */
+export function resolveRunStatus(
+  status: string,
+  minutesSince: number | null,
+): string {
+  if (status !== "running") return status;
+  if (minutesSince === null) return status;
+  return minutesSince > ABANDONED_RUN_AFTER_MINUTES ? "aborted" : status;
+}
 
 export function runStatusLabel(status: string): string {
   return RUN_STATUS_LABELS[status] ?? status;
@@ -140,10 +186,18 @@ export function buildActionsView(input: {
 
   const label = `Raccolta automatica via GitHub Actions: cron «${ACTIONS_CRON}», circa un giro ogni ${ACTIONS_INTERVAL_MINUTES} minuti.`;
 
+  /* l'etichetta si corregge qui, non nell'archivio: una riga rimasta aperta
+     oltre il tempo massimo del job non è «in corso», è un giro interrotto */
+  const status = resolveRunStatus(last?.status ?? "", minutesSince);
+  const abortedClause =
+    status === "aborted"
+      ? " La raccolta ha scritto, ma analisi e chiusure non risultano chiuse: il giro si è interrotto prima della fine."
+      : "";
+
   const lastRunLine =
     last === null
       ? "Nessun giro schedulato registrato finora: la serie storica non è ancora avanzata da sola."
-      : `Ultimo giro schedulato (run ${last.runId}): esito ${runStatusLabel(last.status)}.`;
+      : `Ultimo giro schedulato (run ${last.runId}): esito ${runStatusLabel(status)}.${abortedClause}`;
 
   const warning =
     stalled && minutesSince !== null
@@ -155,7 +209,7 @@ export function buildActionsView(input: {
     intervalMinutes: ACTIONS_INTERVAL_MINUTES,
     stalledAfterMinutes: ACTIONS_STALLED_AFTER_MINUTES,
     lastRun: last,
-    lastRunStatusLabel: last === null ? null : runStatusLabel(last.status),
+    lastRunStatusLabel: last === null ? null : runStatusLabel(status),
     minutesSinceLastRun: minutesSince,
     stalled,
     label,

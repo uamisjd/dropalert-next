@@ -183,11 +183,15 @@ home:
 - una riga sulla raccolta automatica via **GitHub Actions**, letta
   dall'archivio e non dalla riga di stato di un processo:
 
-  «Raccolta automatica via GitHub Actions: cron «7,52 * * * *», circa un
-  giro ogni 45 minuti.» seguita da «Ultimo giro schedulato (run N): esito
+  «Raccolta automatica via GitHub Actions: cron «7,22,37,52 * * * *», circa
+  un giro ogni 45 minuti.» seguita da «Ultimo giro schedulato (run N): esito
   riuscito.» con data e ora, e da un avviso ambra — «Nessun giro
   schedulato da …: oltre i 90 minuti attesi, la raccolta automatica
-  potrebbe essersi fermata.» — quando il silenzio supera due intervalli;
+  potrebbe essersi fermata.» — quando il silenzio supera due intervalli. Un
+  giro rimasto `running` oltre il tetto del job (15 minuti, mentre il job
+  decade a 10 e un giro riuscito ne misura ~7) non si chiama «in corso»: si
+  chiama **troncato**, e la riga dice anche cosa manca — l'analisi e le
+  chiusure non risultano;
 
 - una riga sul runner in-process, **solo quando c'è un processo vivo che
   la sostenga**, in due varianti:
@@ -376,7 +380,7 @@ Vercel il processo non sopravvive fra due richieste: un loop in-process
 dichiarerebbe un "prossimo giro" che nessuno eseguirà. Dallo Sprint 9 il
 pannello, con il processo spento, non dice più «Raccolta automatica non
 attiva»: descrive la raccolta per come avviene — GitHub Actions, cron
-`7,52 * * * *`, l'ora e l'esito dell'ultimo giro schedulato letti dai run
+`7,22,37,52 * * * *`, l'ora e l'esito dell'ultimo giro schedulato letti dai run
 salvati, e un avviso ambra se nessun giro schedulato arriva da oltre 90
 minuti. La verità non è nel processo che serve la pagina, è nell'archivio.
 
@@ -384,9 +388,28 @@ minuti. La verità non è nel processo che serve la pagina, è nell'archivio.
 
 `*/45 * * * *` **non** produce un giro ogni 45 minuti: il campo dei minuti si
 azzera a ogni ora, quindi scatta a :00 e :45 — 45 minuti, poi 15. Il workflow
-usa `7,52 * * * *` (45 e 75 minuti alternati, minuto 0 evitato perché
-congestionato). L'autorità sulla spaziatura minima resta il gate interno
-`COLLECT_INTERVAL_MINUTES=45`, che scarta i giri troppo ravvicinati.
+usa `7,22,37,52 * * * *`: quattro occasioni all'ora, minuto 0 evitato perché
+congestionato. Non sono quattro raccolte — due sole (7 e 52) erano state la
+scelta iniziale, ma lo scheduler di GitHub è best-effort e quando è
+congestionato **salta il turno**: il 05/09/2026 ne ha serviti 4 su 16. Le
+occasioni in più sono la difesa, e il gate le neutralizza. L'autorità sulla
+spaziatura minima resta il gate interno `COLLECT_INTERVAL_MINUTES=45`, che
+scarta i giri troppo ravvicinati.
+
+### Il gate rispetta il tentativo, non solo la chiusura
+
+Il gate legge `scheduler:last_cycle`, che `runCycle` scrive **a giro chiuso**.
+Se il giro non si chiude mai — è ciò che accade alla seconda gamba quando il
+budget del chiamante (300 s su Vercel) è più corto del giro (~430 s misurati)
+— il registro non avanza e ogni battuta successiva è libera di raccogliere:
+il 05/09/2026 la fonte è stata raccolta alle 12:15, 12:30 e 12:45 (ora
+italiana) con intervallo reale di 15 minuti invece di 45, ~11 richieste in più
+a ogni quarto d'ora. Per questo `runCycle` marca anche un **tentativo**
+(`scheduler:cycle_claim`) *prima* di toccare la fonte, e il gate — sia nel
+codice sia nell'uscita anticipata di `/api/cron/collect` — rispetta il più
+recente dei due istanti. Un giro chiuso regolarmente scrive lo stesso istante
+su entrambe le chiavi, quindi la cadenza dichiarata non si allunga di un
+minuto: cambia solo che un giro interrotto non vale più come un permesso.
 
 ### Cosa conta per la serie N/10
 
