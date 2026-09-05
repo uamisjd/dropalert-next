@@ -75,6 +75,14 @@ async function main(): Promise<void> {
   ): Promise<void> {
     const el = inputByLabel(label);
     assert(el !== null, `campo «${label}» presente`);
+    await impostaValore(el, valore);
+  }
+
+  async function impostaValore(
+    el: HTMLInputElement | null,
+    valore: string,
+  ): Promise<void> {
+    assert(el !== null, "campo presente");
     /* React tiene traccia del valore di un input controllato: assegnarlo
        direttamente aggiorna anche quella traccia, e l'evento successivo non
        sembra più un cambiamento. Si passa quindi dal setter nativo del
@@ -214,6 +222,22 @@ async function main(): Promise<void> {
     assert(t.includes("Nessuna vincita è garantita"), "il limite è nel verdetto");
   });
 
+  await test("surebet: a quota mancante nessun verdetto, solo l'invito", async () => {
+    const prima = container.querySelector(
+      'input[placeholder="Quota (es. 2.10)"]',
+    ) as HTMLInputElement | null;
+    await impostaValore(prima, "");
+    const t = testo();
+    assert(
+      t.includes("Inserisci una quota valida"),
+      "l'invito compare al posto del verdetto",
+    );
+    assert(
+      !t.includes("Nessuna Surebet (Mercato con Margine)"),
+      "nessun overround fittizio a caselle vuote",
+    );
+  });
+
   await act(async () => rootSure.unmount());
 
   /* ---------------------------------------------------------------- */
@@ -238,6 +262,26 @@ async function main(): Promise<void> {
     assert(
       !t.includes("quota di uscita è sopra"),
       "nessun avviso di quota salita su un trade in profitto",
+    );
+  });
+
+  await test("green-up: a quota salita scattano avviso e responsabilità scoperta", async () => {
+    /* gli input sono nell'ordine: entrata, puntata, uscita, commissione */
+    const inputs = container.querySelectorAll('input[type="text"]');
+    assert(inputs.length === 4, "quattro campi nel calcolatore");
+    await impostaValore(inputs[2] as HTMLInputElement, "3.00");
+    const t = testo();
+    assert(
+      t.includes("quota di uscita è sopra quella di entrata"),
+      "l'avviso di quota salita compare",
+    );
+    assert(
+      t.includes("Supera il profitto della puntata"),
+      "la responsabilità non è più detta coperta",
+    );
+    assert(
+      !t.includes("Coperta dal profitto della puntata"),
+      "la frase incondizionata è sparita",
     );
   });
 
