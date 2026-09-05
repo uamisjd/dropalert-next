@@ -170,6 +170,22 @@ export function groupLatestLines(rows: LineRow[]): Map<string, LineReading[]> {
  * Le letture marcate `isStale` dalla fonte restano fuori: sono quote arrivate
  * più vecchie della soglia, e una linea mezza vecchia non è una linea.
  */
+/**
+ * Un istante letto da un aggregato (`max(collected_at)`) arriva dal driver come **testo**,
+ * non come `Date`: passedalo a `inArray` così com'è e il serializzatore di Postgres chiama
+ * `.toISOString()` su una stringa e la pagina esplode. Normalizzare qui, con un solo punto
+ * di verità: `null` se il testo non è interpretabile, così la riga viene scartata invece di
+ * produrre un'età falsa.
+ */
+export function toInstant(v: unknown): Date | null {
+  if (v instanceof Date) return Number.isNaN(v.getTime()) ? null : v;
+  if (typeof v !== "string" && typeof v !== "number") return null;
+  const text = typeof v === "string" ? v.trim() : v;
+  if (typeof text === "string" && text === "") return null;
+  const d = new Date(text);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
 async function loadLines(
   matchIds: number[],
   since: Date,
@@ -197,7 +213,17 @@ async function loadLines(
 
   if (groups.length === 0) return new Map();
 
-  const instants = [...new Set(groups.map((g) => g.newestAt))];
+  // Gli istanti escono dagli aggregati come testo: vanno riportati a `Date` prima di
+  // usarli come parametri (vedi `toInstant`).
+  const instants = [
+    ...new Set(
+      groups
+        .map((g) => toInstant(g.newestAt))
+        .filter((d): d is Date => d !== null)
+        .map((d) => d.getTime()),
+    ),
+  ].map((t) => new Date(t));
+  if (instants.length === 0) return new Map();
   const rows = await db
     .select({
       matchId: oddsSnapshots.matchId,

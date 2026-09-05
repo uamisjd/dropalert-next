@@ -269,6 +269,30 @@ osserva — lo scarto è il doppio.
   commissione dichiarata come assunta): un vero terminale exchange resta fuori portata finché non
   esiste una fonte di prezzi di bancata.
 
+### 4ter — Che cosa ha dato il primo sguardo sui dati reali (05/09/2026)
+
+La pagina è andata in produzione con la PR #7 e la prima lettura reale ha dato una
+soddisfazione e una batosta, entrambe istruttive.
+
+**Soddisfazione: il guard ha funzionato come doveva.** Con i dati non leggibili la pagina
+NON ha mostrato «0 opportunità» né zeri di ripiego: ha scritto `Lettura dei dati non
+riuscita`, il dettaglio dell'errore e la ragione. È il comportamento deciso in P2
+(niente pavimenti): senza di esso il difetto qui sotto avrebbe prodotto una lista vuota
+scambiata per «nessun valore».
+
+**Batosta: un difetto che nessun fixture poteva vedere.** `loadLines` passa gli istanti
+dell'aggregato `max(collected_at)` dentro `inArray(...)`. postgres-js serializza i
+parametri `timestamptz` chiamando `.toISOString()` — ma su un aggregato il valore arriva
+dal driver **come testo**, non come `Date`. In produzione: `a.toISOString is not a
+function`. Con i fixture (Date costruite a mano) e con `tsc` (che leggeva `sql<Date>`
+dichiarato) il difetto non era osservabile: solo il DB reale lo mostra. Corretto con
+`toInstant()` in `src/lib/repo/value-bets.ts` (normalizza testo pg / epoch / `Date`,
+scarta ciò che non è interpretabile) + 6 asserzioni in `npm run test:value-lines`.
+
+**Lezione per chi toccherà queste pagine:** qualunque valore esca da una funzione SQL
+(aggregati, `case`, cast) va trattato come testo anche se il tipo dichiarato è un altro,
+e non va rimandato a Postgres senza normalizzarlo.
+
 ## 5. Come si verifica
 
 > Le decisioni che restano aperte — CLV a basi miste, seconda fonte, finestre di
