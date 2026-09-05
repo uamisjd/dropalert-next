@@ -98,7 +98,7 @@ export function BacktestNoteR15() {
           docs/BACKTEST-R1.5.md
         </span>{" "}
         nel repository. Anche qui vale la regola del sito: questi numeri
-        non sono un consiglio di scommessa né una promessa di rendimento.
+        non sono una promessa di rendimento né una garanzia di vincita.
       </p>
     </section>
   );

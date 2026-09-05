@@ -125,6 +125,27 @@ const piatta = buildClvChart([
 check("serie tutta a zero non produce NaN", piatta.dots.every((d) => Number.isFinite(d.y)));
 eq("data breve", shortDay("2026-08-26"), "26/08");
 
+/* --- i buchi lunghi spezzano la linea, quelli brevi no --- */
+const bucoLungo = buildClvChart([
+  { day: "2026-08-01", cumulativeAvgPp: 1.0, cumulativeN: 40, inconclusive: false },
+  { day: "2026-08-20", cumulativeAvgPp: 1.2, cumulativeN: 45, inconclusive: false },
+])!;
+eq("silenzio di 19 giorni: una interruzione", bucoLungo.breaks, 1);
+check(
+  "silenzio di 19 giorni: il percorso ha due tratti",
+  (bucoLungo.path.match(/M/g) ?? []).length === 2,
+);
+const bucoCorto = buildClvChart([
+  { day: "2026-08-01", cumulativeAvgPp: 1.0, cumulativeN: 40, inconclusive: false },
+  { day: "2026-08-03", cumulativeAvgPp: 1.2, cumulativeN: 45, inconclusive: false },
+])!;
+eq("due giorni saltati: nessuna interruzione", bucoCorto.breaks, 0);
+check(
+  "due giorni saltati: il percorso resta un tratto unico",
+  (bucoCorto.path.match(/M/g) ?? []).length === 1,
+);
+eq("serie continua: nessuna interruzione", geo.breaks, 0);
+
 if (failures.length > 0) {
   console.error(`✗ ${failures.length} test falliti su ${passed + failures.length}`);
   for (const f of failures) console.error(`  - ${f}`);

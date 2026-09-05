@@ -16,6 +16,7 @@ export const metadata: Metadata = {
   title: "Metodologia — DropAlert",
   description:
     "Come DropAlert misura i movimenti di quota: indice di fiducia, CLV, verifiche storiche e limiti dichiarati delle fonti.",
+  alternates: { canonical: "/metodologia" },
 };
 
 export const revalidate = 86400;
@@ -143,7 +144,7 @@ export default function MetodologiaPage() {
           href="/"
           className="text-slate-600 underline underline-offset-2 hover:text-slate-900"
         >
-          ← Torna all&apos;osservatorio
+          ← Torna ai movimenti
         </Link>
       </p>
     </main>

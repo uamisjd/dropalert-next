@@ -5,7 +5,7 @@ import type { Metadata } from "next";
 import { PoissonSimulatorView } from "@/components/simulator/PoissonSimulatorView";
 
 export const metadata: Metadata = {
-  title: "xG & Dixon-Coles Poisson Match Simulator — DropAlert Pro",
+  title: "xG & Dixon-Coles Poisson Match Simulator — DropAlert",
   description:
     "Simulatore statistico di partite basato su Expected Goals (xG) e modello Dixon-Coles. Matrice risultati esatti 0-0 a 5-5 e quote fair indipendenti.",
   alternates: { canonical: "/simulator" },
@@ -28,9 +28,10 @@ export default function SimulatorPage() {
             Simulatore Match xG / Dixon-Coles
           </h1>
           <p className="mt-3 text-sm leading-relaxed text-slate-300 sm:text-base">
-            Genera quote fair teoriche indipendenti dal mercato basate su dati Expected Goals (xG).
-            Confronta il modello statistico con le quote offerte dai bookmaker per scovare
-            disallineamenti ad alto Expected Value (+EV).
+            Genera quote fair teoriche indipendenti dal mercato a partire dai gol attesi
+            (xG) che inserisci tu. Confrontale con una quota di mercato: la differenza è
+            l&apos;EV del modello su quella quota, non un&apos;indicazione di giocata —
+            il modello non sa come giocherà la partita.
           </p>
         </div>
       </header>

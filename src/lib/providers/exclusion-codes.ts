@@ -26,6 +26,11 @@ export const EXCLUSION_CODES = {
   UNREADABLE_ROW: "riga-illeggibile",
   /** esclusa dal tetto di partite per giro: nostra scelta, non della fonte */
   RUN_CAP: "tetto-per-giro",
+  /**
+   * pagina di dettaglio non visitata: oltre il tetto di righe o oltre il
+   * budget di tempo per giro. Nostra scelta anti-timeout, non della fonte.
+   */
+  DETAIL_BUDGET: "dettaglio-non-visitato",
 } as const;
 
 export type ExclusionCode =

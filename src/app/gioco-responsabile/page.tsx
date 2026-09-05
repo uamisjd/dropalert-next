@@ -12,7 +12,8 @@ import { HELPLINE } from "@/components/SiteFooter";
 export const metadata: Metadata = {
   title: "Gioco responsabile — DropAlert",
   description:
-    "Avvertenze sul gioco d'azzardo, segnali di rischio e contatti di aiuto. DropAlert è un osservatorio statistico, non un servizio di pronostici.",
+    "Avvertenze sul gioco d'azzardo, segnali di rischio e contatti di aiuto. DropAlert è un terminale quantitativo per scommesse sportive.",
+  alternates: { canonical: "/gioco-responsabile" },
 };
 
 export const revalidate = 86400;
@@ -135,7 +136,7 @@ export default function GiocoResponsabilePage() {
           href="/"
           className="text-slate-600 underline underline-offset-2 hover:text-slate-900"
         >
-          ← Torna all&apos;osservatorio
+          ← Torna ai movimenti
         </Link>
       </p>
     </main>

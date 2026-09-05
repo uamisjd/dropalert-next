@@ -33,7 +33,7 @@ export function GreenUpCalculator() {
             Calcolatore Green-Up & Cashout (Betting Exchange)
           </h2>
           <p className="mt-1 text-xs text-slate-500">
-            Hai puntato (Back) prima del calo e ora vuoi bancare (Lay) per bloccare il profitto o creare una scommessa a rischio zero (Freebet).
+            Hai puntato (Back) e ora vuoi bancare (Lay): per uniformare il risultato su tutti gli esiti, oppure per azzerare il lato perdente (Freebet). «Rischio zero» vale solo per il lato perdente e solo se la quota è scesa.
           </p>
         </div>
 
@@ -56,7 +56,7 @@ export function GreenUpCalculator() {
                 : "text-slate-600 hover:text-slate-950"
             }`}
           >
-            Freebet (Rischio Zero)
+            Freebet (perdente a zero)
           </button>
         </div>
       </div>
@@ -129,20 +129,20 @@ export function GreenUpCalculator() {
               </div>
             </div>
 
-            {/* Profitto Netto */}
-            <div className="rounded-xl bg-emerald-500/20 p-3.5 ring-1 ring-emerald-400/40">
-              <div className="text-[10px] font-bold uppercase tracking-wider text-emerald-300">
+            {/* Profitto Netto: il colore segue il segno, mai il contrario */}
+            <div className={`rounded-xl p-3.5 ring-1 ${(mode === "equal_profit" ? result.hedgedProfitNet : result.freebetProfitIfWin) >= 0 ? "bg-emerald-500/20 ring-emerald-400/40" : "bg-rose-500/20 ring-rose-400/40"}`}>
+              <div className={`text-[10px] font-bold uppercase tracking-wider ${(mode === "equal_profit" ? result.hedgedProfitNet : result.freebetProfitIfWin) >= 0 ? "text-emerald-300" : "text-rose-300"}`}>
                 {mode === "equal_profit" ? "Profitto netto, uguale su tutti gli esiti" : "Vincita Netta Freebet"}
               </div>
-              <div className="mt-1 text-2xl font-black tabular-nums text-emerald-400">
+              <div className={`mt-1 text-2xl font-black tabular-nums ${(mode === "equal_profit" ? result.hedgedProfitNet : result.freebetProfitIfWin) >= 0 ? "text-emerald-400" : "text-rose-400"}`}>
                 {mode === "equal_profit"
                   ? `${result.hedgedProfitNet >= 0 ? "+" : ""}€ ${result.hedgedProfitNet.toFixed(2)}`
-                  : `+€ ${result.freebetProfitIfWin.toFixed(2)}`}
+                  : `${result.freebetProfitIfWin >= 0 ? "+" : ""}€ ${result.freebetProfitIfWin.toFixed(2)}`}
               </div>
-              <div className="mt-0.5 text-xs text-emerald-200">
+              <div className={`mt-0.5 text-xs ${(mode === "equal_profit" ? result.hedgedProfitNet : result.freebetProfitIfWin) >= 0 ? "text-emerald-200" : "text-rose-200"}`}>
                 {mode === "equal_profit"
-                  ? `ROI netto: +${result.roiPct.toFixed(1)}%`
-                  : `Se perde la selezione: 0.00 € (nessuna perdita)`}
+                  ? `ROI netto: ${result.roiPct >= 0 ? "+" : ""}${result.roiPct.toFixed(1)}%`
+                  : `Se perde la selezione: € ${result.freebetProfitIfLose.toFixed(2)} (il lato perdente si azzera per costruzione)`}
               </div>
             </div>
 
@@ -168,10 +168,23 @@ export function GreenUpCalculator() {
                 € {(result.requiredLayStake * (result.layOdds - 1)).toFixed(2)}
               </div>
               <div className="mt-0.5 text-xs text-slate-300">
-                Coperta dal profitto della puntata
+                {result.layOdds <= result.backOdds
+                  ? "Coperta dal profitto della puntata, se la selezione vince"
+                  : "Supera il profitto della puntata: servono fondi oltre la vincita"}
               </div>
             </div>
           </div>
+          {/* La quota non è scesa: chiudere ora congela una perdita, non un profitto */}
+          {result.layOdds > result.backOdds && (
+            <p className="mt-3 rounded-xl bg-amber-500/15 px-3.5 py-2.5 text-xs leading-relaxed text-amber-200 ring-1 ring-amber-400/40">
+              La quota di uscita è sopra quella di entrata: in modalità Green-Up il
+              risultato è una perdita di €{" "}
+              {Math.abs(result.hedgedProfitNet).toFixed(2)}, in modalità Freebet il
+              lato vincente perde €{" "}
+              {Math.abs(result.freebetProfitIfWin).toFixed(2)}. La freebet azzera
+              solo il lato perdente.
+            </p>
+          )}
         </div>
       )}
     </div>

@@ -98,15 +98,21 @@ export async function GET(request: Request) {
         includesDemoData: q.demo,
         note: q.demo
           ? "La risposta include fixture dimostrative marcate con match.isDemo = true. Non sono dati reali di mercato."
-          : "Sono esclusi i dati dimostrativi. Osservatorio statistico: nessun contenuto è un consiglio di scommessa.",
+          : "Sono esclusi i dati dimostrativi. Terminale quantitativo per scommesse: segnali misurati, nessuna vincita garantita.",
         generatedAt: new Date().toISOString(),
       },
     });
   } catch (err) {
+    /* il dettaglio resta nei log del server: la risposta non espone mai
+       l'SQL o i messaggi interni del driver al client */
+    console.error(
+      "[api/signals] lettura fallita:",
+      err instanceof Error ? err.message : err,
+    );
     return NextResponse.json(
       {
         error: "errore nel recupero dei segnali",
-        detail: err instanceof Error ? err.message : String(err),
+        detail: "Lettura non riuscita. Il dettaglio è registrato nei log del server.",
       },
       { status: 500 },
     );

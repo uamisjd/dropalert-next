@@ -32,20 +32,30 @@ export function EmptyState({
     );
   }
 
-  const broken = status.overall === "blocked" || status.overall === "no_data";
+  /* Tre casi, tre toni: «rotto» e «mai partito» sono rossi, «ha girato ma oggi non
+     ha rilevazioni» è ambra — dipingerlo di rosso sarebbe falso allarmismo. */
+  const neverRan = status.lastSuccessfulRun == null;
+  const broken = status.overall === "blocked" || (status.overall === "no_data" && neverRan);
+  const idle = status.overall === "no_data" && !neverRan;
 
   return (
     <div
       className={`rounded-lg border p-6 ${
         broken
           ? "border-red-300 bg-red-50"
-          : "border-dashed border-slate-300 bg-white"
+          : idle
+            ? "border-amber-300 bg-amber-50"
+            : "border-dashed border-slate-300 bg-white"
       }`}
     >
       <p className="text-sm font-medium text-slate-900">
-        {broken
+        {status.overall === "blocked"
           ? "Nessun movimento in elenco: la raccolta dati non sta funzionando."
-          : "Nessun movimento di quota rilevato al momento."}
+          : idle
+            ? "Nessun movimento in elenco: oggi nessuna rilevazione, ma il collettore ha girato."
+            : neverRan && status.overall === "no_data"
+              ? "Nessun movimento in elenco: il monitor non ha ancora completato una raccolta."
+              : "Nessun movimento di quota rilevato al momento."}
       </p>
 
       <div className="mt-2 space-y-1 text-xs leading-relaxed text-slate-700">
@@ -53,7 +63,7 @@ export function EmptyState({
           <span className="font-medium">Causa:</span> {status.overallLabel}
         </p>
 
-        {!broken && (
+        {!broken && status.snapshotsToday > 0 && (
           <p>
             Il monitor sta osservando{" "}
             <span className="font-medium tabular-nums">
@@ -66,6 +76,14 @@ export function EmptyState({
             rilevazioni oggi, ma nessuna variazione ha superato la soglia di
             rumore di 2 punti percentuali. Un elenco vuoto è un risultato
             legittimo: significa che il mercato è fermo, non che manchi il dato.
+          </p>
+        )}
+
+        {idle && (
+          <p>
+            Il collettore ha completato giri in passato (vedi «ultima raccolta
+            riuscita» qui sotto), ma oggi non ha lasciato rilevazioni: la causa
+            precisa è nella riga «Causa» qui sopra, non in un guasto presunto.
           </p>
         )}
 

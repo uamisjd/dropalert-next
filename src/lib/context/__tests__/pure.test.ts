@@ -80,7 +80,7 @@ function main(): void {
   test("la dicitura fissa è quella concordata, parola per parola", () => {
     assertEqual(
       CONTEXT_DISCLAIMER,
-      "Contesto generato automaticamente: non è un pronostico né una garanzia.",
+      "Contesto generato automaticamente: informazione a supporto delle tue analisi, non garanzia di vincita.",
     );
   });
 

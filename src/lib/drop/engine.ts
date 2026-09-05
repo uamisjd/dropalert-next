@@ -6,7 +6,7 @@
  *  - nessun segnale inventato: se il dato manca, la funzione lo dichiara
  *    e il punteggio ne risente, non viene stimato;
  *  - il punteggio misura la SOLIDITÀ DELL'OSSERVAZIONE, non la probabilità
- *    che un esito si verifichi, e non costituisce un consiglio.
+ *    che un esito si verifichi, e non è una garanzia di vincita.
  */
 import type { ConfidenceBand, MagnitudeClass } from "@/db/schema";
 import {
@@ -462,7 +462,7 @@ export function toConfidenceBand(score: number, coverage: number): ConfidenceBan
 
 /**
  * Punteggio 0–100 sulla solidità dell'osservazione.
- * NON è una probabilità di vincita e non è un consiglio.
+ * NON è una probabilità di vincita né una garanzia.
  */
 export function computeConfidence(
   magnitude: MagnitudeResult,
@@ -586,7 +586,7 @@ function emptyAnalysis(
     components: [],
     missingData: coverage.missing.length > 0 ? coverage.missing : [reason],
     caveats: [
-      "Questa scheda descrive un movimento di mercato osservato. Non è una previsione dell'esito né un consiglio di scommessa.",
+      "Questa scheda descrive un movimento di mercato osservato: usala nelle tue analisi, senza garanzie di vincita.",
     ],
     computedAt: input.now.toISOString(),
   };

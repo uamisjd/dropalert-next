@@ -78,7 +78,7 @@ export function BacktestNote() {
         metodologia: report{" "}
         <span className="font-mono text-slate-600">docs/BACKTEST-R1.md</span>{" "}
         nel repository. Anche qui vale la regola del sito: questi numeri non
-        sono un consiglio di scommessa né una promessa di rendimento, e la
+        sono una promessa di rendimento né una garanzia di vincita, e la
         sola misura di qualità del monitor resta il CLV.
       </p>
     </section>

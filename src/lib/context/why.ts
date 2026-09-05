@@ -17,7 +17,7 @@
  */
 
 /** Chiusura obbligatoria, identica ovunque compaia la lettura. */
-export const WHY_CLOSING = "È una lettura, non una certezza né un consiglio.";
+export const WHY_CLOSING = "È una lettura del contesto, non una garanzia di vincita.";
 
 /** Testo quando non c'è nulla: nessuna fonte e profilo neutro. */
 export const WHY_NO_CAUSE =

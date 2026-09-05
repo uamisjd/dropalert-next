@@ -18,8 +18,8 @@
  *  - Nessun pavimento a +0,5% e nessun valore di ripiego: un divario negativo è un
  *    divario negativo, e un mercato senza terna completa non viene elencato — viene
  *    contato in `skipped`, che la pagina mostra.
- *  - Nessun sizing: niente Kelly in euro e niente "puntata consigliata" (regola del
- *    progetto: nessuna selezione da eseguire). La Kelly come calcolatrice con numeri
+ *  - Nessun sizing: niente Kelly in euro e niente "puntata consigliata" — il divario
+ *    è una misura, non un ordine di esecuzione. La Kelly come calcolatrice con numeri
  *    inseriti a mano vive in `/strumenti`.
  */
 import { and, desc, eq, gte, inArray, isNull, sql } from "drizzle-orm";
@@ -72,6 +72,8 @@ export interface ValueScannerResult {
    * Motivo di una lettura fallita, mostrato dalla pagina invece di sparire dietro una
    * lista vuota: `opportunities.length === 0` con `error === null` significa "niente da
    * misurare", con `error` valorizzata significa "non abbiamo potuto leggere".
+   * È un testo generico fisso: il dettaglio grezzo (driver SQL incluso) resta nel log
+   * del server e non raggiunge mai l'HTML.
    */
   error: string | null;
   generatedAt: Date;
@@ -274,7 +276,10 @@ export async function getValueOpportunities(
   try {
     return await scanValueGaps(filters, now, skipped);
   } catch (err) {
-    // una lettura mancante si dichiara, non si camuffa da «nessuna occasione»
+    // una lettura mancante si dichiara, non si camuffa da «nessuna occasione».
+    // Il dettaglio grezzo resta nel log del server: alla pagina arriva solo un
+    // testo generico, mai il messaggio del driver SQL.
+    console.error("[value-bets] lettura dei divari non riuscita:", err);
     return {
       opportunities: [],
       signalsRead: 0,
@@ -283,7 +288,7 @@ export async function getValueOpportunities(
       method: NOVIG_METHOD,
       averageEdgePct: 0,
       dataNote: "lettura dei dati non riuscita: questa pagina non ha numeri da mostrare",
-      error: err instanceof Error ? err.message : String(err),
+      error: "lettura non riuscita (dettaglio nel log del server)",
       generatedAt: now,
     };
   }
@@ -382,7 +387,7 @@ async function scanValueGaps(
       matchId: s.matchId,
       homeTeam: s.homeTeam,
       awayTeam: s.awayTeam,
-      league: s.league ?? "Competizione non specificata",
+      league: s.league ?? "Competizione non attribuita",
       kickoffAt: new Date(s.kickoffAt),
       market,
       selection: s.selection,

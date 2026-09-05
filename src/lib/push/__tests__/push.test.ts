@@ -96,7 +96,7 @@ const scelte = selectNotifications(
 eq("una sola notifica: l'altra partita non ha dato vivo", scelte.length, 1);
 eq("link al dettaglio giusto", scelte[0].url, "https://esempio.it/matches/7");
 check("il titolo dice che la soglia è stata raggiunta", scelte[0].title.includes("soglia raggiunta"));
-check("il corpo nega il consiglio", scelte[0].body.includes("non è un consiglio"));
+check("il corpo nega la garanzia", scelte[0].body.includes("nessuna vincita garantita"));
 
 check(
   "mai notifiche per partite fuori watchlist",

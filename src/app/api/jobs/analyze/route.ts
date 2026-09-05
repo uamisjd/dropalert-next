@@ -106,7 +106,7 @@ export async function POST(request: Request) {
         next: report.pending.slice(0, 5),
       },
       errors: report.errors,
-      note: "Analisi di movimenti osservati. Nessun contenuto costituisce un consiglio di scommessa.",
+      note: "Analisi di movimenti osservati a supporto delle tue giocate. Nessuna vincita garantita.",
       generatedAt: report.startedAt,
       durationMs: report.durationMs,
     },

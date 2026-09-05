@@ -22,9 +22,13 @@ export async function GET(): Promise<Response> {
       keyConfigured: (process.env.FOOTBALL_DATA_API_KEY ?? "").trim() !== "",
     });
   } catch (err) {
+    console.error(
+      "[api/calendar] lettura calendario fallita:",
+      err instanceof Error ? err.message : err,
+    );
     return Response.json({
       ok: false,
-      error: err instanceof Error ? err.message : "errore non identificato",
+      error: "Calendario non leggibile in questo momento.",
       keyConfigured: (process.env.FOOTBALL_DATA_API_KEY ?? "").trim() !== "",
     });
   }

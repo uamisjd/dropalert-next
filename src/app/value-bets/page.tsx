@@ -15,7 +15,7 @@ import { ValueScannerTable } from "@/components/ValueScannerTable";
 import { fmtDateTime } from "@/components/format";
 
 export const metadata: Metadata = {
-  title: "Divario di prezzo contro linea no-vig — DropAlert Pro",
+  title: "Divario di prezzo contro linea no-vig — DropAlert",
   description:
     "Quanto margine resta dentro l'ultima quota letta, confronto per confronto, sulle partite non ancora al kickoff. Nessuna puntata consigliata: è una misura.",
   alternates: { canonical: "/value-bets" },
@@ -23,8 +23,10 @@ export const metadata: Metadata = {
 
 export const revalidate = 60; // rigenera ogni minuto
 
+/* Il divario è un edge relativo (`ev × 100` in `value-gap.ts`), quindi percento:
+   i punti percentuali compaiono solo sulla card, come differenza fair − implicita. */
 const signed = (v: number): string =>
-  `${v > 0 ? "+" : v < 0 ? "−" : ""}${Math.abs(v).toFixed(2)} pp`;
+  `${v > 0 ? "+" : v < 0 ? "−" : ""}${Math.abs(v).toFixed(2)}%`;
 
 export default async function ValueBetsPage() {
   const now = new Date();
@@ -96,8 +98,9 @@ export default async function ValueBetsPage() {
           <p className="font-semibold">Lettura dei dati non riuscita.</p>
           <p className="mt-1">
             Questa pagina non mostra numeri quando non può leggerli: niente zeri di
-            ripiego, niente lista vuota scambiata per «nessuna occasione». Dettaglio:{' '}
-            <code className="rounded bg-white/70 px-1">{data.error}</code>
+            ripiego, niente lista vuota scambiata per «nessuna occasione».{" "}
+            {data.error} Il dettaglio tecnico resta nel log del server e non viene
+            stampato qui.
           </p>
         </div>
       )}
@@ -165,8 +168,8 @@ export default async function ValueBetsPage() {
           </div>
         </div>
         <p className="mt-4 border-t border-slate-100 pt-3 text-[11px] text-slate-400">
-          Nessun campo di questa pagina è una puntata da eseguire. Per giocare con i
-          numeri — Kelly, varianza, surebet — ci sono gli&nbsp;
+          Queste misure informano le tue giocate, non le decidono: nessuna vincita
+          è garantita. Per giocare con i numeri — Kelly, varianza, surebet — ci sono gli&nbsp;
           <Link href="/strumenti" className="underline">
             strumenti
           </Link>

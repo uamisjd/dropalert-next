@@ -411,6 +411,44 @@ async function main(): Promise<void> {
     }
   });
 
+  await test("il tetto di dettaglio visita i cali maggiori e dichiara gli altri", async () => {
+    const p = createBetexplorerProvider({
+      enabled: true,
+      fetchImpl: routedFetch("2026-08-18T22:00:00+02:00"),
+      detailRowCap: 2,
+    });
+    const res = await p.fetchFixtures(WIDE_WINDOW);
+    assert(res.ok, "la chiamata riesce");
+    if (!res.ok) return;
+    assertEqual(res.data.length, 2, "solo due pagine di dettaglio visitate");
+    assertEqual(res.partial, true, "l'esito è parziale");
+    if (res.partial) {
+      const dichiarate = res.missing.filter((m) =>
+        m.includes("[dettaglio-non-visitato]"),
+      );
+      assertEqual(dichiarate.length, 4, "quattro righe dichiarate non visitate");
+    }
+  });
+
+  await test("a budget esaurito niente si visita e tutto è dichiarato", async () => {
+    const p = createBetexplorerProvider({
+      enabled: true,
+      fetchImpl: routedFetch("2026-08-18T22:00:00+02:00"),
+      detailBudgetMs: -1,
+    });
+    const res = await p.fetchFixtures(WIDE_WINDOW);
+    assert(res.ok, "la chiamata riesce");
+    if (!res.ok) return;
+    assertEqual(res.data.length, 0, "nessuna pagina di dettaglio visitata");
+    assertEqual(res.partial, true, "l'esito è parziale");
+    if (res.partial) {
+      const dichiarate = res.missing.filter((m) =>
+        m.includes("[dettaglio-non-visitato]"),
+      );
+      assertEqual(dichiarate.length, 6, "sei righe dichiarate non visitate");
+    }
+  });
+
   await test("fetchOdds legge le quote di consenso della partita richiesta", async () => {
     const p = createBetexplorerProvider({
       enabled: true,

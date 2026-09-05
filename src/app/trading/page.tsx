@@ -15,7 +15,7 @@ import { TradingTerminalView } from "@/components/trading/TradingTerminalView";
 import { fmtDateTime } from "@/components/format";
 
 export const metadata: Metadata = {
-  title: "Escursione dei prezzi e green-up a ritroso — DropAlert Pro",
+  title: "Escursione dei prezzi e green-up a ritroso — DropAlert",
   description:
     "Quanto si è mossa una quota fra apertura e ultima lettura, in tick, e quanto varrebbe chiudere la posizione fra quei due prezzi. Nessun exchange è collegato.",
   alternates: { canonical: "/trading" },
@@ -69,7 +69,7 @@ export default async function TradingPage() {
         </div>
       </header>
 
-      <TradingTerminalView trades={data.trades} signalsRead={data.signalsRead} />
+      <TradingTerminalView trades={data.trades} signalsRead={data.signalsRead} readFailed={data.readFailed} />
 
       <section className="mt-8 rounded-2xl border border-slate-200 bg-white p-5 text-xs text-slate-600 shadow-sm sm:p-6">
         <h2 className="text-sm font-bold uppercase tracking-wide text-slate-900">

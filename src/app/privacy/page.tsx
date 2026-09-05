@@ -12,6 +12,7 @@ export const metadata: Metadata = {
   title: "Privacy — DropAlert",
   description:
     "Informativa privacy di DropAlert: titolare, dati trattati, cookie e localStorage, diritti dell'interessato e contatti.",
+  alternates: { canonical: "/privacy" },
 };
 
 /* pagina di solo testo: si può servire dalla cache di bordo a lungo */
@@ -194,7 +195,7 @@ export default function PrivacyPage() {
           href="/"
           className="text-slate-600 underline underline-offset-2 hover:text-slate-900"
         >
-          ← Torna all&apos;osservatorio
+          ← Torna ai movimenti
         </Link>
       </p>
     </main>

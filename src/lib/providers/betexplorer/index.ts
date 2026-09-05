@@ -157,13 +157,34 @@ export interface BetexplorerOptions {
   enabled?: boolean;
   /** campionati da interrogare per i risultati, come "paese/lega" */
   resultLeagues?: string[];
+  /**
+   * Tetto di pagine di dettaglio visitate per giro e budget di tempo per
+   * visitarle (test e casi estremi). Default dai `FIXTURE_DETAIL_*` sotto.
+   */
+  detailRowCap?: number;
+  detailBudgetMs?: number;
 }
+
+/**
+ * Quante pagine di dettaglio partita visitare al massimo per giro, e in
+ * quanto tempo. L'elenco del weekend supera le 200 righe: visitarle tutte
+ * in serie ha sforato i 10 minuti del job tre giri di fila (set-2026),
+ * con la raccolta ferma e nessun errore dichiarato. Si visitano i cali
+ * maggiori; le altre righe restano dichiarate come non visitate.
+ */
+export const FIXTURE_DETAIL_CAP = 60;
+export const FIXTURE_DETAIL_BUDGET_MS = 300_000;
 
 export function createBetexplorerProvider(
   options: BetexplorerOptions = {},
 ): OddsProvider {
   const enabled = options.enabled ?? betexplorerEnabled();
   const fetchImpl = options.fetchImpl;
+  const detailRowCap =
+    options.detailRowCap ?? envInt("BETEXPLORER_DETAIL_CAP", FIXTURE_DETAIL_CAP);
+  const detailBudgetMs =
+    options.detailBudgetMs ??
+    envInt("BETEXPLORER_DETAIL_BUDGET_MS", FIXTURE_DETAIL_BUDGET_MS);
 
   /**
    * Cache brevissima dell'elenco drop.
@@ -251,9 +272,31 @@ export function createBetexplorerProvider(
 
       /* L'orario affidabile sta nella pagina della partita: una richiesta
          in più per partita, ma è l'unico istante con fuso dichiarato.
-         Senza di esso la partita viene SCARTATA, non salvata a caso. */
+         Senza di esso la partita viene SCARTATA, non salvata a caso.
+         Tetto + budget (vedi FIXTURE_DETAIL_*): l'elenco non sta mai fermo
+         e visitarlo tutto in serie sfora il timeout del job. Si parte dai
+         cali maggiori; chi resta fuori è dichiarato, non sparisce. */
+      const ordered = [...parsed.fixtures].sort(
+        (a, b) => (b.dropPercent ?? -1) - (a.dropPercent ?? -1),
+      );
+      const detailRows = ordered.slice(0, detailRowCap);
+      for (const skipped of ordered.slice(detailRowCap)) {
+        missing.push(
+          taggedExclusion(
+            skipped.providerMatchId,
+            EXCLUSION_CODES.DETAIL_BUDGET,
+            `pagina di dettaglio non visitata: oltre il tetto di ${detailRowCap} righe per giro, si visitano i cali maggiori.`,
+          ),
+        );
+      }
+      const detailStartedAt = Date.now();
       const fixtures: FixtureDTO[] = [];
-      for (const row of parsed.fixtures) {
+      /* righe di `detailRows` effettivamente visitate: serve per dichiarare
+         quelle mai raggiunte quando il budget scade a metà. */
+      let visitedCount = 0;
+      for (const row of detailRows) {
+        if (Date.now() - detailStartedAt > detailBudgetMs) break;
+        visitedCount += 1;
         const detail = await fetchPage(row.sourceUrl, { fetchImpl });
         if (!detail.ok) {
           missing.push(
@@ -292,6 +335,20 @@ export function createBetexplorerProvider(
           continue;
         }
         fixtures.push(toFixtureDTO(row, kickoffAt));
+      }
+
+      /* Il budget è scaduto a metà: le righe mai raggiunte si dichiarano con
+         il loro codice, invece di sparire come se l'elenco fosse finito. */
+      if (visitedCount < detailRows.length) {
+        for (const row of detailRows.slice(visitedCount)) {
+          missing.push(
+            taggedExclusion(
+              row.providerMatchId,
+              EXCLUSION_CODES.DETAIL_BUDGET,
+              `pagina di dettaglio non visitata: budget di ${Math.round(detailBudgetMs / 1000)} s per giro esaurito, si riprova al prossimo giro.`,
+            ),
+          );
+        }
       }
 
       if (missing.length > 0) {

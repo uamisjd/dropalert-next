@@ -42,7 +42,27 @@ export interface ClvChartGeometry {
   max: number;
   firstDay: string;
   lastDay: string;
+  /**
+   * Quante volte la linea è stata spezzata: un buco di oltre `GAP_BREAK_DAYS`
+   * giorni non si cuce con un segmento, perché fingerebbe continuità dove il
+   * registro tace.
+   */
+  breaks: number;
 }
+
+/**
+ * Oltre questa distanza in giorni di calendario fra due punti, la linea si
+ * spezza: i giorni senza osservazioni non lasciano spazio sull'asse (i punti
+ * restano equidistanti), quindi un segmento lungo fingerebbe un andamento
+ * continuo attraverso un silenzio anche di settimane.
+ */
+export const GAP_BREAK_DAYS = 7;
+
+const dayToUtc = (day: string): number | null => {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(day);
+  if (!m) return null;
+  return Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+};
 
 /**
  * Costruisce le coordinate della serie cumulata.
@@ -82,16 +102,32 @@ export function buildClvChart(
     inconclusive: p.inconclusive,
   }));
 
+  /* Si spezza solo sui buchi lunghi: un giorno saltato (festivi, turni vuoti)
+     resta cucito, un silenzio di oltre una settimana no. Chiavi non-data non
+     spezzano mai: nel dubbio si disegna, non si nasconde. */
+  let breaks = 0;
+  const segments = dots.map((d, i) => {
+    if (i === 0) return `M${d.x.toFixed(1)} ${d.y.toFixed(1)}`;
+    const prev = dayToUtc(valid[i - 1].day);
+    const cur = dayToUtc(valid[i].day);
+    const gapDays =
+      prev !== null && cur !== null ? (cur - prev) / 86_400_000 : 0;
+    if (gapDays > GAP_BREAK_DAYS) {
+      breaks += 1;
+      return `M${d.x.toFixed(1)} ${d.y.toFixed(1)}`;
+    }
+    return `L${d.x.toFixed(1)} ${d.y.toFixed(1)}`;
+  });
+
   return {
     dots,
-    path: dots
-      .map((d, i) => `${i === 0 ? "M" : "L"}${d.x.toFixed(1)} ${d.y.toFixed(1)}`)
-      .join(" "),
+    path: segments.join(" "),
     zeroY: yOf(0),
     min,
     max,
     firstDay: valid[0].day,
     lastDay: valid[valid.length - 1].day,
+    breaks,
   };
 }
 

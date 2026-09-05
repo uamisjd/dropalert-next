@@ -43,7 +43,7 @@ export async function GET(
         isDemoData: detail.match.isDemo,
         note: detail.match.isDemo
           ? "Fixture dimostrativa: non è un dato reale di mercato."
-          : "Osservatorio statistico: descrizione di un movimento osservato, non un consiglio di scommessa.",
+          : "Terminale quantitativo per scommesse: descrizione di un movimento osservato, nessuna vincita garantita.",
         clvAvailable: detail.clv !== null,
         clvNote:
           detail.clv === null
@@ -53,10 +53,16 @@ export async function GET(
       },
     });
   } catch (err) {
+    /* il dettaglio resta nei log del server: la risposta non espone mai
+       l'SQL o i messaggi interni del driver al client */
+    console.error(
+      "[api/signals/[id]] lettura fallita:",
+      err instanceof Error ? err.message : err,
+    );
     return NextResponse.json(
       {
         error: "errore nel recupero del segnale",
-        detail: err instanceof Error ? err.message : String(err),
+        detail: "Lettura non riuscita. Il dettaglio è registrato nei log del server.",
       },
       { status: 500 },
     );

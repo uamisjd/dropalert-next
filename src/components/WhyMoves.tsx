@@ -6,7 +6,7 @@
  * ogni riga porta il proprio tag, «da fonte» o «ipotesi dal profilo del
  * movimento», e la chiusura è fissa.
  *
- * Non introduce metriche, non entra nel punteggio, non è un pronostico.
+ * Non introduce metriche, non entra nel punteggio, non promette esiti.
  */
 import {
   WHY_CLOSING,

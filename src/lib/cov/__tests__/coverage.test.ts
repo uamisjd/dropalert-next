@@ -625,6 +625,10 @@ function main(): void {
     assertEqual(reasonForCode(EXCLUSION_CODES.RUN_CAP), "our_choice");
   });
 
+  test("dettaglio non visitato (tetto/budget) è una nostra scelta, non perdita", () => {
+    assertEqual(reasonForCode(EXCLUSION_CODES.DETAIL_BUDGET), "our_choice");
+  });
+
   test("'altro' resta solo per l'esclusione senza codice dichiarato", () => {
     assertEqual(reasonForCode(null), "altro");
   });

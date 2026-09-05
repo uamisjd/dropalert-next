@@ -1,5 +1,5 @@
 /**
- * Suite di test per i motori quantitativi di DropAlert Pro:
+ * Suite di test per i motori quantitativi di DropAlert:
  *  - Devigging Avanzato (Shin, Power, Proportional)
  *  - Expected Value (+EV) e Rilevamento Alpha
  *  - Staking di Kelly Frazionale

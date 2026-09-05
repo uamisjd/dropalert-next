@@ -47,6 +47,25 @@ import {
    freschezza del dato resta dichiarata in pagina dal pannello «Stato dati». */
 export const revalidate = 300;
 
+/* titolo e descrizione arrivano dal layout; qui canonical + regola sui filtri.
+   La home legge i filtri dalla query string (?level=, ?league=, ?when= …):
+   quelle varianti sono fette duplicate della stessa lista, quindi non si
+   indicizzano (ma si seguono i link). Solo la home pulita resta indicizzata. */
+export async function generateMetadata({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}): Promise<import("next").Metadata> {
+  const sp = await searchParams;
+  const filtered = ["level", "league", "team", "sort", "when"].some(
+    (k) => sp[k] !== undefined,
+  );
+  return {
+    ...(filtered ? { robots: { index: false, follow: true } } : {}),
+    alternates: { canonical: "/" },
+  };
+}
+
 const VALID_LEVELS: SignalLevel[] = ["forte", "reale", "debole", "nessuno"];
 
 function parseFilters(
@@ -186,7 +205,8 @@ export default async function Home({
             <strong className="text-emerald-400">divario contro la linea senza margine</strong>{" "}
             (no-vig proporzionale, lo stesso della chiusura usata per il CLV) e{" "}
             <strong>escursione in tick</strong> dei movimenti. Sono misure, con i loro buchi
-            dichiarati: nessuna previsione, nessun consiglio, nessuna puntata suggerita.
+            dichiarati, per informare le tue giocate: nessuna vincita garantita,
+            gioca responsabilmente.
           </p>
 
           <nav
@@ -385,15 +405,15 @@ export default async function Home({
 
       <footer className="mt-6 border-t border-slate-200 pt-4 text-xs leading-relaxed text-slate-500">
         <p className="mb-2 font-medium text-slate-700">
-          DropAlert è un osservatorio statistico, non un servizio di pronostici.
+          DropAlert è un terminale quantitativo per scommettitori.
         </p>
         <p className="mb-2">
           I movimenti di quota descrivono il comportamento del mercato, non la
-          probabilità reale che un evento accada. Un drop non è una previsione e
-          non implica alcun vantaggio: la sola metrica di qualità applicata è il
-          CLV, che confronta il segnale con la quota di chiusura e non con
-          l&apos;esito della partita. Nessun contenuto di questo sito
-          costituisce un consiglio di scommessa o un invito a giocare.
+          probabilità reale che un evento accada. Un drop non implica alcun
+          vantaggio garantito: la sola metrica di qualità applicata è il CLV,
+          che confronta il segnale con la quota di chiusura e non con
+          l&apos;esito della partita. Usa queste misure per informare le tue
+          giocate, mai come promesse di vincita.
         </p>
         <p className="mb-2">
           I dati provengono dal polling delle fonti pubbliche configurate e

@@ -23,7 +23,7 @@ import {
 export const dynamic = "force-dynamic";
 
 const DISCLAIMER =
-  "DropAlert è un osservatorio statistico sui movimenti di quota. Questa misura descrive la copertura dei dati raccolti e non contiene indicazioni di scommessa.";
+  "DropAlert è un terminale quantitativo per scommesse. Questa misura descrive la copertura dei dati raccolti, senza garanzie sui segnali.";
 
 export async function GET(request: Request): Promise<NextResponse> {
   const startedAt = Date.now();
@@ -87,14 +87,17 @@ export async function GET(request: Request): Promise<NextResponse> {
       disclaimer: DISCLAIMER,
     });
   } catch (error) {
-    /* mai riempire il buco con stime: si dichiara il guasto */
+    /* mai riempire il buco con stime: si dichiara il guasto. Il dettaglio
+       resta nei log del server, senza esporre l'SQL al client. */
+    console.error(
+      "[api/cov] lettura copertura fallita:",
+      error instanceof Error ? error.message : error,
+    );
     return NextResponse.json(
       {
         status: "DATI PARZIALI",
         detail:
-          error instanceof Error
-            ? error.message
-            : "Errore non identificato nella lettura della copertura.",
+          "Copertura non leggibile in questo momento. Il dettaglio è registrato nei log del server.",
         latest: null,
         history: null,
         tookMs: Date.now() - startedAt,

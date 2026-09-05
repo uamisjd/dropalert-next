@@ -190,6 +190,8 @@ export function reasonForCode(code: ExclusionCode | null): ExclusionReason {
       return "our_choice";
     case EXCLUSION_CODES.RUN_CAP:
       return "our_choice";
+    case EXCLUSION_CODES.DETAIL_BUDGET:
+      return "our_choice";
     /* `null` = nessun codice dichiarato. Resta "altro": è l'unico caso in
        cui davvero non sappiamo, e va continuato a dichiarare come tale. */
     default:

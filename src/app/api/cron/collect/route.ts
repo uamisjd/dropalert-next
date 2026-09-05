@@ -132,11 +132,17 @@ export async function GET(request: Request) {
     });
     return NextResponse.json({ ok: true, runner: "vercel-cron", result });
   } catch (error) {
+    /* rotta protetta da segreto, ma il principio è lo stesso delle altre:
+       il dettaglio resta nei log, fuori c'è solo l'esito */
+    console.error(
+      "[api/cron/collect] giro fallito:",
+      error instanceof Error ? error.message : error,
+    );
     return NextResponse.json(
       {
         ok: false,
         runner: "vercel-cron",
-        error: error instanceof Error ? error.message : "errore non identificato",
+        error: "Giro non completato. Il dettaglio è registrato nei log del server.",
       },
       { status: 500 },
     );

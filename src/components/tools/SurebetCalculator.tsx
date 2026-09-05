@@ -2,6 +2,7 @@
 
 import { useState, useMemo } from "react";
 import { calculateArbitrage } from "@/lib/quant/arbitrage";
+import { isValidPrice } from "@/lib/drop/math";
 
 interface OutcomeInput {
   label: string;
@@ -27,6 +28,12 @@ export function SurebetCalculator() {
 
   const currentOutcomes = marketType === "2way" ? outcomes2Way : outcomes3Way;
   const setOutcomes = marketType === "2way" ? setOutcomes2Way : setOutcomes3Way;
+
+  /* Quote digitate valide? Senza questo controllo il verdetto mostrerebbe un
+     «overround 100%» anche a caselle vuote: uno zero di ripiego, non una misura. */
+  const inputsValid = currentOutcomes.every((o) =>
+    isValidPrice(Number.parseFloat(o.odds.replace(",", ".")) || 0),
+  );
 
   const result = useMemo(() => {
     const parsed = currentOutcomes.map((o) => ({
@@ -84,9 +91,11 @@ export function SurebetCalculator() {
             Calcolatore Surebet & Arbitraggio Matematico
           </h2>
           <p className="mt-1 text-xs text-slate-500">
-            Distribuisce l&apos;importo sulle quote che inserisci, così che il risultato sia lo
-stesso a ogni esito. La distribuzione è matematica; l&apos;esistenza di quelle quote,
-nello stesso momento e allo stesso importo, non lo è.
+            Distribuisce l&apos;importo sulle quote che inserisci, così che il risultato sia
+(quasi) lo stesso a ogni esito: con l&apos;arrotondamento all&apos;euro i singoli
+incassi possono differire di qualche centesimo e il verdetto usa il peggiore. La
+distribuzione è matematica; l&apos;esistenza di quelle quote, nello stesso momento
+e allo stesso importo, non lo è.
           </p>
         </div>
 
@@ -189,8 +198,15 @@ nello stesso momento e allo stesso importo, non lo è.
         ))}
       </div>
 
-      {/* Verdetto Arbitraggio */}
-      {result && (
+      {/* Verdetto Arbitraggio: con quote incomplete non si dichiara nulla */}
+      {!inputsValid ? (
+        <div className="mt-6 rounded-2xl border border-dashed border-slate-300 bg-white p-4 text-xs leading-relaxed text-slate-500 sm:p-5">
+          Inserisci una quota valida (maggiore di 1,00) per ogni esito: finché
+          manca un numero, qui non compare nessun verdetto — né «surebet» né
+          «overround».
+        </div>
+      ) : (
+        result && (
         <div
           className={`mt-6 rounded-2xl p-4 sm:p-5 ${
             result.isArbitrage
@@ -208,13 +224,13 @@ nello stesso momento e allo stesso importo, non lo è.
                 />
                 <span className="text-xs font-bold uppercase tracking-wider">
                   {result.isArbitrage
-                    ? "✨ SUREBET TROVATA — PROFITTO GARANTITO"
+                    ? "✨ Surebet aritmetica su queste quote"
                     : "Nessuna Surebet (Mercato con Margine)"}
                 </span>
               </div>
               <p className="mt-1 text-xs opacity-80">
                 {result.isArbitrage
-                  ? `Puntando le quote indicate otterrai un ritorno sicuro a prescindere dall'esito finale.`
+                  ? `Se tutte le quote indicate sono eseguibili insieme, per questi importi, il ritorno supera la spesa a ogni esito. Nessuna vincita è garantita: le quote si muovono e i bookmaker limitano.`
                   : `Overround attuale: ${(100 + result.arbitrageMarginPct).toFixed(2)}%. Serve un overround < 100% per l'arbitraggio.`}
               </p>
             </div>
@@ -227,7 +243,8 @@ nello stesso momento e allo stesso importo, non lo è.
                     Profitto Netto
                   </div>
                   <div className="text-lg font-extrabold text-emerald-700 tabular-nums">
-                    +€ {result.guaranteedProfit.toFixed(2)}
+                    {result.guaranteedProfit >= 0 ? "+" : ""}€{" "}
+                    {result.guaranteedProfit.toFixed(2)}
                   </div>
                 </div>
                 <div className="rounded-xl bg-emerald-600 px-3.5 py-2 text-center text-white">
@@ -235,12 +252,35 @@ nello stesso momento e allo stesso importo, non lo è.
                     ROI su queste quote
                   </div>
                   <div className="text-lg font-extrabold tabular-nums">
-                    +{result.profitPct.toFixed(2)}%
+                    {result.profitPct >= 0 ? "+" : ""}
+                    {result.profitPct.toFixed(2)}%
                   </div>
                 </div>
               </div>
             )}
           </div>
+
+          {/* L'arrotondamento all'euro sposta il totale: la spesa vera è questa,
+              non il numero digitato sopra. */}
+          {result.isArbitrage && (
+            <p className="mt-2 text-[11px] text-slate-500 tabular-nums">
+              Spesa effettiva dopo l&apos;arrotondamento: €{" "}
+              {result.totalStake.toFixed(2)}
+              {roundStakes
+                ? " (può differire di qualche euro dall'importo digitato)."
+                : "."}
+            </p>
+          )}
+          {/* Margine più sottile dell'arrotondamento: l'aritmetica dice surebet,
+              gli euro interi dicono di no — e comandano gli euro interi. */}
+          {result.isArbitrage && roundStakes && result.guaranteedProfit <= 0 && (
+            <p className="mt-2 rounded-xl bg-amber-50 px-3 py-2 text-[11px] leading-relaxed text-amber-900 ring-1 ring-amber-200">
+              L&apos;arrotondamento all&apos;euro ha mangiato il margine: con
+              importi interi il peggiore degli incassi non copre la spesa.
+              Disattiva l&apos;arrotondamento o alza l&apos;importo per
+              ritrovare il vantaggio dell&apos;aritmetica.
+            </p>
+          )}
 
           <p className="mt-3 text-[11px] leading-relaxed text-slate-500">
             Il vantaggio esiste solo se tutte le quote indicate sono disponibili{" "}
@@ -269,6 +309,7 @@ nello stesso momento e allo stesso importo, non lo è.
             </div>
           )}
         </div>
+        )
       )}
     </div>
   );

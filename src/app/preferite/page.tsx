@@ -37,6 +37,10 @@ export default function WatchlistPage() {
   const [entries, setEntries] = useState<WatchEntry[]>([]);
   const [live, setLive] = useState<Map<number, LiveRow>>(new Map());
   const [loading, setLoading] = useState(true);
+  /* Il servizio dei dati vivi può non rispondere (API giù): senza questo
+     stato una riga «nessun segnale a registro» sarebbe indistinguibile fra
+     «segnale scaduto» e «lettura fallita». Il banner sotto lo dichiara. */
+  const [liveOk, setLiveOk] = useState(true);
 
   useEffect(() => {
     const sync = () => {
@@ -106,9 +110,15 @@ export default function WatchlistPage() {
             });
           }
         }
-        if (!annullato) setLive(map);
+        if (!annullato) {
+          setLive(map);
+          setLiveOk(true);
+        }
       } catch {
-        if (!annullato) setLive(new Map());
+        if (!annullato) {
+          setLive(new Map());
+          setLiveOk(false);
+        }
       } finally {
         if (!annullato) setLoading(false);
       }
@@ -156,6 +166,15 @@ export default function WatchlistPage() {
         solo in questo browser: non viene inviata al server e non la ritrovi su
         un altro dispositivo.
       </p>
+
+      {!loading && !liveOk && entries.length > 0 ? (
+        <p className="mt-3 rounded-lg border border-orange-300 bg-orange-50 px-3 py-2 text-xs leading-relaxed text-orange-900">
+          <span className="font-semibold">Dati vivi non raggiungibili.</span>{" "}
+          Il servizio che aggiorna indici e variazioni non risponde: le righe
+          qui sotto mostrano assenza di segnale, non una lettura. Le preferite
+          restano salvate, riprova più tardi.
+        </p>
+      ) : null}
 
       {entries.length === 0 ? (
         <p className="mt-5 rounded-lg border border-dashed border-slate-300 bg-white p-4 text-sm text-slate-600">
@@ -238,7 +257,7 @@ export default function WatchlistPage() {
 
       <p className="mt-6 text-[11px] leading-relaxed text-slate-500">
         La soglia personale non cambia il punteggio, non filtra la lista
-        principale e non è un consiglio: serve solo a ritrovare in fretta ciò
+        principale e non garantisce nulla: serve solo a ritrovare in fretta ciò
         che stai osservando.
       </p>
     </main>

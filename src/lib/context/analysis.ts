@@ -5,7 +5,7 @@
  *  - le PARTI DISCORSIVE (matrice dei fattori, tre punti, scenario) arrivano
  *    dal modello, che lavora solo sui fatti già recuperati (campi del
  *    Contesto 360° con fonte, documenti Tavily, profilo del movimento);
- *  - la validazione respinge qualunque raccomandazione: se compare un pick,
+ *  - la validazione respinge pick diretti e promesse di vincita: se compaiono,
  *    l'analisi non si pubblica.
  *
  * Niente qui dentro entra nel punteggio.
@@ -13,7 +13,7 @@
 
 /** Chiusura fissa, identica ovunque compaia l'analisi. */
 export const ANALYSIS_CLOSING =
-  "È una lettura basata su fonti pubbliche e sul profilo del movimento: non è una certezza né un consiglio.";
+  "È una lettura basata su fonti pubbliche e sul profilo del movimento: non è una garanzia di vincita. Gioca responsabilmente.";
 
 /** Testo unico quando il budget è finito. */
 export const ANALYSIS_BUDGET_MESSAGE = "analisi non disponibile per budget";
@@ -38,12 +38,14 @@ export const FORBIDDEN_PATTERNS: RegExp[] = [
   /\bscommetter/i,
   /\bvalue\s*bet\b/i,
   /\bquota\s+da\s+giocare\b/i,
-  /\bover\s*\d/i,
-  /\bunder\s*\d/i,
   /\bgoal\/nogoal\b/i,
   /\bmulti(?:pla)?\b/i,
   /\bbanker\b/i,
   /\bconsiglio\s+finale\b/i,
+  /vincita\s+(certa|garantita|sicura|assicurata)/i,
+  /guadagno\s+garantito/i,
+  /profitto\s+(certo|garantito|sicuro)/i,
+  /\b100%\s+di\s+(vincita|successo)/i,
 ];
 
 /** true se il testo contiene una raccomandazione: allora si respinge. */
@@ -481,7 +483,9 @@ export function buildAnalysisPrompt(f: AnalysisFacts): string {
     "- non citare quote, percentuali, punti percentuali, orari o conteggi esatti: il testo resta valido",
     "  mentre i numeri cambiano, quindi parla di direzione e intensità («la quota è scesa nettamente»,",
     "  «il movimento è durato alcune ore»), mai di valori precisi;",
-    "- non scrivere mai esito consigliato, mercato gol, risultato esatto, over, under, pronostico, value bet;",
+    "- non scrivere mai esito consigliato, mercato gol, risultato esatto, pronostico, value bet;",
+    "- i nomi dei mercati (over/under) si usano solo per descrivere dove si muove il mercato, mai per suggerire cosa giocare;",
+    "- non promettere mai vincite o guadagni: niente vincita certa, profitto garantito o simili;",
     "- non consigliare né suggerire alcuna giocata, in nessuna forma;",
     "- non affermare chi vincerà: descrivi come si muove il mercato, non come finirà la partita;",
     "- metafore tattiche ammesse, certezze no: usa condizionale e forme dubitative.",

@@ -41,7 +41,12 @@ export type ValueGapResult =
       fairProb: number;
       /** overround osservato sulla linea: 0.061 = margine 6,1% */
       marginPct: number;
-      /** divario fra fair ed eseguibile, in punti percentuali; può essere negativo */
+      /**
+       * Divario fra fair ed eseguibile in PERCENTO relativo (`ev × 100`, non punti
+       * percentuali): +5,0 significa che il rendimento atteso sul prezzo eseguibile
+       * supera di un ventesimo la posta, non che le probabilità distano 5 pp.
+       * Può essere negativo.
+       */
       edgePct: number;
       /** lo stesso divario in frazione */
       expectedValue: number;

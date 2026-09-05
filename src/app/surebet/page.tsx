@@ -16,7 +16,7 @@ import { SurebetCalculator } from "@/components/tools/SurebetCalculator";
 import { DutchingCalculator } from "@/components/tools/DutchingCalculator";
 
 export const metadata: Metadata = {
-  title: "Calcolatore di Surebet e Dutching — DropAlert Pro",
+  title: "Calcolatore di Surebet e Dutching — DropAlert",
   description:
     "Arbitraggio e distribuzione su più esiti: l'aritmetica delle quote che inserisci tu, con i vincoli che la rendono rara (simultaneità, limiti, commissione).",
   alternates: { canonical: "/surebet" },

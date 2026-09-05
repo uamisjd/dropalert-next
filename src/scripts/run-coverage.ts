@@ -497,7 +497,7 @@ function renderReport(r: CoverageReport): string {
   }
 
   push(
-    "Nota: DropAlert è un osservatorio statistico sui movimenti di quota. Questa misura descrive la copertura dei dati, non la qualità di un pronostico, e non contiene indicazioni di scommessa.",
+    "Nota: DropAlert è un terminale quantitativo per scommesse. Questa misura descrive la copertura dei dati, non una garanzia sui segnali.",
   );
   return out.join("\n");
 }

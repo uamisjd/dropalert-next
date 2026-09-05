@@ -9,6 +9,8 @@ interface Props {
   trades: TradingOpportunity[];
   /** segnali letti dall'elenco del dashboard: il denominale onesto di `trades.length` */
   signalsRead: number;
+  /** true quando la lettura è fallita: la tabella vuota non è «nessuna escursione» */
+  readFailed: boolean;
 }
 
 /**
@@ -21,7 +23,7 @@ interface Props {
  * qui è quanto il prezzo si è mosso, e quanto varrebbe chiudere fra quei due numeri.
  * Per questo la sezione è «a ritroso»: misura, non trade da eseguire.
  */
-export function TradingTerminalView({ trades, signalsRead }: Props) {
+export function TradingTerminalView({ trades, signalsRead, readFailed }: Props) {
   const filtered = trades;
 
   return (
@@ -50,11 +52,21 @@ export function TradingTerminalView({ trades, signalsRead }: Props) {
         </div>
 
         {filtered.length === 0 ? (
-          <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-8 text-center text-xs text-slate-500">
-            Nessuna escursione di almeno tre tick, fra le letture disponibili. Se la lista
-            è vuota non è un&#39;assenza di movimento: è il collettore che non l&#39;ha
-            registrato, e la differenza sta nei contatori di&nbsp;<Link href="/api/health" className="underline">/api/health</Link>.
-          </div>
+          readFailed ? (
+            <div className="rounded-2xl border border-rose-200 bg-rose-50 p-8 text-center text-xs leading-relaxed text-rose-900">
+              Le escursioni non sono leggibili in questo momento (lettura non
+              riuscita, dettaglio nel log del server). Questa tabella vuota non
+              significa «nessuna escursione»: lo stato del collettore è su&nbsp;
+              <Link href="/coverage" className="underline">/coverage</Link>.
+            </div>
+          ) : (
+            <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-8 text-center text-xs text-slate-500">
+              Nessuna escursione di almeno tre tick, fra le {signalsRead} letture
+              disponibili. Se la lista è vuota non è un&#39;assenza di movimento:
+              è il collettore che non l&#39;ha registrato, e la differenza sta nei
+              contatori di&nbsp;<Link href="/coverage" className="underline">/coverage</Link>.
+            </div>
+          )
         ) : (
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             {filtered.map((trade) => (

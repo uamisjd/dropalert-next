@@ -30,6 +30,8 @@ export const metadata = {
   title: "Copertura della raccolta — DropAlert",
   description:
     "Quante righe dell'elenco della fonte diventano dato utile, e dove finiscono quelle che non ci arrivano.",
+  /* l'URL pubblico è /coverage (rewrite): il canonical dice quello vero */
+  alternates: { canonical: "/coverage" },
 };
 
 export default async function CoveragePage() {
@@ -61,11 +63,11 @@ export default async function CoveragePage() {
       actions: { lastScheduledRun: history.lastScheduledRun, now },
     });
   } catch (error) {
-    /* il guasto si dichiara, non si nasconde dietro una pagina vuota */
-    failure =
-      error instanceof Error
-        ? error.message
-        : "Errore non identificato nella lettura della copertura.";
+    /* il guasto si dichiara, non si nasconde dietro una pagina vuota. Il dettaglio
+       grezzo (driver SQL incluso) resta nel log del server: alla pagina arriva solo
+       un testo generico, mai `error.message`. */
+    console.error("[copertura] lettura non riuscita:", error);
+    failure = "lettura non riuscita (dettaglio nel log del server).";
   }
 
   return (
@@ -83,8 +85,8 @@ export default async function CoveragePage() {
           Misura di completezza del dato: quante righe di calcio pubblicate
           dalla fonte diventano una partita osservata.{" "}
           <span className="font-medium text-slate-800">
-            Non dice nulla sulla bontà dei segnali e non è un consiglio di
-            scommessa.
+            Non dice nulla sulla bontà dei segnali: è una misura del dato,
+            senza garanzie sui risultati.
           </span>
         </p>
       </header>
@@ -93,7 +95,7 @@ export default async function CoveragePage() {
         <div className="rounded-lg border border-orange-300 bg-orange-50 p-4 text-sm text-orange-900">
           <p className="font-medium">DATI PARZIALI</p>
           <p className="mt-1 text-xs leading-relaxed">
-            La copertura non è leggibile in questo momento: {failure}. Nessun
+            La copertura non è leggibile in questo momento ({failure}) Nessun
             valore viene mostrato al suo posto.
           </p>
         </div>

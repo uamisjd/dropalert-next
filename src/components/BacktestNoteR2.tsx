@@ -70,9 +70,8 @@ export function BacktestNoteR2() {
         <span className="font-semibold">Cosa resta vero:</span> questi
         numeri negativi sono pubblicati così come sono. Il monitor misura
         movimenti di mercato e la propria capacità di prenderne il prezzo
-        — e la misura dice che oggi il prezzo al rilevamento non batte la
-        chiusura. Nessun contenuto di questo sito è un consiglio di
-        scommessa.
+          — e la misura dice che oggi il prezzo al rilevamento non batte la
+          chiusura. Nessun numero di questo sito è una garanzia di vincita.
       </p>
 
       <p className="mt-3 text-[11px] leading-relaxed text-slate-500">

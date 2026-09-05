@@ -250,7 +250,7 @@ eq("kelly senza vantaggio: frazione 0", noEdge?.fractionPct, 0);
 check("kelly senza vantaggio: dichiarato", noEdge?.hasEdge === false);
 eq("kelly con quota non valida", kellyFraction(60, null), null);
 
-check("il testo del limite esiste", STAKE_DISCLAIMER.includes("consiglio"));
+check("il testo del limite nega la garanzia", STAKE_DISCLAIMER.includes("vincite"));
 check("l'avviso su Kelly esiste", KELLY_NOTE.includes("raccomandazione"));
 eq("soglia di rovina dichiarata", RUIN_THRESHOLD_PCT, 20);
 

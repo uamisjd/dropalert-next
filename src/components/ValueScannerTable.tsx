@@ -47,7 +47,7 @@ export function ValueScannerTable({ scanner }: Props) {
   );
   const filtered = useMemo(() => applyScannerFilters(items, filters), [items, filters]);
 
-  const negative = filtered.filter((o) => o.edgePct <= 0).length;
+  const negative = filtered.filter((o) => o.edgePct < 0).length;
   const empty = describeEmptyScanner(items, filtered, filters);
 
   return (
@@ -65,9 +65,9 @@ export function ValueScannerTable({ scanner }: Props) {
               className="mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-900 focus:border-cyan-500 focus:outline-none"
             >
               <option value={SHOW_ALL_EDGES}>Mostra tutto, anche i negativi</option>
-              <option value={0.5}>Da +0,5 pp</option>
-              <option value={1}>Da +1,0 pp</option>
-              <option value={2}>Da +2,0 pp</option>
+              <option value={0.5}>Da +0,5%</option>
+              <option value={1}>Da +1,0%</option>
+              <option value={2}>Da +2,0%</option>
             </select>
           </div>
 
@@ -226,9 +226,13 @@ export function ValueScannerTable({ scanner }: Props) {
                     >
                       {signed(opp.edgePct, 1)}%
                     </div>
-                    <div className="text-[11px] text-slate-500 tabular-nums">
+                    <div
+                      className="text-[11px] text-slate-500 tabular-nums"
+                      title="Il divario sopra è relativo (edge × 100); qui la differenza assoluta fra le due probabilità, in punti percentuali."
+                    >
                       fair {opp.trueProbPct.toFixed(1)}% · implicita{" "}
-                      {opp.impliedProbPct.toFixed(1)}%
+                      {opp.impliedProbPct.toFixed(1)}% (
+                      {signed(opp.trueProbPct - opp.impliedProbPct, 1)} pp)
                     </div>
                   </div>
 

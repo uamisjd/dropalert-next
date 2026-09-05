@@ -10,8 +10,11 @@ const LINKS: Array<{ href: string; label: string; badge?: string; highlight?: bo
   { href: "/surebet", label: "Surebet (calcolo)" },
   { href: "/simulator", label: "Simulatore xG" },
   { href: "/strumenti", label: "Strumenti" },
-  { href: "/preferite", label: "Watchlist" },
+  { href: "/preferite", label: "Preferite" },
   { href: "/ieri", label: "Ieri" },
+  { href: "/domani", label: "Domani" },
+  { href: "/performance", label: "Performance" },
+  { href: "/coverage", label: "Copertura" },
   { href: "/metodologia", label: "Metodo" },
 ];
 
@@ -24,7 +27,7 @@ export function SiteNav() {
         <Link
           href="/"
           className="flex shrink-0 items-center gap-2 text-sm font-black tracking-tight text-slate-950"
-          aria-label="DropAlert Pro — quant terminal"
+          aria-label="DropAlert — terminale quantitativo per scommesse sul calcio"
         >
           <span
             aria-hidden

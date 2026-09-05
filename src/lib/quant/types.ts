@@ -1,5 +1,5 @@
 /**
- * Tipi per il motore quantitativo di DropAlert Pro.
+ * Tipi per il motore quantitativo di DropAlert.
  * Copre: Value Betting (+EV), Dixon-Coles/Poisson, Shin Devig, Kelly Staking,
  * Surebet/Arbitraggio, Dutching e Trading Exchange (Green-Up/Scalping).
  */
@@ -178,6 +178,11 @@ export interface GreenUpCalculation {
   hedgedProfitIfLose: number;
   hedgedProfitNet: number; // se equal_profit, identico in ogni caso
   freebetProfitIfWin: number;
+  /**
+   * Lato perdente della freebet: sempre zero per costruzione (la vincita del lay
+   * restituisce esattamente la puntata persa sul back), con o senza commissione —
+   * la commissione colpisce solo un netto positivo, e qui il netto è nullo.
+   */
   freebetProfitIfLose: number;
   roiPct: number;
   tickDifference: number;
