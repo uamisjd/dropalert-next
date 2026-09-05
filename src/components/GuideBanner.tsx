@@ -88,9 +88,10 @@ export function GuideBanner() {
         </li>
         <li>
           <span className="font-medium text-slate-900">
-            Non è un pronostico: misura il mercato, non il risultato.
+            Non prevede il risultato: misura il mercato.
           </span>{" "}
-          Un drop non dice chi vincerà e non offre alcun vantaggio. La sola
+          Un drop non dice chi vincerà e non garantisce alcun vantaggio: usalo
+          per informare le tue giocate. La sola
           metrica di qualità pubblicata è il CLV
           <Info term="clv" />.
         </li>

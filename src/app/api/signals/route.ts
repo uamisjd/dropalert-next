@@ -98,7 +98,7 @@ export async function GET(request: Request) {
         includesDemoData: q.demo,
         note: q.demo
           ? "La risposta include fixture dimostrative marcate con match.isDemo = true. Non sono dati reali di mercato."
-          : "Sono esclusi i dati dimostrativi. Osservatorio statistico: nessun contenuto è un consiglio di scommessa.",
+          : "Sono esclusi i dati dimostrativi. Terminale quantitativo per scommesse: segnali misurati, nessuna vincita garantita.",
         generatedAt: new Date().toISOString(),
       },
     });

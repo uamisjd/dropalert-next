@@ -55,7 +55,7 @@ export interface ContextGeneration {
 function buildPrompt(input: ContextRequestInput): string {
   return [
     "Sei un assistente di un osservatorio statistico sui movimenti delle quote del calcio.",
-    "Prepari CONTESTO informativo, mai pronostici, mai consigli di scommessa.",
+    "Prepari CONTESTO informativo per scommettitori: descrivi fatti e mercato, mai pick diretti né promesse di vincita.",
     "Usa la ricerca per trovare dati reali e verifica ciò che sai.",
     "Dati della partita:",
     `- competizione: ${input.league ?? "non nota"}${input.country ? ` (${input.country})` : ""}`,

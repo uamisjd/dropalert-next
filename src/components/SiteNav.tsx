@@ -10,8 +10,11 @@ const LINKS: Array<{ href: string; label: string; badge?: string; highlight?: bo
   { href: "/surebet", label: "Surebet (calcolo)" },
   { href: "/simulator", label: "Simulatore xG" },
   { href: "/strumenti", label: "Strumenti" },
-  { href: "/preferite", label: "Watchlist" },
+  { href: "/preferite", label: "Preferite" },
   { href: "/ieri", label: "Ieri" },
+  { href: "/domani", label: "Domani" },
+  { href: "/performance", label: "Performance" },
+  { href: "/coverage", label: "Copertura" },
   { href: "/metodologia", label: "Metodo" },
 ];
 

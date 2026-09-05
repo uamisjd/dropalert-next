@@ -126,7 +126,7 @@ export async function generateMetadata({
     pezzi.push(`Competizione: ${m.league}.`);
   }
   pezzi.push(
-    "Osservatorio statistico sui movimenti delle quote: non è un pronostico.",
+    "Terminale quantitativo per scommesse: nessuna vincita garantita.",
   );
 
   const url = `${SITE_URL}/matches/${matchId}`;
@@ -630,8 +630,8 @@ export default async function MatchDetailPage({
           ) : null}
 
           <p className="mt-5 max-w-2xl border-t border-white/10 pt-4 text-xs leading-relaxed text-slate-400">
-            Osserviamo il mercato, non prevediamo il risultato. Un movimento di
-            quota non è un consiglio di scommessa.
+            Osserviamo il mercato per informare le tue giocate, non per
+            prevedere il risultato: nessuna vincita è garantita.
           </p>
         </div>
       </header>
@@ -738,7 +738,7 @@ export default async function MatchDetailPage({
           </h2>
           <p className="mt-1 text-sm leading-relaxed text-slate-600">
             Le fonti pubbliche aiutano a leggere il movimento, ma non lo
-            trasformano in un pronostico. Le ipotesi non verificate restano
+            trasformano in una garanzia. Le ipotesi non verificate restano
             separate dai fatti.
           </p>
         </div>

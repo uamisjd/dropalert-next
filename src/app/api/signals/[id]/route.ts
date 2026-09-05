@@ -43,7 +43,7 @@ export async function GET(
         isDemoData: detail.match.isDemo,
         note: detail.match.isDemo
           ? "Fixture dimostrativa: non è un dato reale di mercato."
-          : "Osservatorio statistico: descrizione di un movimento osservato, non un consiglio di scommessa.",
+          : "Terminale quantitativo per scommesse: descrizione di un movimento osservato, nessuna vincita garantita.",
         clvAvailable: detail.clv !== null,
         clvNote:
           detail.clv === null

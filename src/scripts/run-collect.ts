@@ -152,7 +152,7 @@ async function main(): Promise<void> {
   );
   console.log("dichiarate mancanti in data_gaps.");
   console.log(
-    "Osservatorio statistico: nessun contenuto è un consiglio di scommessa.\n",
+    "Terminale quantitativo per scommesse: nessuna vincita garantita.\n",
   );
 }
 

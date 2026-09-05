@@ -17,7 +17,7 @@ import { matchesTimeChip } from "@/lib/view/timeline";
 import { SITE_URL } from "@/lib/site";
 
 /** Frase fissa in coda a ogni elemento del feed. */
-export const FEED_DISCLAIMER = "Non è un consiglio di scommessa.";
+export const FEED_DISCLAIMER = "Nessuna vincita garantita: gioca responsabilmente.";
 
 /** Quante voci al massimo: un feed lungo non è un feed più utile. */
 export const FEED_MAX_ITEMS = 30;

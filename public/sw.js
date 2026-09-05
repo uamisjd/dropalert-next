@@ -26,14 +26,14 @@ self.addEventListener("push", (event) => {
   const title = data.title || "DropAlert";
   const body =
     data.body ||
-    "Una partita che segui ha superato la tua soglia. Non è un consiglio di scommessa.";
+    "Una partita che segui ha superato la tua soglia. Nessuna vincita garantita: gioca responsabilmente.";
   const url = data.url || "/preferite";
 
   event.waitUntil(
     self.registration.showNotification(title, {
       body,
-      icon: "/og-cover.png",
-      badge: "/og-cover.png",
+      icon: "/icon-512.png",
+      badge: "/icon-512.png",
       lang: "it",
       tag: url,
       data: { url },

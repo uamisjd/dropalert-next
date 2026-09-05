@@ -165,8 +165,8 @@ export default async function ValueBetsPage() {
           </div>
         </div>
         <p className="mt-4 border-t border-slate-100 pt-3 text-[11px] text-slate-400">
-          Nessun campo di questa pagina è una puntata da eseguire. Per giocare con i
-          numeri — Kelly, varianza, surebet — ci sono gli&nbsp;
+          Queste misure informano le tue giocate, non le decidono: nessuna vincita
+          è garantita. Per giocare con i numeri — Kelly, varianza, surebet — ci sono gli&nbsp;
           <Link href="/strumenti" className="underline">
             strumenti
           </Link>

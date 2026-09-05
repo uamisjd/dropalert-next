@@ -106,7 +106,7 @@ export function buildNotification(
     matchKey: item.matchKey,
     matchId: item.matchId,
     title: `${partita}: soglia raggiunta`,
-    body: `${dettaglio}. Il monitor descrive il mercato, non l'esito: non è un consiglio.`,
+    body: `${dettaglio}. Il monitor descrive il mercato, non l'esito: nessuna vincita garantita.`,
     url: `${siteUrl}/matches/${item.matchId}`,
   };
 }

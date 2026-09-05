@@ -109,7 +109,7 @@ async function main(): Promise<void> {
 
   await test("margine: il disclaimer è presente", () => {
     assert(
-      testo().includes("consiglio di scommessa"),
+      testo().includes("non garantisce vincite"),
       "il limite dichiarato compare in pagina",
     );
   });
@@ -185,7 +185,7 @@ async function main(): Promise<void> {
 
   await test("varianza: il disclaimer e l'avviso su Kelly restano fissi", () => {
     const t = testo();
-    assert(t.includes("consiglio di scommessa"), "limite dichiarato");
+    assert(t.includes("non garantisce vincite"), "limite dichiarato");
     assert(t.includes("raccomandazione"), "Kelly non è presentato come consiglio");
     assert(t.includes("deterministica"), "la riproducibilità è dichiarata");
   });

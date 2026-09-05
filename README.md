@@ -1,12 +1,13 @@
-# DropAlert — Osservatorio statistico sui movimenti di quota
+# DropAlert — Terminale quantitativo per scommesse sul calcio
 
-DropAlert è un **osservatorio statistico**: registra come si muovono le quote del
-calcio, misura quanto è solido ogni movimento e verifica nel tempo la propria
-attendibilità tramite il CLV.
+DropAlert è un **terminale quantitativo per scommettitori**: registra come si
+muovono le quote del calcio, misura quanto è solido ogni movimento, confronta i
+prezzi con le linee senza margine e verifica nel tempo la propria attendibilità
+tramite il CLV.
 
-**Non è** un servizio di pronostici, non promette esiti e non fornisce consigli
-di scommessa. Ogni scheda descrive un fenomeno di mercato osservato, dichiara i
-dati che mancano e mostra la scomposizione del punteggio.
+**Non promette vincite**: ogni scheda descrive un fenomeno di mercato osservato,
+dichiara i dati che mancano e mostra la scomposizione del punteggio. Nessuna
+vincita è garantita: gioca responsabilmente (+18).
 
 ---
 

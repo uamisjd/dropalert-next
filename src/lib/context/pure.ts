@@ -15,7 +15,7 @@ import { sportKeyFor } from "@/lib/providers/optional/sport-keys";
 
 /** Dicitura fissa in testa al blocco, ovunque il contesto compaia. */
 export const CONTEXT_DISCLAIMER =
-  "Contesto generato automaticamente: non è un pronostico né una garanzia.";
+  "Contesto generato automaticamente: informazione a supporto delle tue analisi, non garanzia di vincita.";
 
 /** Tag che accompagna ogni campo privo di fonte recuperata. */
 export const MODEL_KNOWLEDGE_TAG = "conoscenza modello, da verificare";

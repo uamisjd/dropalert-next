@@ -277,8 +277,8 @@ export function PushControls() {
               : ""}
         Ricevi un avviso solo per le partite in questa lista che superano la
         soglia che hai impostato: mai per altre partite. {DEDUPE_NOTE}{" "}
-        {PLATFORM_NOTE} L&apos;avviso descrive un movimento di mercato e non è
-        un consiglio di scommessa.
+        {PLATFORM_NOTE} L&apos;avviso descrive un movimento di mercato:
+        nessuna vincita garantita.
       </p>
     </section>
   );

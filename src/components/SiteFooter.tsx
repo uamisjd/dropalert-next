@@ -76,9 +76,10 @@ export function SiteFooter() {
         </nav>
 
         <p className="mt-2 text-[11px] leading-relaxed text-slate-500">
-          DropAlert è un osservatorio statistico sui movimenti delle quote. Non
-          fornisce pronostici, non raccoglie scommesse e non è affiliato ad
-          alcun operatore di gioco.
+          DropAlert è un terminale quantitativo per scommesse sportive: segnali
+          e strumenti basati sui movimenti delle quote. Non raccoglie scommesse
+          e non è affiliato ad alcun operatore di gioco. Nessuna vincita è
+          garantita: gioca responsabilmente.
         </p>
       </div>
     </footer>

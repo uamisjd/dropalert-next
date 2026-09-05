@@ -23,10 +23,10 @@ export const SITE_URL =
 export const SITE_NAME = "DropAlert";
 
 export const SITE_TITLE =
-  "DropAlert — Osservatorio sui movimenti delle quote";
+  "DropAlert — Terminale quantitativo per scommesse sul calcio";
 
 export const SITE_DESCRIPTION =
-  "Monitoraggio statistico dei movimenti di quota nel calcio: ampiezza, conferme, persistenza e qualità del dato. Non è un servizio di pronostici.";
+  "Segnali quantitativi sui movimenti di quota nel calcio: ampiezza, conferme, divari di prezzo e strumenti per scommettitori. Nessuna vincita garantita: gioca responsabilmente.";
 
 /** Pagine pubbliche sempre presenti in sitemap.
  *

@@ -85,8 +85,8 @@ export default async function CoveragePage() {
           Misura di completezza del dato: quante righe di calcio pubblicate
           dalla fonte diventano una partita osservata.{" "}
           <span className="font-medium text-slate-800">
-            Non dice nulla sulla bontà dei segnali e non è un consiglio di
-            scommessa.
+            Non dice nulla sulla bontà dei segnali: è una misura del dato,
+            senza garanzie sui risultati.
           </span>
         </p>
       </header>

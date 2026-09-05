@@ -23,7 +23,7 @@ import {
 export const dynamic = "force-dynamic";
 
 const DISCLAIMER =
-  "DropAlert è un osservatorio statistico sui movimenti di quota. Questa misura descrive la copertura dei dati raccolti e non contiene indicazioni di scommessa.";
+  "DropAlert è un terminale quantitativo per scommesse. Questa misura descrive la copertura dei dati raccolti, senza garanzie sui segnali.";
 
 export async function GET(request: Request): Promise<NextResponse> {
   const startedAt = Date.now();

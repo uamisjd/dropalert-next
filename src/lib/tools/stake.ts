@@ -23,7 +23,7 @@ import { isValidPrice, round } from "@/lib/drop/math";
 
 /** Testo unico del limite, mostrato accanto a ogni risultato. */
 export const STAKE_DISCLAIMER =
-  "Non è un consiglio di scommessa e non indica alcuna giocata: sono conseguenze aritmetiche di un prezzo e di una probabilità che inserisci tu.";
+  "Non indica alcuna giocata e non garantisce vincite: sono conseguenze aritmetiche di un prezzo e di una probabilità che inserisci tu.";
 
 /** Avviso sulla dimensione della puntata, fisso in interfaccia. */
 export const KELLY_NOTE =
