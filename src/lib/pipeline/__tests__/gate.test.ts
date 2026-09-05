@@ -9,7 +9,7 @@
  * Funzioni pure: nessuna rete, nessun database.
  * Eseguire con: npm run test:gate
  */
-import { shouldRunNow } from "../scheduler";
+import { latestRunMoment, shouldRunNow } from "../scheduler";
 
 let passed = 0;
 const failures: string[] = [];
@@ -72,6 +72,62 @@ check(
   "il forzato lo dichiara nel motivo",
   shouldRunNow(minutiFa(1), now, INTERVAL, true).reason.includes("forzata"),
 );
+
+/* --- il tentativo conta: un giro interrotto non libera il successivo --- */
+/* Scenario misurato il 05/09/2026: l'ultimo giro CHIUSO era di 46 minuti fa,
+   un giro TENTATO 15 minuti fa era stato interrotto a metà dal budget del
+   chiamante e non aveva scritto l'esito. Col solo registro delle chiusure il
+   gate lasciava passare ogni battuta: quattro raccolte all'ora contro una
+   ogni 45 minuti, cioè ~11 richieste in più alla fonte ogni quarto d'ora. */
+eq(
+  "nessun registro: niente da rispettare",
+  latestRunMoment(null, null),
+  null,
+);
+eq(
+  "solo chiusura: si rispetta la chiusura",
+  latestRunMoment(minutiFa(50), null)!.getTime(),
+  minutiFa(50).getTime(),
+);
+eq(
+  "solo tentativo (giro mai chiuso): si rispetta il tentativo",
+  latestRunMoment(null, minutiFa(15))!.getTime(),
+  minutiFa(15).getTime(),
+);
+eq(
+  "tentativo più recente della chiusura: vince il tentativo",
+  latestRunMoment(minutiFa(46), minutiFa(15))!.getTime(),
+  minutiFa(15).getTime(),
+);
+eq(
+  "chiusura più recente del tentativo: vince la chiusura",
+  latestRunMoment(minutiFa(10), minutiFa(40))!.getTime(),
+  minutiFa(10).getTime(),
+);
+eq(
+  "giro chiuso e poi tentato alla stessa ora: nessuna attesa extra",
+  latestRunMoment(minutiFa(45), minutiFa(45))!.getTime(),
+  minutiFa(45).getTime(),
+);
+/* qui sta il senso della modifica: con il tentativo a 15 minuti il gate deve
+   negare la raccolta, mentre con la sola chiusura l'avrebbe concessa */
+eq(
+  "chiusura a 46 min, senza tentativo: si raccoglie (comportamento precedente)",
+  shouldRunNow(minutiFa(46), now, INTERVAL, false).run,
+  true,
+);
+eq(
+  "chiusura a 46 min + tentativo a 15 min: non si raccoglie",
+  shouldRunNow(latestRunMoment(minutiFa(46), minutiFa(15)), now, INTERVAL, false).run,
+  false,
+);
+check(
+  "il diniego dice il perché senza inventare un esito",
+  shouldRunNow(latestRunMoment(minutiFa(46), minutiFa(15)), now, INTERVAL, false).reason.includes(
+    "saltata",
+  ),
+);
+passed += 1;
 
 if (failures.length > 0) {
   console.error(`✗ ${failures.length} test falliti su ${passed + failures.length}`);

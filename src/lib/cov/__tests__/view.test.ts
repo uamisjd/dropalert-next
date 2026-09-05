@@ -6,6 +6,8 @@
  * sola ma decisiva — che la pagina non possa mostrare uno zero dove non
  * c'è misura, né sommare fra loro cose di natura diversa.
  */
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import {
   buildCoverageView,
   coverageLabel,
@@ -60,6 +62,24 @@ function assertEqual<T>(actual: T, expected: T, label = ""): void {
       `${label ? label + ": " : ""}atteso ${String(expected)}, ottenuto ${String(actual)}`,
     );
   }
+}
+
+/**
+ * Il cron scritto nel workflow, letto dal file.
+ *
+ * `ACTIONS_CRON` è una copia di `.github/workflows/collect.yml`, e il 05/09/2026
+ * la copia era rimasta a «7,52» mentre il workflow prevedeva quattro occasioni
+ * all'ora: la pagina raccontava un orario falso a chi legge, e il test era
+ * verde perché confrontava due ricordi della stessa cosa. Leggere il file
+ * rende la deriva impossibile — se il workflow cambia, questo test chiede di
+ * aggiornare anche la dichiarazione pubblica.
+ */
+function cronDelWorkflow(): string {
+  const file = join(process.cwd(), ".github/workflows/collect.yml");
+  const text = readFileSync(file, "utf8");
+  const m = text.match(/^\s*-\s*cron:\s*["']([^"']+)["']/m);
+  if (m === null) throw new Error(`cron non trovato in ${file}`);
+  return m[1];
 }
 
 /* ------------------------------------------------------------------ */
@@ -452,7 +472,8 @@ function main(): void {
     /* il valore dichiarato in pagina deve coincidere con il cron REALE del
        workflow: una pagina che promette più giri di quelli programmati è
        peggio di una pagina che non li promette */
-    assertEqual(ACTIONS_CRON, "7,52 * * * *");
+    assertEqual(ACTIONS_CRON, cronDelWorkflow(), "cron dichiarato vs workflow");
+    assertEqual(ACTIONS_CRON, "7,22,37,52 * * * *");
     assert(
       RUNNER_NOTE.includes("GitHub Actions") && RUNNER_NOTE.includes("Vercel"),
       "il pannello dichiara dove gira la raccolta e la rete di sicurezza",
@@ -480,6 +501,45 @@ function main(): void {
       now: NOW,
     });
     assert(a.lastRunLine.includes("fallito"), a.lastRunLine);
+  });
+
+  /* Il 05/09/2026 la seconda gamba lasciava righe `running` aperte per ore:
+     il giro veniva interrotto dal budget del chiamante prima della chiusura,
+     e la pagina raccontava un dato «in corso» che non sarebbe mai arrivato. */
+  test("un `running` di 5 minuti è davvero in corso", () => {
+    const a = buildActionsView({
+      lastScheduledRun: scheduledRun({
+        status: "running",
+        startedAt: "2026-08-20T14:55:00Z",
+      }),
+      now: NOW,
+    });
+    assertEqual(a.lastRunStatusLabel, "in corso");
+  });
+
+  test("un `running` a 15 minuti esatti è ancora in corso (soglia oltre, non oltre-o)", () => {
+    const a = buildActionsView({
+      lastScheduledRun: scheduledRun({
+        status: "running",
+        startedAt: "2026-08-20T14:45:00Z",
+      }),
+      now: NOW,
+    });
+    assertEqual(a.lastRunStatusLabel, "in corso");
+  });
+
+  test("un `running` di 20 minuti è un giro tronciato, e lo dice", () => {
+    const a = buildActionsView({
+      lastScheduledRun: scheduledRun({
+        status: "running",
+        startedAt: "2026-08-20T14:40:00Z",
+      }),
+      now: NOW,
+    });
+    assertEqual(a.lastRunStatusLabel, "troncato");
+    assert(a.lastRunLine.includes("troncato"), a.lastRunLine);
+    /* la pagina deve anche dire cosa manca, non solo che è mancato */
+    assert(a.lastRunLine.includes("non risultano chiuse"), a.lastRunLine);
   });
 
   test("nessun giro schedulato mai: assenza dichiarata, nessun allarme", () => {

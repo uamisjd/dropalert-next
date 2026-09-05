@@ -2,6 +2,11 @@
 
 > Documento di continuità fra sessioni di lavoro. Ultimo aggiornamento: 2026-09-05.
 > PR #11 (ramo `arena/01a0707a-dropalert-next` → `main`): MERGIATA in questa sessione.
+> **Nuovo**: verifica post-merge + fix del gate («seconda gamba», §8). Ramo
+> `arena/01a07101-dropalert-next`, PR #12 da rivedere. Gli orari di questo
+> documento sono in UTC quando hanno la `Z`; le pagine del sito li mostrano in
+> ora italiana (estate = UTC+2) — non confondere i due, il «giro delle 10:22»
+> è le 12:22 a Napoli.
 
 ## 1. Cos'è questo progetto (in una frase)
 
@@ -99,3 +104,56 @@ niente link a bookmaker, niente stime spacciate per dati.
 - Doc di metodo: `docs/STUDIO-VALUE-BETS.md`, `docs/STUDIO-PARTITE-FINITE.md`,
   `docs/SCHEDULING.md`, `src/app/metodologia/page.tsx` (fonte di verità
   pubblica di cosa il sito dichiara di misurare).
+
+## 8. Verifica post-merge e gate «anti-runaway» (05.09.2026, ore 12:00–13:10 UTC+2)
+
+**Verifica del punto 1, con gli orari giusti (ora italiana).** Merge di PR #11 alle
+11:37. Il primo giro post-merge è quello di Actions #297: 11:29 → 11:37, `success`,
+8 minuti (non 10 = non il `timeout-minutes` del job) ✓. Poi **le finestre 12:07,
+12:22 e 12:37 non hanno prodotto alcun run** — coda vuota, workflow `active`: lo
+scheduler di GitHub ne ha servite 4 su 16 nelle 12 ore precedenti. «Prossimi 2–3 run
+in success» quindi **non ancora verificato**: serve un altro giro di Actions, non una
+raccolta qualsiasi. `/api/health` raggiungibile, `partial_data`, DB raggiungibile,
+parser vivo (22 righe viste, 11 di calcio importate, 0 perse): il punto 3 non è
+scattato. Deploy di produzione giudicato vivo da `/api/health` (`force-dynamic`) e da
+`Verifica` #27 verde su main — l'API di Vercel non è raggiungibile da questo sandbox.
+
+**La scoperta.** Il database si muoveva comunque: giri alle 12:15, 12:30, 12:45,
+nessuno dei quali da Actions. Sono la **seconda gamba** — uno scheduler esterno che
+busna `/api/cron/collect` ogni 15 minuti (prova: `/api/cron/status` → `lastPingAt`
+12:45, `lastPingSkipped:false`). Il giro completo misura ~430 s, la funzione ha
+`maxDuration = 300 s`: **la seconda gamba non può chiudersi mai**, quindi non scrive
+`scheduler:last_cycle` (scritto solo a giro chiuso) e lascia la riga `collector_runs`
+a `running` per sempre. Conseguenze: (a) il gate è cieco e lascia passare ogni
+battuta → ~11 richieste in più alla fonte ogni 15 minuti, 3× la pressione progettata
+su una fonte con 154 episodi 429 e circuito aperto; (b) la pagina
+  raccontava «in corso» un dato che non sarebbe mai arrivato; (c) la profondità della serie
+(46 → 47 «giri schedulati») avanza su giri monchi, mentre `instrument.ts` dichiara
+l'opposto; (d) `clvRecords` fermo: analisi e chiusure le fa solo chi arriva in fondo.
+
+**Cosa fa la PR #12** (codice, nessun tocco a `.github/workflows/`):
+1. `scheduler:cycle_claim` — il tentativo di giro si marca **prima** di toccare la
+   fonte; il gate (`readGateMoment`, usata da `runCycle` e dall'uscita anticipata
+   della rotta) rispetta il più recente fra chiuso e tentato. Un giro interrotto
+   vale come lavoro fatto: i ping fuori cadenza escono in millisecondi.
+2. `resolveRunStatus` + `ABANDONED_RUN_AFTER_MINUTES = 15`: una riga `running` oltre
+   il tetto del job si chiama **troncato**, e la pagina dice cosa manca invece di
+   promettere un dato in arrivo.
+3. Onestà di pagina: `ACTIONS_CRON` era «7,52» contro un workflow a quattro
+   occasioni; ora il test legge il cron **dal file**, quindi la copia non può più
+   invecchiare in silenzio. `RUNNER_NOTE` dice anche della seconda gamba esterna e
+   punta a `/api/cron/status`.
+4. `scripts/gate-check.sh` (non cablato nel workflow) allineato alla stessa regola;
+   `docs/SCHEDULING.md` aggiornato con la sezione «Il gate rispetta il tentativo».
+
+**Test di accettazione dopo il deploy.** `/api/cron/status` deve mostrare, nei ping
+fuori cadenza, `lastPingSkipped: true` e `gate.minutesUntilNextRun > 0`; a regime
+`gate.lastCycleTruncated` deve comparire solo quando un giro viene davvero interrotto
+(non a ogni giro, come accadeva). Un `npm run test:pipeline` su Postgres di servizio
+copre il caso «46 min chiuso + 15 min tentato ⇒ non si raccoglie».
+
+**Resta all'owner (fuori dal repo, due mosse):** (a) decidere la cadenza dello
+scheduler esterno — con il fix a 15 minuti è innocuo (esce subito), ma se lo si porta
+a 60 minuti il consumo di CPU del piano Hobby si vede subito da `/api/cron/status`;
+(b) il cron del workflow, se si vuole, va modificato da interfaccia GitHub e si può
+puntare allo script ora che è coerente.

@@ -53,6 +53,23 @@ export const MAX_INTERVAL_MINUTES = 24 * 60;
 /** Chiave di stato che conserva l'esito dell'ultimo giro. */
 export const LAST_CYCLE_KEY = "scheduler:last_cycle";
 
+/**
+ * Chiave di stato che marca il TENTATIVO di giro, scritto prima di toccare
+ * la fonte e non dopo la chiusura.
+ *
+ * Perché esiste: `scheduler:last_cycle` viene scritto solo a giro chiuso
+ * (`writeLastCycle`, in fondo a `runCycle`). Un giro interrotto a metà — è
+ * il caso del chiamante esterno, che su Vercel dispone di 300 secondi mentre
+ * un giro completo ne misura ~430 — non lo scrive mai. Il gate quindi resta
+ * a guardare un registro che non avanza e lascia passare ogni battuta
+ * successiva: misurato il 05/09/2026, la seconda gamba ha raccolto alle
+ * 12:15, 12:30 e 12:45 (ora italiana) invece che ogni 45 minuti, cioè ~11
+ * richieste in più alla fonte ogni quarto d'ora. Il tentativo, non
+ * l'esito, è ciò che deve far aspettare il giro dopo: una fonte già limitata
+ * non va di nuovo pressata solo perché il giro precedente non è riuscito a dirlo.
+ */
+export const CYCLE_CLAIM_KEY = "scheduler:cycle_claim";
+
 export interface SchedulerConfig {
   intervalMinutes: number;
   horizonHours: number;
@@ -130,6 +147,76 @@ export async function writeLastCycle(state: LastCycleState): Promise<void> {
       target: systemState.key,
       set: { value: state, updatedAt: new Date() },
     });
+}
+
+/**
+ * Marca l'inizio del giro, prima di qualsiasi richiesta alla fonte.
+ *
+ * È il gemello «sincero» di `writeLastCycle`: quello registra un fatto
+ * compiuto, questo registra un'intenzione. Serve perché la chiusura può non
+ * arrivare mai (funzione interrotta dal budget del piano) e il gate non può
+ * permettersi di comportarsi come se il giro non fosse mai partito.
+ */
+export async function writeCycleClaim(at: Date): Promise<void> {
+  const value = { at: at.toISOString() };
+  await db
+    .insert(systemState)
+    .values({ key: CYCLE_CLAIM_KEY, value, updatedAt: at })
+    .onConflictDoUpdate({
+      target: systemState.key,
+      set: { value, updatedAt: at },
+    });
+}
+
+/** L'istante dell'ultimo tentativo di giro, `null` se non ce n'è registro. */
+export async function readCycleClaim(): Promise<Date | null> {
+  const [row] = await db
+    .select({ value: systemState.value })
+    .from(systemState)
+    .where(eq(systemState.key, CYCLE_CLAIM_KEY))
+    .limit(1);
+  if (!row) return null;
+  const raw = (row.value as { at?: unknown }).at;
+  if (typeof raw !== "string") return null;
+  const parsed = new Date(raw);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+/**
+ * L'istante che il gate deve rispettare: il più recente fra l'ultimo giro
+ * chiuso e l'ultimo giro tentato.
+ *
+ * Pura, perché la regola «un tentativo conta quanto una chiusura per far
+ * aspettare il giro dopo» è il punto intero del fix e va verificata senza
+ * database. Un giro che si è chiuso regolarmente scrive lo stesso istante su
+ * entrambe le chiavi (`at` è l'inizio del giro), quindi questa scelta non
+ * allunga mai l'attesa oltre l'intervallo dichiarato.
+ */
+export function latestRunMoment(
+  closedAt: Date | null,
+  claimedAt: Date | null,
+): Date | null {
+  if (closedAt === null) return claimedAt;
+  if (claimedAt === null) return closedAt;
+  return claimedAt.getTime() > closedAt.getTime() ? claimedAt : closedAt;
+}
+
+/**
+ * Legge i due registri e restituisce il momento da rispettare.
+ *
+ * Un registro illeggibile non ferma il giro: meglio una raccolta in più che
+ * un'osservazione persa per un errore di lettura, la stessa regola del gate
+ * `serve raccogliere?` nel workflow.
+ */
+export async function readGateMoment(): Promise<Date | null> {
+  const [closed, claim] = await Promise.all([
+    readLastCycle()
+      .then((l) => (l === null ? null : new Date(l.at)))
+      .catch(() => null),
+    readCycleClaim().catch(() => null),
+  ]);
+  const usable = closed !== null && !Number.isNaN(closed.getTime()) ? closed : null;
+  return latestRunMoment(usable, claim);
 }
 
 /**
@@ -455,9 +542,11 @@ export async function runCycle(options: CycleOptions = {}): Promise<CycleReport>
   const handle = await startRun("scheduler-cycle");
   const errors: string[] = [];
 
-  const last = await readLastCycle();
+  /* il gate guarda l'ultimo giro *chiuso o tentato*: una chiusura mancata
+     non deve trasformarsi in un permesso di ripartire subito (vedi
+     `CYCLE_CLAIM_KEY`) */
   const gate = shouldRunNow(
-    last ? new Date(last.at) : null,
+    await readGateMoment(),
     now,
     config.intervalMinutes,
     options.force ?? options.skipCollect ?? false,
@@ -510,6 +599,13 @@ export async function runCycle(options: CycleOptions = {}): Promise<CycleReport>
   try {
     /* --- 1. raccolta ------------------------------------------------ */
     if (!options.skipCollect && gate.run) {
+      /* il tentativo si mette a registro PRIMA di toccare la fonte: se
+         questo giro viene interrotto a metà — è ciò che accade quando il
+         budget del chiamante è più corto del giro — il gate del giro dopo lo
+         sa comunque e non rimanda la stessa pressione addosso alla fonte.
+         Un errore di scrittura non ferma la raccolta: al peggio si torna al
+         comportamento precedente */
+      await writeCycleClaim(now).catch(() => undefined);
       try {
         const collected = await collectBetexplorer({
           horizonHours: config.horizonHours,

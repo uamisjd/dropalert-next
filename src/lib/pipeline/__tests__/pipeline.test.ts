@@ -41,9 +41,15 @@ import {
   summarizeClvByScoreBucket,
 } from "../closing";
 import {
+  readCycleClaim,
+  readGateMoment,
   readLastCycle,
+  readSchedulerConfig,
   runCycle,
+  shouldRunNow,
+  writeCycleClaim,
   writeLastCycle,
+  CYCLE_CLAIM_KEY,
   LAST_CYCLE_KEY,
   type LastCycleState,
 } from "../scheduler";
@@ -140,7 +146,7 @@ async function cleanup(): Promise<void> {
   /* i giri dello scheduler avviati dai test non devono restare a registro */
   await db.delete(collectorRuns).where(eq(collectorRuns.collectorKey, "scheduler-cycle"));
 
-  await restoreLastCycle();
+  await restoreCycleState();
 }
 
 /* ------------------------------------------------------------------ */
@@ -158,20 +164,41 @@ async function cleanup(): Promise<void> {
  */
 let savedLastCycle: { present: boolean; value: LastCycleState | null } | null = null;
 
-async function borrowLastCycle(): Promise<void> {
-  if (savedLastCycle !== null) return;
-  const value = await readLastCycle();
-  savedLastCycle = { present: value !== null, value };
+/* Il tentativo di giro (`scheduler:cycle_claim`) va trattato come l'esito:
+   è la chiave che il gate rispetta, e una corsa di test che la lasciasse
+   scritta a «adesso» terrebbe chiusa la gate della produzione per un
+   intervallo intero. */
+let savedClaim: { present: boolean; at: Date | null } | null = null;
+
+async function borrowCycleState(): Promise<void> {
+  if (savedLastCycle === null) {
+    const value = await readLastCycle();
+    savedLastCycle = { present: value !== null, value };
+  }
+  if (savedClaim === null) {
+    const at = await readCycleClaim();
+    savedClaim = { present: at !== null, at };
+  }
 }
 
-async function restoreLastCycle(): Promise<void> {
-  if (savedLastCycle === null) return;
-  const saved = savedLastCycle;
-  savedLastCycle = null;
-  if (saved.present && saved.value !== null) {
-    await writeLastCycle(saved.value);
-  } else {
-    await db.delete(systemState).where(eq(systemState.key, LAST_CYCLE_KEY));
+async function restoreCycleState(): Promise<void> {
+  if (savedLastCycle !== null) {
+    const saved = savedLastCycle;
+    savedLastCycle = null;
+    if (saved.present && saved.value !== null) {
+      await writeLastCycle(saved.value);
+    } else {
+      await db.delete(systemState).where(eq(systemState.key, LAST_CYCLE_KEY));
+    }
+  }
+  if (savedClaim !== null) {
+    const saved = savedClaim;
+    savedClaim = null;
+    if (saved.present && saved.at !== null) {
+      await writeCycleClaim(saved.at);
+    } else {
+      await db.delete(systemState).where(eq(systemState.key, CYCLE_CLAIM_KEY));
+    }
   }
 }
 
@@ -757,7 +784,7 @@ async function main(): Promise<void> {
   group("Scheduler — giro senza rete");
 
   await test("il giro salta la raccolta se l'intervallo non è trascorso", async () => {
-    await borrowLastCycle();
+    await borrowCycleState();
     await writeLastCycle({
       at: new Date().toISOString(),
       status: "success",
@@ -789,6 +816,46 @@ async function main(): Promise<void> {
       typeof last!.at === "string" && !Number.isNaN(Date.parse(last!.at)),
       "istante dell'ultimo giro non valido",
     );
+  });
+
+  await test("un giro tentato e non chiuso tiene chiuso il gate", async () => {
+    await borrowCycleState();
+    const interval = readSchedulerConfig().intervalMinutes;
+    const now = new Date();
+    const minutiFa = (m: number) => new Date(now.getTime() - m * 60_000);
+    const esito = (at: string): LastCycleState => ({
+      at,
+      status: "success",
+      snapshotsWritten: 0,
+      signalsTouched: 0,
+      closingLinesCaptured: 0,
+      clvComputed: 0,
+    });
+
+    /* Situazione misurata il 05/09/2026 in produzione: un giro CHIUSO 46
+       minuti fa e un giro TENTATO 15 minuti fa, interrotto dal budget del
+       chiamante prima di poter scrivere l'esito. Col solo registro delle
+       chiusure il gate lasciava passare ogni battuta: era così che la fonte
+       veniva raccolta ogni quarto d'ora invece che ogni 45 minuti. */
+    await writeLastCycle(esito(minutiFa(46).toISOString()));
+    await writeCycleClaim(minutiFa(15));
+
+    const moment = await readGateMoment();
+    assert(moment !== null, "il tentativo deve essere leggibile dal gate");
+    assertEqual(
+      Math.round((now.getTime() - moment!.getTime()) / 60_000),
+      15,
+      "il gate deve rispettare il tentativo, non la chiusura più vecchia",
+    );
+    assertEqual(shouldRunNow(moment, now, interval, false).run, false);
+
+    /* Un giro che si chiude come si deve scrive lo stesso istante su entrambe
+       le chiavi: la cadenza dichiarata non si allunga di un minuto. */
+    await db.delete(systemState).where(eq(systemState.key, CYCLE_CLAIM_KEY));
+    const at = minutiFa(46);
+    await writeLastCycle(esito(at.toISOString()));
+    await writeCycleClaim(at);
+    assertEqual(shouldRunNow(await readGateMoment(), now, interval, false).run, true);
   });
 
   group("Tracciamento delle esecuzioni");

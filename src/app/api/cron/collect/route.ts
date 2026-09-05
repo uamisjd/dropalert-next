@@ -36,7 +36,7 @@ import { NextResponse } from "next/server";
 import { db } from "@/db/client";
 import { systemState } from "@/db/schema";
 import {
-  readLastCycle,
+  readGateMoment,
   readSchedulerConfig,
   runCycle,
   shouldRunNow,
@@ -102,10 +102,14 @@ export async function GET(request: Request) {
        chiusure, e misurato in produzione costa oltre 200 secondi anche
        quando non raccoglie nulla. Con uno scheduler esterno che bussa ogni
        quarto d'ora quel lavoro inutile divorerebbe le 4 CPU-ore mensili del
-       piano. Qui si legge soltanto l'istante dell'ultimo giro e, se è
-       recente, si risponde in pochi millisecondi. */
+       piano. Qui si legge soltanto l'istante dell'ultimo giro — chiuso *o
+       tentato*, `readGateMoment`: un giro troncato a metà dal budget della
+       funzione conta come lavoro fatto, altrimenti ogni battuta del
+       chiamante tornerebbe a premere sulla fonte ogni quarto d'ora invece
+       che ogni 45 minuti — e se è recente si risponde in pochi
+       millisecondi. */
     const gate = shouldRunNow(
-      await readLastCycle().then((l) => (l ? new Date(l.at) : null)),
+      await readGateMoment(),
       new Date(),
       readSchedulerConfig().intervalMinutes,
       false,
