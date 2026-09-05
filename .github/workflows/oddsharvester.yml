@@ -1,0 +1,105 @@
+# OddsHarvester Collector — Raccolta quote multi-bookmaker ogni 2 ore
+#
+# Questo workflow:
+# 1. Esegue OddsHarvester (Python) per raccogliere quote da 80+ bookmaker
+# 2. Importa i dati nel database Neon con script TypeScript
+# 3. Abilita multi-bookmaker nel sistema (coordinationScore, sharpConfirms)
+#
+# Frequenza: ogni 2 ore (12 volte al giorno)
+# Costo: GitHub Actions Free (2000 min/mese su repo privati, illimitato su pubblici)
+
+name: OddsHarvester Collector
+
+on:
+  schedule:
+    # Ogni 2 ore al minuto 15 (per evitare congestione al minuto 0)
+    - cron: "15 */2 * * *"
+  workflow_dispatch:
+    inputs:
+      force:
+        description: "Forza raccolta anche se recente"
+        type: boolean
+        default: false
+
+concurrency:
+  group: oddsharvester-collect
+  cancel-in-progress: false
+
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+
+    steps:
+      - name: Codice
+        uses: actions/checkout@v4
+
+      - name: Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Installa OddsHarvester
+        run: |
+          pip install oddsharvester
+          # Installa Playwright browsers (necessario per scraping)
+          playwright install chromium
+          playwright install-deps chromium
+
+      - name: Installa dipendenze Node
+        run: npm ci --include=dev
+
+      - name: Verifica configurazione database
+        run: |
+          if [ -z "$DATABASE_URL" ]; then
+            echo "::error::DATABASE_URL non configurato fra i secrets del repository."
+            exit 1
+          fi
+
+      - name: Migrazioni database
+        run: npx drizzle-kit migrate
+
+      - name: Crea directory dati
+        run: mkdir -p data/oddsharvester
+
+      - name: Esegui OddsHarvester
+        run: python scripts/oddsharvester-collect.py
+        continue-on-error: true
+
+      - name: Verifica dati raccolti
+        run: |
+          if [ ! -f data/oddsharvester/latest.json ]; then
+            echo "::warning::Nessun dato raccolto da OddsHarvester"
+            exit 0
+          fi
+          echo "✓ Dati raccolti:"
+          cat data/oddsharvester/latest.json | jq '.today.data | length' | xargs echo "  Match oggi:"
+          cat data/oddsharvester/latest.json | jq '.tomorrow.data | length' | xargs echo "  Match domani:"
+
+      - name: Importa dati nel database
+        run: npx tsx scripts/import-oddsharvester.ts
+        if: success()
+
+      - name: Upload artifact (per debug)
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: oddsharvester-data-${{ github.run_number }}
+          path: data/oddsharvester/
+          retention-days: 7
+
+# Note:
+# - OddsHarvester richiede Playwright per scraping headless
+# - Il timeout è 15 minuti (scraping può essere lento)
+# - continue-on-error su OddsHarvester: se fallisce, proviamo comunque a importare
+# - Artifact retention 7 giorni per debug

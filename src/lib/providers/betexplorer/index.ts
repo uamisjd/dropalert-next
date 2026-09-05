@@ -223,7 +223,7 @@ export function createBetexplorerProvider(
      Configurabile, ma con default prudenti. */
   const rateLimit = {
     requestsPerMinute: envInt("BETEXPLORER_RPM", 12),
-    minIntervalMs: envInt("BETEXPLORER_MIN_INTERVAL_MS", 4_000),
+    minIntervalMs: envInt("BETEXPLORER_MIN_INTERVAL_MS", 10_000), // Aumentato da 4s a 10s per ridurre 429
   };
 
   return {

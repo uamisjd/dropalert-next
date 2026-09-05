@@ -61,7 +61,10 @@
     "audit:value-bets": "tsx --env-file-if-exists=.env src/scripts/audit-value-bets.ts",
     "test:value-lines": "tsx src/lib/repo/__tests__/value-lines.test.ts",
     "test:line-shape": "tsx src/lib/providers/__tests__/line-shape.test.ts",
-    "test:filters": "tsx src/lib/view/__tests__/scanner-filters.test.ts"
+    "test:filters": "tsx src/lib/view/__tests__/scanner-filters.test.ts",
+    "oddsharvester:collect": "python scripts/oddsharvester-collect.py",
+    "oddsharvester:import": "tsx --env-file-if-exists=.env scripts/import-oddsharvester.ts",
+    "oddsharvester:full": "npm run oddsharvester:collect && npm run oddsharvester:import"
   },
   "dependencies": {
     "drizzle-orm": "^0.45.2",

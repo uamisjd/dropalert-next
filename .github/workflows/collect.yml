@@ -18,20 +18,10 @@ on:
     # alternati). Due voci esplicite a distanza reale di 45 e 75 minuti sono
     # il compromesso più onesto possibile con un cron orario; il gate interno
     # a COLLECT_INTERVAL_MINUTES resta l'autorità sulla spaziatura minima.
-    # QUATTRO occasioni all'ora (UTC), non due. Motivo misurato: il
-    # 27/08/2026 la raccolta è rimasta ferma quasi nove ore con il workflow
-    # ATTIVO e nessun run in coda; i minuti reali dei run erano 02, 30, 09,
-    # 54, 05, 28... mai 7 o 52. Lo scheduler di GitHub è best-effort: ritarda
-    # e, quando è congestionato, SALTA il turno. Con due sole occasioni
-    # bastano due salti per aprire un buco di ore.
-    #
-    # Non è più traffico verso la fonte: il gate qui sotto esce prima di
-    # installare, e COLLECT_INTERVAL_MINUTES (45) resta l'unica autorità
-    # sulla spaziatura. Sui repository pubblici i minuti non sono a consumo.
-    #
-    # `timezone:` NON è supportata nei cron dei workflow: veniva ignorata ed
-    # è stata rimossa per non lasciare una dichiarazione che non fa nulla.
-    - cron: "7,22,37,52 * * * *"
+    # Ogni 60 minuti. Ridotto da 45 min per diminuire pressione su BetExplorer (429).
+    # Il gate interno a COLLECT_INTERVAL_MINUTES (60) resta l'autorità sulla
+    # spaziatura minima. Una sola occasione all'ora (UTC) invece di quattro.
+    - cron: "7 * * * *"
   workflow_dispatch:
     inputs:
       force:
@@ -57,7 +47,7 @@ jobs:
       # migrare ed eseguire il giro) non verrebbero installati.
       # Intervallo applicato dal codice, non dal cron: un retry o una
       # esecuzione manuale ravvicinata non producono traffico aggiuntivo.
-      COLLECT_INTERVAL_MINUTES: ${{ vars.COLLECT_INTERVAL_MINUTES || '45' }}
+      COLLECT_INTERVAL_MINUTES: ${{ vars.COLLECT_INTERVAL_MINUTES || '60' }}
       COLLECT_HORIZON_HOURS: ${{ vars.COLLECT_HORIZON_HOURS || '72' }}
       COLLECT_MAX_FIXTURES: ${{ vars.COLLECT_MAX_FIXTURES || '25' }}
       BETEXPLORER_ENABLED: "true"
