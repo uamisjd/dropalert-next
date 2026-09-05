@@ -132,7 +132,6 @@ async function main(): Promise<void> {
             beatClose: decision.update.beatClose,
             closingBasis: decision.update.closingBasis,
             marketMargin: null,
-            computedAt: new Date(),
           })
           .where(eq(clvRecords.id, r.id));
       }
