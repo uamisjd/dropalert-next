@@ -12,7 +12,7 @@ import { devigShin, devigPower, devigProportional, getBestFairOdds } from "../de
 import { calculateEV, findValueFromSharpPrices } from "../ev-engine";
 import { computeValueGap } from "../value-gap";
 import { calculateKellyStake } from "../kelly";
-import { simulateDixonColes, estimateTeamExpectancy } from "../dixon-coles";
+import { DEFAULT_MAX_GOALS, simulateDixonColes, estimateTeamExpectancy } from "../dixon-coles";
 import { calculateArbitrage, calculateDutching } from "../arbitrage";
 import { calculateGreenUp, calculateTickDistance } from "../exchange-trading";
 import { buildSyntheticMarkets, detectMarketDiscrepancy } from "../synthetic-odds";
@@ -184,7 +184,16 @@ console.log("\n[4] Dixon-Coles & Poisson Bivariato");
     muAway: 1.05,
     rho: -0.12,
   });
-  assert(sim.scoreMatrix.length === 7, "Matrice 7x7 generata");
+  /* il lato della matrice non è un numero magico: è il default dichiarato
+     del modello, lo stesso che la pagina /simulator espone nelle intestazioni */
+  assert(
+    sim.scoreMatrix.length === DEFAULT_MAX_GOALS + 1,
+    `Matrice ${DEFAULT_MAX_GOALS + 1}x${DEFAULT_MAX_GOALS + 1} generata (ottenuta ${sim.scoreMatrix.length}x${sim.scoreMatrix[0].length})`,
+  );
+  assert(
+    sim.scoreMatrix[0].length === DEFAULT_MAX_GOALS + 1,
+    "la matrice è quadrata",
+  );
   assert(sim.probabilities.homeWinPct > sim.probabilities.awayWinPct, "Squadra di casa favorita coerentemente con lambda > mu");
   assert(sim.probabilities.over25Pct + sim.probabilities.under25Pct === 100, "Over 2.5 + Under 2.5 somma al 100%");
   assert(sim.probabilities.bttsYesPct + sim.probabilities.bttsNoPct === 100, "BTTS Si + No somma al 100%");

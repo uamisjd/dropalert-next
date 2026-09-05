@@ -38,7 +38,12 @@ import {
   unsupported,
   type OddsProvider,
 } from "../types";
-import { createTheOddsApiProvider } from "../optional/the-odds-api";
+import {
+  ADAPTER_IMPLEMENTED,
+  createTheOddsApiProvider,
+  theOddsApiEnabled,
+} from "../optional/the-odds-api";
+import { readOddsApiKey } from "../optional/odds-api-budget";
 
 /* ------------------------------------------------------------------ */
 /* Runner                                                              */
@@ -538,6 +543,66 @@ async function main(): Promise<void> {
       createTheOddsApiProvider().enabled,
       false,
       "senza chiave non si accende",
+    );
+    delete process.env.ODDS_API_ENABLED;
+  });
+
+  await test("accesa con la chiave, NON dichiara una capacità che non ha", () => {
+    /* il caso che questo test blocca: flag + chiave presenti. L'adapter è un
+       guscio che risponde `unsupported`, quindi dichiarare
+       `perBookmakerOdds: true` farebbe dire a /api/health «quote per singolo
+       bookmaker disponibili» e spegnere la dichiarazione di non misurabilità
+       di coordinazione e sharp — su una fonte che non restituisce nulla. */
+    process.env.ODDS_API_ENABLED = "true";
+    process.env.ODDS_API_KEY = "chiave-di-prova";
+    const p = createTheOddsApiProvider();
+    assertEqual(p.enabled, true, "con flag e chiave la fonte si accende");
+    assertEqual(
+      p.capabilities.perBookmakerOdds,
+      ADAPTER_IMPLEMENTED,
+      "la capacità segue l'implementazione, non l'intenzione",
+    );
+    resetRegistry();
+    registerProvider(p);
+    assert(
+      perBookmakerOddsUnavailable(),
+      "anche accesa, finché l'adapter non è implementato le quote per book restano non disponibili",
+    );
+    resetRegistry();
+    delete process.env.ODDS_API_ENABLED;
+    delete process.env.ODDS_API_KEY;
+  });
+
+  await test("la chiave è la stessa per i due interruttori (4 nomi accettati)", () => {
+    /* Il caso reale: la chiave in produzione si chiama `theoddsapiKey`. Il
+       check sharp la legge (usa readOddsApiKey), quindi funzionava; la fonte
+       invece guardava solo ODDS_API_KEY e restava spenta anche con il flag
+       acceso. I due interruttori devono leggere la stessa chiave. */
+    process.env.ODDS_API_ENABLED = "true";
+    delete process.env.ODDS_API_KEY;
+    for (const nome of [
+      "THE_ODDS_API_KEY",
+      "ODDS_API_KEY",
+      "theoddsapiKey",
+      "THEODDSAPIKEY",
+    ]) {
+      process.env[nome] = "chiave-di-prova";
+      assertEqual(
+        theOddsApiEnabled(),
+        true,
+        `la fonte si accende anche con la chiave nel nome ${nome}`,
+      );
+      assertEqual(
+        readOddsApiKey() !== null,
+        true,
+        `il check sharp vede la stessa chiave (${nome})`,
+      );
+      delete process.env[nome];
+    }
+    assertEqual(
+      theOddsApiEnabled(),
+      false,
+      "senza nessuna delle quattro resta spenta",
     );
     delete process.env.ODDS_API_ENABLED;
   });

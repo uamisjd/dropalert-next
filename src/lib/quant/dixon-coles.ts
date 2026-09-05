@@ -1,8 +1,21 @@
 /**
  * Modello Statistico Dixon-Coles & Poisson Bivariato per il Calcio.
  *
- * Genera la matrice completa delle probabilità dei risultati esatti (da 0-0 a 6-6)
- * correggendo le correlazioni a basso punteggio tramite il parametro tau di Dixon-Coles (1997).
+ * Genera la matrice completa delle probabilità dei risultati esatti (da 0-0 a
+ * `maxGoals`-`maxGoals`, default 5 → 6×6) correggendo le correlazioni a basso
+ * punteggio tramite il parametro tau di Dixon-Coles (1997).
+ *
+ * Il default vale 5 perché è quello che la pagina `/simulator` espone: la
+ * tabella ha un'intestazione per colonna e un titolo che dichiara
+ * l'intervallo. Un default più largo produrrebbe una matrice che nessuna
+ * intestazione descrive — il disallineamento non si vede nel calcolo, si vede
+ * nella tabella (`src/components/__tests__/simulator.test.tsx`).
+ *
+ * STATO DEL MODELLO: non è mai stato validato contro il mercato. La voce 7 di
+ * `docs/RESEARCH-BACKLOG.md` blocca l'ingresso di un modello di gol nel
+ * punteggio, nel CLV e nelle pagine di segnale finché un backtest
+ * out-of-sample non è passato e dichiarato: questo modulo resta quindi una
+ * calcolatrice con numeri inseriti da chi legge, non una fonte di previsioni.
  * Calcola le probabilità e quote fair per:
  *  - 1X2 (Esito Finale)
  *  - Over / Under 1.5, 2.5, 3.5
@@ -23,6 +36,17 @@ function poissonProb(k: number, lambda: number): number {
   if (lambda <= 0) return k === 0 ? 1 : 0;
   return (Math.pow(lambda, k) * Math.exp(-lambda)) / factorial(k);
 }
+
+/**
+ * Gol massimi per squadra considerati dalla matrice, quando il chiamante non
+ * li specifica: la griglia è `(DEFAULT_MAX_GOALS + 1)²`.
+ *
+ * È una costante esportata perché due cose devono leggerla insieme: il default
+ * della funzione e la tabella che la pagina espone. Un default scritto due
+ * volte — uno nella firma, uno nelle intestazioni — è il modo in cui una
+ * matrice finisce con una colonna senza titolo.
+ */
+export const DEFAULT_MAX_GOALS = 5;
 
 /**
  * Fattore di correzione tau di Dixon-Coles per punteggi bassi.
@@ -47,7 +71,7 @@ function dixonColesTau(x: number, y: number, lambda: number, mu: number, rho: nu
  * Esegue la simulazione Dixon-Coles per una coppia di squadre con xG / goal expectancy.
  */
 export function simulateDixonColes(params: DixonColesParams): PoissonSimulationResult {
-  const { lambdaHome, muAway, rho = -0.12, maxGoals = 6 } = params;
+  const { lambdaHome, muAway, rho = -0.12, maxGoals = DEFAULT_MAX_GOALS } = params;
 
   const lH = Math.max(0.1, lambdaHome);
   const mA = Math.max(0.1, muAway);

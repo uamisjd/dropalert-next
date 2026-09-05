@@ -18,6 +18,7 @@
  * L'implementazione di rete arriverà solo se la fonte verrà accesa.
  */
 import { envFlag } from "../registry";
+import { readOddsApiKey } from "./odds-api-budget";
 import {
   disabledResult,
   unsupported,
@@ -33,10 +34,36 @@ import {
 
 const KEY = "the-odds-api";
 
-/** Accesa solo con flag esplicito E chiave presente. */
+/**
+ * L'adapter di rete NON è implementato: i tre metodi rispondono `unsupported`.
+ *
+ * Questa costante esiste perché la dichiarazione di capacità deve dire la
+ * verità. Finché vale `false`, `perBookmakerOdds` resta `false` anche quando
+ * la fonte viene accesa con flag e chiave: altrimenti `/api/health`
+ * stamperebbe «Quote per singolo bookmaker disponibili» e
+ * `perBookmakerOddsUnavailable()` smetterebbe di dichiarare che coordinazione
+ * e conferma sharp non sono misurabili — mentre la fonte non restituisce una
+ * sola quota. Una capacità dichiarata e non mantenuta è peggio di una
+ * capacità assente.
+ *
+ * Quando l'implementazione di rete arriverà, questa diventa `true` e il test
+ * `test:providers` lo verifica insieme al resto.
+ */
+export const ADAPTER_IMPLEMENTED = false;
+
+/**
+ * Accesa solo con flag esplicito E chiave presente.
+ *
+ * La chiave si legge con `readOddsApiKey()`, che accetta i quattro nomi in uso
+ * (`THE_ODDS_API_KEY`, `ODDS_API_KEY`, `theoddsapiKey`, `THEODDSAPIKEY`).
+ * Prima questa funzione guardava solo `ODDS_API_KEY`: con una chiave
+ * impostata con un altro nome accettato il check sharp funzionava (usa
+ * `readOddsApiKey`) ma la fonte restava spenta anche con il flag acceso. Due
+ * interruttori che leggono la stessa chiave in modo diverso sono un modo
+ * sicuro per passare un pomeriggio a capire perché non si accende nulla.
+ */
 export function theOddsApiEnabled(): boolean {
-  const hasKey = (process.env.ODDS_API_KEY ?? "").trim() !== "";
-  return envFlag("ODDS_API_ENABLED", false) && hasKey;
+  return envFlag("ODDS_API_ENABLED", false) && readOddsApiKey() !== null;
 }
 
 export function createTheOddsApiProvider(): OddsProvider {
@@ -47,12 +74,12 @@ export function createTheOddsApiProvider(): OddsProvider {
     label: "The Odds API (opzionale)",
     enabled,
     capabilities: {
-      fixtures: true,
-      odds: true,
-      results: true,
-      /* l'API espone i singoli bookmaker: se un giorno verrà accesa,
-         coordinazione e sharp tornerebbero calcolabili */
-      perBookmakerOdds: true,
+      fixtures: ADAPTER_IMPLEMENTED,
+      odds: ADAPTER_IMPLEMENTED,
+      results: ADAPTER_IMPLEMENTED,
+      /* l'API espone i singoli bookmaker, ma questo adapter non la chiama
+         ancora: la capacità si dichiara quando esiste, non quando è prevista */
+      perBookmakerOdds: ADAPTER_IMPLEMENTED,
     },
     /* limiti prudenti: il piano gratuito è a quota mensile, non al minuto */
     rateLimit: { requestsPerMinute: 10, minIntervalMs: 6_000 },

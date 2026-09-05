@@ -56,6 +56,50 @@ export function SharpLineBlock({ view }: { view: SharpView }) {
               </span>
             ) : null}
           </p>
+          {snapshot.marketSpread !== null ? (
+            <p className="text-xs leading-relaxed text-slate-600">
+              <strong className="font-semibold text-slate-950">Mercato:</strong>{" "}
+              {snapshot.marketSpread.count} book europei quotano questa
+              selezione fra {fmtPrice(snapshot.marketSpread.min)} e{" "}
+              {fmtPrice(snapshot.marketSpread.max)} (differenza{" "}
+              {fmtPrice(snapshot.marketSpread.spread)}). Più la differenza è
+              piccola, più il mercato è allineato sul prezzo.
+            </p>
+          ) : (
+            <p className="text-xs leading-relaxed text-slate-500">
+              Una sola quotazione disponibile: la dispersione del mercato non è
+              misurabile e non la stimiamo.
+            </p>
+          )}
+          <p className="text-xs leading-relaxed text-slate-600">
+            <strong className="font-semibold text-slate-950">Book sharp:</strong>{" "}
+            {snapshot.spread !== null
+              ? `${snapshot.spread.count} book sharp fra ${fmtPrice(snapshot.spread.min)} e ${fmtPrice(snapshot.spread.max)} (differenza ${fmtPrice(snapshot.spread.spread)}).`
+              : "meno di due book sharp quotano questa selezione, quindi la loro dispersione non è misurabile."}
+          </p>
+          {snapshot.books.length > 0 ? (
+            <details className="mt-1">
+              <summary className="cursor-pointer text-xs font-medium text-slate-600 hover:text-slate-950">
+                Tutti i {snapshot.books.length} prezzi letti
+              </summary>
+              <ul className="mt-1 space-y-0.5">
+                {snapshot.books.map((b) => (
+                  <li
+                    key={b.key}
+                    className="flex justify-between text-xs text-slate-600"
+                  >
+                    <span>
+                      {b.key}
+                      {b.isSharp ? (
+                        <span className="ml-1 text-cyan-700">sharp</span>
+                      ) : null}
+                    </span>
+                    <span className="tabular-nums">{fmtPrice(b.price)}</span>
+                  </li>
+                ))}
+              </ul>
+            </details>
+          ) : null}
           <p className="text-xs leading-relaxed text-slate-500">
             Confrontiamo la direzione del consenso con quella di un bookmaker
             sharp. Non è una previsione del risultato.

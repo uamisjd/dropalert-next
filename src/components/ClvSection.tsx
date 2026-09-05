@@ -42,6 +42,20 @@ export function ClvSection({ clv }: { clv: ClvMaturity }) {
         {clv.note}
       </p>
 
+      {/* base di confronto: va letta PRIMA del numero, non dopo. Con basi
+          miste la media sotto somma numeri non confrontabili, e chi legge ha
+          diritto di saperlo prima di darle un significato. */}
+      <p
+        className={`mb-3 rounded border px-3 py-2 text-xs leading-relaxed ${
+          clv.basis.mixed
+            ? "border-amber-300 bg-amber-50 text-amber-900"
+            : "border-slate-200 bg-white text-slate-600"
+        }`}
+      >
+        <span className="font-semibold">Base di confronto del CLV. </span>
+        {clv.basisNote}
+      </p>
+
       {hasAny ? (
         <>
           <div className="mb-3 grid grid-cols-1 gap-2 sm:grid-cols-3">
@@ -77,6 +91,17 @@ export function ClvSection({ clv }: { clv: ClvMaturity }) {
             da 60 — e la differenza è dichiarata proprio per non confonderle.
           </p>
 
+          {/* Tetto strutturale: una fascia vuota sopra il tetto non significa
+              «nessun segnale abbastanza buono», significa che nessun segnale
+              può arrivarci. Senza questa riga la tabella si legge come un
+              risultato, ed è esattamente l'errore che R2 non poteva escludere. */}
+          <p className="mb-2 rounded border border-slate-200 bg-slate-50 px-3 py-2 text-[11px] leading-relaxed text-slate-700">
+            <span className="font-semibold">
+              Tetto dell&apos;indice: {clv.ceiling.maxRaw} su 100
+              {clv.ceiling.singleSource ? " (fonte singola)" : ""}. </span>
+            {clv.ceilingNote}
+          </p>
+
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs">
               <thead>
@@ -94,8 +119,23 @@ export function ClvSection({ clv }: { clv: ClvMaturity }) {
               </thead>
               <tbody>
                 {clv.buckets.map((b) => (
-                  <tr key={b.key} className="border-b border-slate-100">
-                    <td className="py-1.5 pr-3 text-slate-700">{b.label}</td>
+                  <tr
+                    key={b.key}
+                    className={`border-b border-slate-100 ${
+                      b.unreachable ? "text-slate-400" : ""
+                    }`}
+                  >
+                    <td className="py-1.5 pr-3 text-slate-700">
+                      {b.label}
+                      {b.unreachable && (
+                        <span
+                          className="ml-1.5 rounded border border-slate-300 bg-slate-100 px-1 py-0.5 text-[10px] font-semibold text-slate-500"
+                          title={`Sopra il tetto strutturale di ${clv.ceiling.maxRaw}: con la fonte attuale nessuna osservazione può cadere in questa fascia.`}
+                        >
+                          irraggiungibile
+                        </span>
+                      )}
+                    </td>
                     <td className="py-1.5 pr-3 tabular-nums text-slate-700">
                       {b.sampleSize}
                     </td>

@@ -27,6 +27,7 @@ import {
 } from "@/lib/providers/optional/odds-api-budget";
 import {
   fetchSharpLine,
+  normalizeSharpSnapshot,
   type SharpSnapshot,
 } from "@/lib/providers/optional/odds-api-sharp";
 
@@ -76,8 +77,10 @@ async function readSnapshot(
     .where(eq(systemState.key, matchKey(matchId, now)))
     .limit(1);
   if (row === undefined) return null;
-  const v = row.value as { snapshot?: SharpSnapshot };
-  return v.snapshot ?? null;
+  const v = row.value as { snapshot?: unknown };
+  /* Le fotografie scritte prima dell'arrivo di `books` e `marketSpread` non
+     hanno quei campi: si normalizzano invece di lasciarli undefined. */
+  return normalizeSharpSnapshot(v.snapshot);
 }
 
 async function writeSnapshot(

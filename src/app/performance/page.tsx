@@ -57,6 +57,23 @@ export default async function PerformancePage() {
         {DISCLAIMER}
       </p>
 
+      {/* La serie qui sotto somma osservazioni misurate su basi diverse:
+          chiusura fair no-vig dove il mercato era completo, chiusura grezza
+          dove non lo era. Il grafico non può dirlo da solo, quindi lo dice
+          questa riga — prima del numero, non dopo. */}
+      {view !== null && (
+        <p
+          className={`mt-3 rounded border px-3 py-2 text-xs leading-relaxed ${
+            view.basis.mixed
+              ? "border-amber-300 bg-amber-50 text-amber-900"
+              : "border-slate-200 bg-white text-slate-700"
+          }`}
+        >
+          <span className="font-semibold">Base di confronto. </span>
+          {view.basisNote}
+        </p>
+      )}
+
       {view === null ? (
         <p className="mt-5 rounded border border-dashed border-slate-300 bg-white p-4 text-sm text-slate-600">
           Registro delle osservazioni non leggibile in questo momento: la

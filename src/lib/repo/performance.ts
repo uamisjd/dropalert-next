@@ -17,6 +17,11 @@ import { db } from "@/db/client";
 import { clvRecords } from "@/db/schema";
 import { num, round } from "@/lib/drop/math";
 import { CLV_INCONCLUSIVE_BELOW } from "@/lib/repo/dashboard";
+import {
+  clvBasisMix,
+  describeClvBasisMix,
+  type ClvBasisMix,
+} from "@/lib/view/clv-basis";
 
 const ROME = "Europe/Rome";
 
@@ -51,6 +56,15 @@ export interface PerformanceView {
   beatCloseRate: number | null;
   inconclusive: boolean;
   threshold: number;
+  /**
+   * Composizione delle basi di confronto del CLV disegnato sopra.
+   *
+   * La serie mescola osservazioni misurate contro una chiusura fair no-vig e
+   * osservazioni misurate contro una chiusura grezza (margine incluso): il
+   * grafico non può dirlo da solo, quindi lo dice questa riga.
+   */
+  basis: ClvBasisMix;
+  basisNote: string;
   generatedAt: string;
 }
 
@@ -69,6 +83,7 @@ export async function getPerformanceView(
       clvPp: clvRecords.clvPp,
       beatClose: clvRecords.beatClose,
       computedAt: clvRecords.computedAt,
+      closingBasis: clvRecords.closingBasis,
     })
     .from(clvRecords)
     .orderBy(asc(clvRecords.computedAt));
@@ -110,6 +125,8 @@ export async function getPerformanceView(
     };
   });
 
+  const basis = clvBasisMix(rows);
+
   return {
     points,
     totalN: nAll,
@@ -118,6 +135,8 @@ export async function getPerformanceView(
     beatCloseRate: nAll > 0 ? round(beat / nAll, 4) : null,
     inconclusive: nAll < CLV_INCONCLUSIVE_BELOW,
     threshold: CLV_INCONCLUSIVE_BELOW,
+    basis,
+    basisNote: describeClvBasisMix(basis),
     generatedAt: now.toISOString(),
   };
 }

@@ -111,28 +111,29 @@ fascia è marcata `underpowered` e non viene commentata.
 
 ```
 src/
+├── app/                 14 pagine + 11 rotte API
+├── components/          card, pannelli, calcolatori, test jsdom
 ├── db/
-│   ├── schema.ts        12 tabelle, enum, tipi inferiti
+│   ├── schema.ts        16 tabelle, enum, tipi inferiti
 │   ├── client.ts        connessione postgres-js condivisa
 │   └── seed.ts          anagrafiche + scenari dimostrativi
 ├── lib/
-│   ├── drop/
-│   │   ├── constants.ts soglie e pesi dichiarati, ENGINE_VERSION
-│   │   ├── math.ts      aritmetica delle quote, null-safe
-│   │   ├── types.ts     contratti del motore
-│   │   ├── engine.ts    ampiezza, coordinazione, sharp, persistenza, fiducia
-│   │   ├── clv.ts       CLV singolo e aggregato con IC 95%
-│   │   └── __tests__/   40 test
-│   ├── push/
-│   │   ├── pure.ts      regole pure: soglia, dedupe, testo dell'avviso
-│   │   └── live.ts      dato vivo con cui si confronta la soglia
-│   ├── tools/
-│   │   ├── margin.ts    margine, trattenuta, quote fair (3 metodi)
-│   │   └── stake.ts     pareggio, rendimento atteso, Kelly, varianza
-│   └── repo/
-│       └── odds.ts      lettura serie storiche dal DB
-└── scripts/
-    └── verify-scenarios.ts  verifica end-to-end DB → motore
+│   ├── drop/            motore dei drop: soglie, aritmetica, fiducia, CLV, no-vig
+│   │   └── __tests__/   61 test
+│   ├── quant/           divario di prezzo, Kelly, EV, Dixon-Coles, tick
+│   ├── pipeline/        ciclo: gate, raccolta, analisi, chiusura, scheduler
+│   ├── providers/       BetExplorer (attivo), the-odds-api (opzionale), backoff
+│   ├── repo/            letture dal DB per ogni pagina
+│   ├── view/            trasformazioni pure per la vista (timeline, filtri, base CLV)
+│   ├── cov/             copertura della raccolta
+│   ├── context/         Contesto 360° (LLM + retrieval), dichiarato come tale
+│   ├── news/            fonti RSS/Tavily accanto al contesto
+│   ├── shape/           feature di forma del movimento, per segnale
+│   ├── settle/          partita → esito dai gol finali
+│   ├── calendar/        calendario football-data.org
+│   ├── push/            regole pure delle notifiche + dato vivo
+│   └── tools/           margine, trattenuta, Kelly, varianza
+└── scripts/             audit, backfill, verifiche end-to-end
 ```
 
 ## Schema dati
@@ -168,7 +169,12 @@ npm run test:value-lines   # come si costruisce una linea di prezzo per il divar
 npm run test:line-shape    # la forma reale delle linee 1X2, sull'HTML congelato del provider
 npm run test:filters       # i filtri di /value-bets: «mostra i negativi» non è un pavimento
 npm run test:client      # componenti in un DOM reale (jsdom + React 19)
-npm run test:all         # tutte le suite (29)
+npm run test:simulator   # simulatore xG: tabella, normalizzazione, dichiarazioni
+npm run test:clv-basis   # la base del CLV è contata e dichiarata, non mescolata in silenzio
+npm run test:score-ceiling # il tetto strutturale dell'indice, verificato contro il motore
+npm run test:odds-adapter # parsing di The Odds API su JSON congelato
+npm run test:clv-rebasis # ribasatura del CLV sulla base allineata
+npm run test:all         # tutte le suite (35)
 npm run job:analyze      # solo analisi + chiusura, senza rete
 npm run job:collect      # giro completo: raccolta + analisi + chiusura + notifiche
 npm run job:collect -- --force         # ignora l'intervallo minimo
@@ -203,6 +209,13 @@ di colmarli con stime.
 | `/api/signals` | GET | elenco dei segnali, filtrabile |
 | `/api/signals/[id]` | GET | dettaglio: 5 criteri, eventi, CLV, buchi dati |
 | `/api/health` | GET | stato del sistema, salute delle fonti, buchi aperti |
+| `/api/coverage` | GET | copertura della raccolta: ultimo giro e storico (file in `app/api/cov/`) |
+| `/api/calendar` | GET | stato del radar calendario, incluso il motivo quando è vuoto |
+| `/api/cron/collect` | GET | seconda gamba dello scheduling, protetta dal gate |
+| `/api/cron/status` | GET | quando lo scheduler esterno ha bussato l'ultima volta |
+| `/api/push/subscribe` | POST / DELETE | registra, aggiorna o cancella un'iscrizione anonima |
+| `/api/push/dispatch` | POST | invia le notifiche dovute (chiamata dal ciclo) |
+| `/api/push/test` | POST | una notifica di prova, fuori dal dedupe |
 | `/api/jobs/analyze` | POST | esegue un giro completo (raccolta, analisi, chiusura), tracciato in `collector_runs` |
 | `/api/jobs/analyze` | GET | 405, ma restituisce la configurazione attiva dello scheduler |
 
@@ -236,8 +249,11 @@ l'identità dell'osservatorio: **misura, non consiglia**.
 |---|---|
 | Margine e quota fair | Quanto margine contiene un insieme di quote (overround, margine in punti, trattenuta) e che cosa resta togliendolo, con tre metodi a confronto: proporzionale, additivo, power. |
 | Peso della varianza | Punto di pareggio a una quota, rendimento atteso, frazione di Kelly e distribuzione dei risultati su N sequenze simulate. |
+| Surebet | Se un insieme di quote sta sotto il 100% di probabilità implicita, quanto vale e come si ripartisce la posta. |
+| Dutching | Come distribuire una posta su più esiti perché il ritorno sia lo stesso qualunque di quelli esca. |
+| Green-Up exchange | Quanto vale chiudere una posizione fra due quote, con la commissione inserita da chi legge. |
 
-Regole che valgono per entrambi:
+Regole che valgono per tutti:
 
 - **nessuna selezione indicata**: i numeri li inserisce chi legge, il sito non
   sceglie partite, mercati né esiti;
