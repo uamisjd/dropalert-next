@@ -97,6 +97,12 @@ tuo PC o su Actions.
 DATABASE_URL="postgres://…" npm run audit:value-bets
 ```
 
+In alternativa — ed è già pronto su questo branch — lo si può far girare **su GitHub**
+senza toccare nulla sul tuo PC: `.github/workflows/audit.yml` è un pulsante manuale
+(`gh workflow run "Verifica dati reali (manuale)" --ref arena/01a06ea0-dropalert-next`)
+che legge il `DATABASE_URL` già presente fra i secrets e stampa nei log solo conteggi e
+percentuali. Nessun trigger automatico, nessuna scrittura: i due script fanno `select`.
+
 La stringa è la stessa di Vercel → *Settings → Environment Variables → `DATABASE_URL`*
 (dal tuo account, non da me: non deve passare dalla chat).
 

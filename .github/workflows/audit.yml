@@ -1,0 +1,74 @@
+name: Verifica dati reali (manuale)
+
+# Solo lancio manuale: non c'è alcun trigger automatico. Serve perché gli script
+# `audit:*` sono le uniche letture che hanno senso contro i dati veri, e in locale
+# (o in una sandbox) non c'è Postgres da raggiungere. I log sono pubblicati sul
+# repository: qui escono CONTAGGI e percentuali, mai righe di gioco o dati personali.
+#
+#   gh workflow run "Verifica dati reali (manuale)" --ref <branch> -f which=both
+
+on:
+  workflow_dispatch:
+    inputs:
+      which:
+        description: "Quale verifica"
+        type: choice
+        default: "both"
+        options:
+          - value
+          - finished
+          - both
+
+concurrency:
+  group: dropalert-audit
+  cancel-in-progress: false
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+
+    steps:
+      - name: Codice
+        uses: actions/checkout@v4
+
+      - name: Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Dipendenze
+        run: npm ci --include=dev
+
+      - name: Verifica configurazione database
+        run: |
+          if [ -z "$DATABASE_URL" ]; then
+            echo "::error::DATABASE_URL non configurato fra i secrets del repository."
+            exit 1
+          fi
+
+      # Gli script non stampano la connection string, ma se il client fallisce
+      # l'errore di `postgres` la include nell'message: si maschera in uscita.
+      - name: Sguardo sui dati (read-only)
+        run: |
+          status=0
+          run_one() {
+            echo "===== $1 ====="
+            npm run "$1" 2>&1 \
+              | sed -E 's#(postgres(ql)?://)[^[:space:]"'"'"']*#\1<redacted>#g'
+            local code=${PIPESTATUS[0]}
+            if [ "$code" -ne 0 ]; then
+              echo "::warning::$1 è uscito con codice $code"
+              status=1
+            fi
+          }
+          case "${{ inputs.which }}" in
+            value) run_one audit:value-bets ;;
+            finished) run_one audit:finished ;;
+            *) run_one audit:value-bets; run_one audit:finished ;;
+          esac
+          exit $status
