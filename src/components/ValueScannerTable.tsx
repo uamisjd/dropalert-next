@@ -11,6 +11,7 @@ import {
   type OddsBand,
 } from "@/lib/view/scanner-filters";
 import { fmtDay, fmtTime } from "@/components/format";
+import { KellyInline } from "@/components/KellyInline";
 
 interface Props {
   scanner: ValueScannerResult;
@@ -235,6 +236,15 @@ export function ValueScannerTable({ scanner }: Props) {
                       {signed(opp.trueProbPct - opp.impliedProbPct, 1)} pp)
                     </div>
                   </div>
+
+                  {opp.edgePct > 0 && (
+                    <KellyInline
+                      offeredOdds={opp.currentOdds}
+                      trueProbPct={opp.trueProbPct}
+                      edgePct={opp.edgePct}
+                      compact
+                    />
+                  )}
 
                   <Link
                     href={`/matches/${opp.matchId}`}
