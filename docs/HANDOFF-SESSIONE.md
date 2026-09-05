@@ -4,8 +4,9 @@
 > PR #11 (ramo `arena/01a0707a-dropalert-next` → `main`): MERGIATA.
 > PR #12 (ramo `arena/01a07101-dropalert-next` → `main`): MERGIATA su richiesta
 > dell'utente in questa sessione — è il primo fix descritto in §8.
-> PR #13 (ramo `arena/01a0717b-dropalert-next` → `main`): APERTA — contiene il
-> profilo collect-only, la diagnostica health e i test descritti in §8–§9.
+> PR #13 (ramo `arena/01a0717b-dropalert-next` → `main`): APERTA, check
+> `Verifica` e Vercel verdi — contiene profilo collect-only, diagnostica health
+> e test descritti in §8–§9.
 > Gli orari di questo
 > documento sono in UTC quando hanno la `Z`; le pagine del sito li mostrano in
 > ora italiana (estate = UTC+2) — non confondere i due, il «giro delle 10:22»
@@ -201,6 +202,14 @@ fissato al 06.09 ore 13:30: oggi manca comunque la seconda condizione (`> 95`).
    PostgreSQL effimera: 43/43 casi verdi, incluso il fallback che chiude il run,
    non finge fasi eseguite e avanza il gate. Anche l'intera `test:all`,
    typecheck, lint e build compilata sono verdi.
+
+**Verifica della preview di PR #13, ore 14:47 italiane.** `/api/health` ha
+proiettato correttamente l'outer-run orfano delle 14:30 come
+`status: "aborted"`, conservando `storedStatus: "running"` e
+`finishedAt: null`; `/api/cron/status` espone già `lastCycleMode` (correttamente
+`null` finché non gira il nuovo profilo). La fonte era `degraded`, ma
+`rate_limited` ancora **95**: anche quest'ultimo campione non autorizza il
+12→8 e non sostituisce la lettura prescritta per domani.
 
 **Cosa resta aperto:** il solo esito temporale del §9.4, i 2–3 run spontanei di
 Actions e le operazioni esterne al repository. Il lavoro di codice sui 300 s,
