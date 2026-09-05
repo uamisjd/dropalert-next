@@ -20,6 +20,11 @@ export const sql =
   postgres(connectionString, {
     max: 10,
     idle_timeout: 20,
+    /* Nessuna attesa infinita: una query che resta appesa oltre due minuti
+       deve fallire e farsi dichiarare, non impiccare il giro di raccolta
+       (il job ha un killer a 10 minuti). Connessione: 30 s al massimo. */
+    connect_timeout: 30,
+    timeout: 120,
     // i numeric arrivano come stringa: li convertiamo esplicitamente dove serve
   });
 

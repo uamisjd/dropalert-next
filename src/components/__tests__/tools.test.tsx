@@ -8,6 +8,7 @@
  * Un calcolatore corretto con un'interfaccia rotta è comunque rotto.
  */
 import { JSDOM } from "jsdom";
+import type { MarketSeries } from "@/lib/repo/match-detail";
 
 const dom = new JSDOM(
   `<!doctype html><html><body><div id="root"></div></body></html>`,
@@ -25,6 +26,8 @@ g.HTMLElement = dom.window.HTMLElement;
 g.Element = dom.window.Element;
 g.Node = dom.window.Node;
 g.Event = dom.window.Event;
+/* `next/link` tocca `self` (requestIdleCallback): in Node non esiste. */
+(g as Record<string, unknown>).self = dom.window as unknown;
 g.localStorage = dom.window.localStorage;
 g.IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -63,6 +66,8 @@ async function main(): Promise<void> {
   const { VarianceSimulator } = await import("@/components/tools/VarianceSimulator");
   const { SurebetCalculator } = await import("@/components/tools/SurebetCalculator");
   const { GreenUpCalculator } = await import("@/components/trading/GreenUpCalculator");
+  const { DutchingCalculator } = await import("@/components/tools/DutchingCalculator");
+  const { MatchQuantPanel } = await import("@/components/MatchQuantPanel");
 
   const container = dom.window.document.getElementById("root")!;
   const testo = () => container.textContent ?? "";
@@ -286,6 +291,94 @@ async function main(): Promise<void> {
   });
 
   await act(async () => rootGreen.unmount());
+
+  /* ---------------------------------------------------------------- */
+  /* Dutching: sintesi solo a quote complete                            */
+  /* ---------------------------------------------------------------- */
+
+  container.textContent = "";
+  const rootDutch = createRoot(container as never);
+  await act(async () => {
+    rootDutch.render(React.createElement(DutchingCalculator));
+  });
+
+  await test("dutching: i valori predefiniti mostrano la sintesi", () => {
+    const t = testo();
+    assert(t.includes("Sintesi Strategia Dutching"), "sintesi a schermo");
+    assert(t.includes("Quota sintetica combinata"), "combinata a schermo");
+  });
+
+  await test("dutching: a quota mancante nessun numero, solo l'invito", async () => {
+    /* text: etichetta esito 1, quota esito 1, etichetta esito 2, ... */
+    const inputs = container.querySelectorAll('input[type="text"]');
+    await impostaValore(inputs[1] as HTMLInputElement, "");
+    const t = testo();
+    assert(
+      t.includes("Inserisci una quota valida"),
+      "l'invito compare al posto della sintesi",
+    );
+    assert(
+      !t.includes("Quota sintetica combinata"),
+      "nessuna combinata a caselle vuote",
+    );
+  });
+
+  await act(async () => rootDutch.unmount());
+
+  /* ---------------------------------------------------------------- */
+  /* Pannello quantitativo partita: divario in % con riconciliazione    */
+  /* ---------------------------------------------------------------- */
+
+  container.textContent = "";
+  const serie = (
+    selection: "home" | "draw" | "away",
+    current: number,
+  ): MarketSeries => ({
+    market: "1x2",
+    marketLabel: "1X2",
+    selection,
+    selectionLabel: selection,
+    bookmakerKey: "betexplorer-consensus",
+    bookmakerName: "Consenso",
+    isSharp: false,
+    points: [],
+    opening: current + 0.3,
+    current,
+    peak: current + 0.3,
+    dropPct: null,
+    shiftPp: null,
+    pointCount: 2,
+    spanMinutes: 120,
+    firstAt: null,
+    lastAt: new Date("2026-09-05T08:00:00Z").toISOString(),
+    depthNote: "",
+    shallow: false,
+    hasSignal: true,
+  });
+  /* terna 2.10 / 3.40 / 3.60, selezione 1: overround ~109,9% */
+  const terna = [serie("home", 2.1), serie("draw", 3.4), serie("away", 3.6)];
+  const rootQuant = createRoot(container as never);
+  await act(async () => {
+    rootQuant.render(
+      React.createElement(MatchQuantPanel, {
+        signal: null,
+        series: terna[0],
+        allSeries: terna,
+        homeTeam: "Casa",
+        awayTeam: "Ospiti",
+      }),
+    );
+  });
+
+  await test("quant partita: il divario è in % con la differenza in pp", () => {
+    const t = testo();
+    assert(t.includes("Divario contro la linea senza margine"), "box divario");
+    /* edge = fair/currente − 1: deve esserci il % e NON il «pp» sul divario */
+    assert(/Divario[\s\S]{0,60}\d+[.,]\d+\s*%/.test(t), "divario in percento");
+    assert(t.includes("implicita"), "riconciliazione fair/implicita a schermo");
+  });
+
+  await act(async () => rootQuant.unmount());
 
   console.log(
     `\n${"─".repeat(60)}\nTest superati: ${passed} | falliti: ${failed}\n${"─".repeat(60)}\n`,

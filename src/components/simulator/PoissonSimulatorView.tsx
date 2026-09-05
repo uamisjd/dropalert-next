@@ -178,9 +178,9 @@ export function PoissonSimulatorView() {
                     x.ev && x.ev.hasEdge ? "text-emerald-600" : "text-rose-600"
                   }`}
                 >
-                  {x.ev && x.ev.hasEdge
-                    ? `+${x.ev.edgePct}% EV`
-                    : `${x.ev?.edgePct ?? "n/d"}% EV`}
+                  {x.ev
+                    ? `${x.ev.hasEdge ? "+" : ""}${x.ev.edgePct}% EV`
+                    : "quota non valida"}
                 </span>
               </div>
             ))}
@@ -218,7 +218,9 @@ export function PoissonSimulatorView() {
                   evOver25 && evOver25.hasEdge ? "text-emerald-600" : "text-rose-600"
                 }`}
               >
-                {evOver25 && evOver25.hasEdge ? `+${evOver25.edgePct}% EV 💎` : `${evOver25?.edgePct}% EV`}
+                {evOver25
+                  ? `${evOver25.hasEdge ? "+" : ""}${evOver25.edgePct}% EV`
+                  : "quota non valida"}
               </span>
             </div>
           </div>
@@ -255,7 +257,9 @@ export function PoissonSimulatorView() {
                   evBtts && evBtts.hasEdge ? "text-emerald-600" : "text-rose-600"
                 }`}
               >
-                {evBtts && evBtts.hasEdge ? `+${evBtts.edgePct}% EV 💎` : `${evBtts?.edgePct}% EV`}
+                {evBtts
+                  ? `${evBtts.hasEdge ? "+" : ""}${evBtts.edgePct}% EV`
+                  : "quota non valida"}
               </span>
             </div>
           </div>

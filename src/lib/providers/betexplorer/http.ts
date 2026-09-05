@@ -17,7 +17,7 @@
 
 /** Identificazione onesta: chi siamo e perché stiamo leggendo. */
 export const USER_AGENT =
-  "DropAlertBot/1.0 (osservatorio statistico non commerciale; rispetta robots.txt)";
+  "DropAlertBot/1.0 (terminale quantitativo non commerciale; rispetta robots.txt)";
 
 export const BASE_URL = "https://www.betexplorer.com";
 
@@ -26,7 +26,9 @@ export const REQUEST_TIMEOUT_MS = 15_000;
 
 /**
  * Regole di esclusione lette da https://www.betexplorer.com/robots.txt
- * (User-agent: *), verificate il 18.08.2026.
+ * (User-agent: *), verificate il 18.08.2026 e riverificate il 05.09.2026:
+ * invariate (solo una riga `Allow` e un blocco a SmartViper in più,
+ * entrambi irrilevanti per noi).
  *
  * L'elenco dei parametri è conservato per documentare la regola della
  * fonte, ma la nostra politica effettiva è più severa: nessuna query

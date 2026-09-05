@@ -2,6 +2,7 @@
 
 import { useState, useMemo } from "react";
 import { calculateDutching } from "@/lib/quant/arbitrage";
+import { isValidPrice } from "@/lib/drop/math";
 
 interface DutchOutcome {
   id: string;
@@ -40,6 +41,12 @@ export function DutchingCalculator() {
       outcomes.map((o) => (o.id === id ? { ...o, [field]: value } : o)),
     );
   };
+
+  /* Quote digitate valide? Senza questo controllo la sintesi sparirebbe e basta,
+     senza dire perché: uno spazio vuoto senza causa. */
+  const inputsValid = outcomes.every((o) =>
+    isValidPrice(Number.parseFloat(o.odds.replace(",", ".")) || 0),
+  );
 
   const result = useMemo(() => {
     const parsed = outcomes.map((o) => ({
@@ -156,8 +163,15 @@ export function DutchingCalculator() {
         ))}
       </div>
 
-      {/* Box Risultato Combinato */}
-      {result && (
+      {/* Box Risultato Combinato: con quote incomplete non si dichiara nulla */}
+      {!inputsValid ? (
+        <div className="mt-6 rounded-2xl border border-dashed border-slate-300 bg-white p-4 text-xs leading-relaxed text-slate-500 sm:p-5">
+          Inserisci una quota valida (maggiore di 1,00) per ogni esito: finché
+          manca un numero, qui non compare nessuna sintesi — né quota combinata
+          né profitto.
+        </div>
+      ) : (
+        result && (
         <div className="mt-6 rounded-2xl border border-cyan-200 bg-cyan-50/70 p-4 sm:p-5">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
@@ -197,6 +211,7 @@ export function DutchingCalculator() {
             </div>
           </div>
         </div>
+        )
       )}
     </div>
   );

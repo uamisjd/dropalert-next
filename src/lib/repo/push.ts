@@ -120,6 +120,29 @@ async function markSent(
 /* Invio                                                               */
 /* ------------------------------------------------------------------ */
 
+/**
+ * Timeout di un singolo invio push. Un endpoint che resta appeso non deve
+ * poter impiccare il giro di raccolta: il job ha un killer a 10 minuti e
+ * tre giri sono già morti così (set-2026) senza lasciare diagnosi.
+ */
+const PUSH_SEND_TIMEOUT_MS = 15_000;
+
+/**
+ * Vince la prima fra la promessa e il tempo massimo. La perdente lenta non
+ * diventa un rejection non gestito se fallisce dopo: la si neutralizza.
+ */
+function withTimeout<T>(p: Promise<T>, ms: number, label: string): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const guardia = new Promise<never>((_, reject) => {
+    timer = setTimeout(
+      () => reject(new Error(`${label}: timeout dopo ${ms} ms`)),
+      ms,
+    );
+  });
+  p.catch(() => undefined);
+  return Promise.race([p, guardia]).finally(() => clearTimeout(timer));
+}
+
 /** Invia un messaggio a una singola iscrizione. Nessuna eccezione esce. */
 export async function sendToSubscription(
   sub: { endpoint: string; keys: { p256dh: string; auth: string } },
@@ -135,9 +158,13 @@ export async function sendToSubscription(
       vapidPublicKey()!,
       vapidPrivateKey()!,
     );
-    await webpush.sendNotification(
-      { endpoint: sub.endpoint, keys: sub.keys },
-      JSON.stringify(payload),
+    await withTimeout(
+      webpush.sendNotification(
+        { endpoint: sub.endpoint, keys: sub.keys },
+        JSON.stringify(payload),
+      ),
+      PUSH_SEND_TIMEOUT_MS,
+      `push verso ${sub.endpoint.slice(0, 60)}`,
     );
     return { ok: true, gone: false };
   } catch (err) {

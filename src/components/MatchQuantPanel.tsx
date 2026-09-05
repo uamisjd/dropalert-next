@@ -18,8 +18,12 @@ interface Props {
   awayTeam: string;
 }
 
-/** Quante cifre servono per non far sembrare precisa una misura indicativa. */
-const pct = (v: number): string => `${v > 0 ? "+" : ""}${v.toFixed(2)} pp`;
+/** Segno esplicito, due decimali: per l'edge relativo (percento). */
+const signedPct = (v: number, d = 2): string =>
+  `${v > 0 ? "+" : v < 0 ? "−" : ""}${Math.abs(v).toFixed(d)}%`;
+/** Differenza assoluta fra probabilità, in punti percentuali. */
+const signedPp = (v: number): string =>
+  `${v > 0 ? "+" : v < 0 ? "−" : ""}${Math.abs(v).toFixed(1)} pp`;
 
 /**
  * Pannello quantitativo della partita.
@@ -179,7 +183,10 @@ export function MatchQuantPanel({ signal, series, allSeries }: Props) {
                   </div>
                 </div>
                 <div>
-                  <div className="text-[10px] font-bold text-slate-700 uppercase">
+                  <div
+                    className="text-[10px] font-bold text-slate-700 uppercase"
+                    title="Edge relativo (ev × 100). La differenza assoluta fra le due probabilità è nella riga sotto, in punti percentuali."
+                  >
                     Divario
                   </div>
                   <div
@@ -187,7 +194,12 @@ export function MatchQuantPanel({ signal, series, allSeries }: Props) {
                       gap.edgePct > 0 ? "text-emerald-700" : "text-slate-500"
                     }`}
                   >
-                    {pct(gap.edgePct)}
+                    {signedPct(gap.edgePct)}
+                  </div>
+                  <div className="mt-0.5 text-[10px] text-slate-500 tabular-nums">
+                    fair {(gap.fairProb * 100).toFixed(1)}% · implicita{" "}
+                    {(100 / (currentPrice ?? 1)).toFixed(1)}% (
+                    {signedPp(gap.fairProb * 100 - 100 / (currentPrice ?? 1))})
                   </div>
                 </div>
               </div>
@@ -364,8 +376,8 @@ export function MatchQuantPanel({ signal, series, allSeries }: Props) {
                   </div>
                   {x.v < 1.01 ? (
                     <div className="mt-1 text-[10px] leading-tight text-amber-700">
-                      sotto 1,00: la terna letta rende questo esito così probabile che nessuna
-                      quota reale lo esprime
+                      intorno a 1,00: la terna letta rende questo esito così probabile che
+                      nessuna quota reale lo esprime
                     </div>
                   ) : null}
                 </div>
