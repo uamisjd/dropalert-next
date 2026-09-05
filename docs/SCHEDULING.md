@@ -448,6 +448,15 @@ viene terminata prima della propria chiusura. In condizioni normali, però,
 `lastCycleTruncated: false`; `lastFullCycleAt` resta l'orologio separato di
 Actions.
 
+### Il full non serializza centinaia di partite
+
+Il run Actions del 05/09 alle 15:00 italiane è arrivato al tetto di 10 minuti
+senza aver interrogato la fonte: i segnali avanzavano, ma la scansione di tutte
+le partite era seriale. `detectAll` usa quindi quattro worker indipendenti,
+contro un pool PostgreSQL da dieci connessioni. Ogni partita è assegnata una
+sola volta e il report viene ricomposto nell'ordine originale: si riduce la
+latenza di rete del DB senza cambiare conteggi, regole o perimetro.
+
 ### Cosa conta per la serie N/10
 
 Solo una riga `betexplorer-collect` **conclusa** e con

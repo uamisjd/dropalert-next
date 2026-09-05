@@ -203,7 +203,7 @@ fissato al 06.09 ore 13:30: oggi manca comunque la seconda condizione (`> 95`).
    query ora escludono esplicitamente `finished_at is null`, e la metodologia
    pubblica lo dichiara.
 6. `test:pipeline` è entrato in `test:all` ed è stato eseguito davvero su una
-   PostgreSQL effimera: 44/44 casi verdi, incluso il fallback che chiude il run,
+   PostgreSQL effimera: 45/45 casi verdi, incluso il fallback che chiude il run,
    non finge fasi eseguite, avanza il gate della fonte e non affama il full.
    Anche l'intera `test:all`,
    typecheck, lint e build compilata sono verdi.
@@ -215,6 +215,16 @@ proiettato correttamente l'outer-run orfano delle 14:30 come
 `null` finché non gira il nuovo profilo). La fonte era `degraded`, ma
 `rate_limited` ancora **95**: anche quest'ultimo campione non autorizza il
 12→8 e non sostituisce la lettura prescritta per domani.
+
+**Nuovo campione Actions, ore 15:00–15:11 italiane.** Il run schedulato
+#33967658782 è arrivato spontaneamente ma è stato cancellato al tetto di 10
+minuti: quindi non vale come secondo successo. Non ha scritto nuove quote né
+aggiornato la fonte, mentre i segnali sono avanzati durante il run: evidenza
+coerente con la lunga scansione DB seriale, non con pressione BetExplorer. PR
+#13 esegue ora `detectAll` con quattro worker indipendenti (pool DB da dieci),
+con ordine del report conservato e test esplicito sul tetto di concorrenza.
+Va verificata la durata del primo full dopo il merge; il fallimento live non
+viene trasformato retroattivamente in successo.
 
 **Cosa resta aperto:** il solo esito temporale del §9.4, i 2–3 run spontanei di
 Actions e le operazioni esterne al repository. Il lavoro di codice sui 300 s,
@@ -280,7 +290,7 @@ deploy o il trascorrere della finestra temporale.
    `storedStatus`. Non scrivere `aborted`/`partial` a mano nel DB: la proiezione
    risolve la diagnostica senza fabbricare una chiusura mai avvenuta.
 7. **Test pipeline — RISOLTO.** Eseguito contro PostgreSQL effimera dopo le
-   migrazioni (44/44) e aggiunto a `test:all`; di conseguenza anche `Verifica`,
+   migrazioni (45/45) e aggiunto a `test:all`; di conseguenza anche `Verifica`,
    che prepara PostgreSQL 17 e lancia `test:all`, lo eseguirà. Non rimuoverlo per
    rendere verde un ambiente locale senza DB: avviare invece PostgreSQL e usare
    una `DATABASE_URL` esplicita.

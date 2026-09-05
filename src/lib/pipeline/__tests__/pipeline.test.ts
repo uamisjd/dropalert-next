@@ -28,6 +28,7 @@ import {
   detectForMatch,
   gapsFromAnalysis,
   getSignalRow,
+  mapWithConcurrency,
   nextStatus,
   recordGap,
 } from "../detect";
@@ -805,6 +806,22 @@ async function main(): Promise<void> {
       }
     }
     assert(summary.total >= 0 && summary.unclassified >= 0, "conteggi coerenti");
+  });
+
+  group("Scansione concorrente");
+
+  await test("la coda limita i worker e conserva tutti i risultati in ordine", async () => {
+    let active = 0;
+    let maxActive = 0;
+    const result = await mapWithConcurrency([30, 10, 20, 5], 2, async (delay) => {
+      active += 1;
+      maxActive = Math.max(maxActive, active);
+      await new Promise<void>((resolve) => setTimeout(resolve, delay));
+      active -= 1;
+      return delay;
+    });
+    assertEqual(result.join(","), "30,10,20,5");
+    assertEqual(maxActive, 2);
   });
 
   group("Scheduler — giro senza rete");
