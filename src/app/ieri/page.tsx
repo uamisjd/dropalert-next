@@ -115,10 +115,10 @@ export default async function YesterdayPage() {
   try {
     view = await getYesterdayView(now);
   } catch (error) {
-    failure =
-      error instanceof Error
-        ? error.message
-        : "Errore non identificato nella lettura dei segnali di ieri.";
+    // Il dettaglio grezzo (driver SQL incluso) resta nel log del server: alla
+    // pagina arriva solo un testo generico, mai `error.message`.
+    console.error("[ieri] lettura dei segnali non riuscita:", error);
+    failure = "lettura non riuscita (dettaglio nel log del server).";
   }
 
   return (
@@ -151,7 +151,7 @@ export default async function YesterdayPage() {
         <div className="rounded-lg border border-orange-300 bg-orange-50 p-4 text-sm text-orange-900">
           <p className="font-medium">DATI PARZIALI</p>
           <p className="mt-1 text-xs leading-relaxed">
-            I segnali di ieri non sono leggibili in questo momento: {failure}.
+            I segnali di ieri non sono leggibili in questo momento ({failure})
             Nessun valore viene mostrato al suo posto.
           </p>
         </div>

@@ -1,5 +1,6 @@
 /**
- * Motore di Calcolo Surebet (Arbitraggio a Profitto Certo) e Dutching Multi-Selezione.
+ * Motore di calcolo Surebet (arbitraggio matematico, mai «profitto certo»: il
+ * vantaggio vale solo se le quote inserite sono eseguibili insieme) e Dutching.
  *
  * Formule:
  *  - Somma probabilità implicite S = sum(1 / Odds_i)

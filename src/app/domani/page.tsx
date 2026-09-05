@@ -109,10 +109,10 @@ export default async function TomorrowPage() {
   try {
     view = await getTomorrowView(now);
   } catch (error) {
-    failure =
-      error instanceof Error
-        ? error.message
-        : "Errore non identificato nella lettura del programma di domani.";
+    // Il dettaglio grezzo (driver SQL incluso) resta nel log del server: alla
+    // pagina arriva solo un testo generico, mai `error.message`.
+    console.error("[domani] lettura del programma non riuscita:", error);
+    failure = "lettura non riuscita (dettaglio nel log del server).";
   }
 
   return (
@@ -175,8 +175,8 @@ export default async function TomorrowPage() {
         <div className="rounded-lg border border-orange-300 bg-orange-50 p-4 text-sm text-orange-900">
           <p className="font-medium">DATI PARZIALI</p>
           <p className="mt-1 text-xs leading-relaxed">
-            Il programma di domani non è leggibile in questo momento:{" "}
-            {failure}. Nessun valore viene mostrato al suo posto.
+            Il programma di domani non è leggibile in questo momento ({failure})
+            Nessun valore viene mostrato al suo posto.
           </p>
         </div>
       ) : view !== null ? (

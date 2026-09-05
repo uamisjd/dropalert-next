@@ -131,7 +131,14 @@ export default async function PerformancePage() {
                   <span className="w-full">
                     Linea tratteggiata = zero. I punti vuoti indicano un
                     campione ancora sotto le {view.threshold} osservazioni:
-                    sono disegnati, ma non provano nulla.
+                    sono disegnati, ma non provano nulla. I punti sono
+                    equidistanti — i giorni senza osservazioni non allargano
+                    l&apos;asse — e oltre una settimana di silenzio la linea si
+                    spezza invece di fingere continuità
+                    {geo.breaks > 0 ? (
+                      <> (qui: {geo.breaks} {geo.breaks === 1 ? "interruzione" : "interruzioni"})</>
+                    ) : null}
+                    .
                   </span>
                 </figcaption>
               </figure>

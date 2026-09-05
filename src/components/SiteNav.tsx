@@ -27,7 +27,7 @@ export function SiteNav() {
         <Link
           href="/"
           className="flex shrink-0 items-center gap-2 text-sm font-black tracking-tight text-slate-950"
-          aria-label="DropAlert — osservatorio sui movimenti di quota"
+          aria-label="DropAlert — terminale quantitativo per scommesse sul calcio"
         >
           <span
             aria-hidden

@@ -61,6 +61,8 @@ async function main(): Promise<void> {
   const { act } = await import("react");
   const { MarginCalculator } = await import("@/components/tools/MarginCalculator");
   const { VarianceSimulator } = await import("@/components/tools/VarianceSimulator");
+  const { SurebetCalculator } = await import("@/components/tools/SurebetCalculator");
+  const { GreenUpCalculator } = await import("@/components/trading/GreenUpCalculator");
 
   const container = dom.window.document.getElementById("root")!;
   const testo = () => container.textContent ?? "";
@@ -191,6 +193,55 @@ async function main(): Promise<void> {
   });
 
   await act(async () => rootSim.unmount());
+
+  /* ---------------------------------------------------------------- */
+  /* Surebet: verdetto condizionale, mai «garantito»                    */
+  /* ---------------------------------------------------------------- */
+
+  container.textContent = "";
+  const rootSure = createRoot(container as never);
+  await act(async () => {
+    rootSure.render(React.createElement(SurebetCalculator));
+  });
+
+  await test("surebet: i valori predefiniti trovano l'arbitraggio senza prometterlo", () => {
+    /* 2.10 / 2.05 → S = 0,964 < 1: arbitraggio presente */
+    const t = testo();
+    assert(t.includes("Surebet aritmetica"), "verdetto condizionale a schermo");
+    assert(!t.includes("GARANTITO"), "nessuna garanzia nel verdetto");
+    assert(!t.toLowerCase().includes("ritorno sicuro"), "nessun ritorno sicuro");
+    assert(t.includes("Spesa effettiva"), "la spesa dopo l'arrotondamento è dichiarata");
+    assert(t.includes("Nessuna vincita è garantita"), "il limite è nel verdetto");
+  });
+
+  await act(async () => rootSure.unmount());
+
+  /* ---------------------------------------------------------------- */
+  /* Green-Up: segni e responsabilità seguono i numeri                  */
+  /* ---------------------------------------------------------------- */
+
+  container.textContent = "";
+  const rootGreen = createRoot(container as never);
+  await act(async () => {
+    rootGreen.render(React.createElement(GreenUpCalculator));
+  });
+
+  await test("green-up: i valori predefiniti mostrano un trade in profitto", () => {
+    /* entrata 2.60, uscita 2.10, commissione 4,5%: quota scesa, trade sopra zero */
+    const t = testo();
+    assert(!t.includes("Rischio Zero"), "l'etichetta assolutoria è sparita");
+    assert(t.includes("perdente a zero"), "la freebet dice ciò che azzera");
+    assert(
+      t.includes("Coperta dal profitto della puntata"),
+      "responsabilità coperta a schermo",
+    );
+    assert(
+      !t.includes("quota di uscita è sopra"),
+      "nessun avviso di quota salita su un trade in profitto",
+    );
+  });
+
+  await act(async () => rootGreen.unmount());
 
   console.log(
     `\n${"─".repeat(60)}\nTest superati: ${passed} | falliti: ${failed}\n${"─".repeat(60)}\n`,

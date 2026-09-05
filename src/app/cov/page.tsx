@@ -63,11 +63,11 @@ export default async function CoveragePage() {
       actions: { lastScheduledRun: history.lastScheduledRun, now },
     });
   } catch (error) {
-    /* il guasto si dichiara, non si nasconde dietro una pagina vuota */
-    failure =
-      error instanceof Error
-        ? error.message
-        : "Errore non identificato nella lettura della copertura.";
+    /* il guasto si dichiara, non si nasconde dietro una pagina vuota. Il dettaglio
+       grezzo (driver SQL incluso) resta nel log del server: alla pagina arriva solo
+       un testo generico, mai `error.message`. */
+    console.error("[copertura] lettura non riuscita:", error);
+    failure = "lettura non riuscita (dettaglio nel log del server).";
   }
 
   return (
@@ -95,7 +95,7 @@ export default async function CoveragePage() {
         <div className="rounded-lg border border-orange-300 bg-orange-50 p-4 text-sm text-orange-900">
           <p className="font-medium">DATI PARZIALI</p>
           <p className="mt-1 text-xs leading-relaxed">
-            La copertura non è leggibile in questo momento: {failure}. Nessun
+            La copertura non è leggibile in questo momento ({failure}) Nessun
             valore viene mostrato al suo posto.
           </p>
         </div>

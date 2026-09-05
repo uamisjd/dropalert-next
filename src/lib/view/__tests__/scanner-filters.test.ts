@@ -67,7 +67,7 @@ const ALL_NEGATIVE: FilterableGap[] = [
     ...DEFAULT_SCANNER_FILTERS,
     minEdge: 0.5,
   });
-  assert(fromHalf.length === 0, "da +0,5 pp: nessun negativo passa");
+  assert(fromHalf.length === 0, "da +0,5%: nessun negativo passa");
 
   const mixed = [
     ...ALL_NEGATIVE,
@@ -77,7 +77,7 @@ const ALL_NEGATIVE: FilterableGap[] = [
   ];
   assert(
     applyScannerFilters(mixed, { ...DEFAULT_SCANNER_FILTERS, minEdge: 1 }).length === 2,
-    "da +1,0 pp: restano i due divari da 1,2 e 2,7",
+    "da +1,0%: restano i due divari da 1,2 e 2,7",
   );
   assert(
     applyScannerFilters(mixed, { ...DEFAULT_SCANNER_FILTERS, positiveOnly: true }).length ===

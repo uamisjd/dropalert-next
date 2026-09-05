@@ -87,7 +87,7 @@ export function describeEmptyScanner(
     };
   }
 
-  const negative = items.filter((i) => i.edgePct <= 0).length;
+  const negative = items.filter((i) => i.edgePct < 0).length;
   const hidden = items.length - filtered.length;
   const mean =
     items.length > 0
@@ -98,10 +98,11 @@ export function describeEmptyScanner(
     `Su ${items.length} divari calcolati, ${negative} sono negativi e ` +
       `${items.length - negative} sopra zero.`,
   ];
-  if (mean !== null) parts.push(`Media ${mean.toFixed(2)} pp.`);
+  /* Media e soglia sono edge relativi, quindi percento — non punti percentuali. */
+  if (mean !== null) parts.push(`Media ${mean.toFixed(2)}%.`);
   if (filters.minEdge !== SHOW_ALL_EDGES) {
     parts.push(
-      `La soglia è «da ${filters.minEdge.toFixed(1)} pp»: ${hidden} righe sono fuori ` +
+      `La soglia è «da ${filters.minEdge.toFixed(1)}%»: ${hidden} righe sono fuori ` +
         `soglia. Scegli «Mostra tutto, anche i negativi» per vederle.`,
     );
   } else if (filters.positiveOnly) {

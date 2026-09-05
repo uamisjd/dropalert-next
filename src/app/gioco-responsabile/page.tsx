@@ -136,7 +136,7 @@ export default function GiocoResponsabilePage() {
           href="/"
           className="text-slate-600 underline underline-offset-2 hover:text-slate-900"
         >
-          ← Torna all&apos;osservatorio
+          ← Torna ai movimenti
         </Link>
       </p>
     </main>

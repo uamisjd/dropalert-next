@@ -148,7 +148,7 @@ export async function generateMetadata({
           url: `${SITE_URL}/og-cover.png`,
           width: 1200,
           height: 630,
-          alt: "DropAlert — osservatorio sui movimenti delle quote",
+          alt: "DropAlert — terminale quantitativo per scommesse sul calcio",
         },
       ],
     },

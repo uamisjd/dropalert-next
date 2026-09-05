@@ -69,7 +69,7 @@ export default async function TradingPage() {
         </div>
       </header>
 
-      <TradingTerminalView trades={data.trades} signalsRead={data.signalsRead} />
+      <TradingTerminalView trades={data.trades} signalsRead={data.signalsRead} readFailed={data.readFailed} />
 
       <section className="mt-8 rounded-2xl border border-slate-200 bg-white p-5 text-xs text-slate-600 shadow-sm sm:p-6">
         <h2 className="text-sm font-bold uppercase tracking-wide text-slate-900">
