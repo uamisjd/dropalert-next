@@ -102,6 +102,9 @@ senza toccare nulla sul tuo PC: `.github/workflows/audit.yml` è un pulsante man
 (`gh workflow run "Verifica dati reali (manuale)" --ref arena/01a06ea0-dropalert-next`)
 che legge il `DATABASE_URL` già presente fra i secrets e stampa nei log solo conteggi e
 percentuali. Nessun trigger automatico, nessuna scrittura: i due script fanno `select`.
+Nota pratica: chi lavora con una GitHub App senza permesso `actions: write` — come gli
+agent — il pulsante non può premerlo: risponde «Resource not accessible by integration».
+Si premi da Actions → «Verifica dati reali (manuale)», o da terminale con un token tuo.
 
 La stringa è la stessa di Vercel → *Settings → Environment Variables → `DATABASE_URL`*
 (dal tuo account, non da me: non deve passare dalla chat).
