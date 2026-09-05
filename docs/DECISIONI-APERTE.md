@@ -127,6 +127,14 @@ Vercel** (deployment `dropalert-next-git-arena-…`) e dimmi se qualche numero n
 Io la pagina resa non l'ho mai vista — l'ho verificata sui dati (fixture) e sul codice,
 non sul browser.
 
+**Aggiornamento dopo il merge (05/09, 03:05 italiane).** La #7, la #8 e la #9 sono in
+produzione. `/value-bets` gira sui dati reali: 4 righe, tutte negative (−7,4 … −10,4%),
+margine rimosso 7,98 – 11,56% — la tabella è in `docs/STUDIO-VALUE-BETS.md` §4ter. La
+lettura ha trovato e fatto saltar fuori due difetti che i fixture non potevano mostrare
+(aggancio `max(collected_at)` e soglia «mostra i negativi» = pavimento): sono corretti e
+testati. Del pulsante «Verifica dati reali» sopra hai ora anche l'alternativa gratuita:
+la pagina stessa, che pubblica gli stessi conteggi.
+
 **Del resto — il merge — posso farlo io in un comando** (`gh pr merge 7 --squash`).
 Lo faccio su tua parola, perché pubblica su `main` e quindi in produzione.
 

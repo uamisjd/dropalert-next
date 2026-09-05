@@ -302,6 +302,29 @@ soglia sentinella `−∞`, e i messaggi di elenco vuoto distinguono «nessuna m
 esclusi e quanto valevano in media: «non c'è nulla» e «non te lo faccio vedere» non
 devono somigliarsi.
 
+**Esito, 05/09/2026 ore 03:05 (italiane): la pagina gira sui dati reali e i numeri sono
+quelli previsti.** Quattro righe su cinque segnali attivi, tutte con terna completa dello
+stesso bookmaker, tutte negative, nessuna con euro o «fiducia»:
+
+| partita (non ancora al kickoff) | selezione | quota eseguibile | fair no-vig | margine rimosso | divario |
+| --- | --- | --- | --- | --- | --- |
+| Deutschlandsberger – LASK | X | 11,92 (apertura 24,00) | 12,87 | 7,98% | **−7,4%** |
+| A. Klagenfurt – SK Rapid | X | 9,50 (23,00) | 10,34 | 8,83% | **−8,1%** |
+| UNAM Pumas W – Club América W | 1 | 7,13 (8,62) | 7,80 | 9,40% | **−8,6%** |
+| Marseille W – Le Havre W | 2 | 4,50 (5,20) | 5,02 | 11,56% | **−10,4%** |
+
+Tre conferme in un colpo solo. (a) Il **margine rimosso è 7,98 – 11,56%**: la banda che
+`npm run test:line-shape` misura sui fixture congelati era 8,66 – 11,58% — i dati reali
+sono dentro la previsione, e il 4,5% assumptions del vecchio codice è fuori di ~2×.
+(b) I **divari stanno tutti fra −7 e −10,4 pp**, cioè −margine con piccole correzioni:
+esattamente ciò che §3 (S9) prevedeva per una lista onesta, invece dei +196,7% di prima.
+(c) L'**età della linea è esposta** («lettura di 1 / 31 / 240 / 510 min fa»): le righe
+vecchie non spacciano freschezza.
+
+Sulla scheda partita (`/matches/558`) la stessa misura appare come «Divario −8,12 pp,
+margine rimosso 8,83% su 3 selezioni» con Kelly in «in attesa di una tua probabilità» —
+al posto dei 21,20 € suggeriti che l'audit documentava.
+
 **Lezione per chi toccherà queste pagine:** qualunque valore esca da una funzione SQL
 (aggregati, `case`, cast) va trattato come testo anche se il tipo dichiarato è un altro,
 e non va rimandato a Postgres senza normalizzarlo.
