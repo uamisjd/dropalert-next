@@ -12,9 +12,9 @@
  *  - un giorno senza osservazioni è un buco, non uno zero: la serie salta
  *    il punto invece di appiattirlo sull'asse.
  */
-import { asc } from "drizzle-orm";
+import { asc, eq } from "drizzle-orm";
 import { db } from "@/db/client";
-import { clvRecords } from "@/db/schema";
+import { clvRecords, matches } from "@/db/schema";
 import { num, round } from "@/lib/drop/math";
 import { CLV_INCONCLUSIVE_BELOW } from "@/lib/repo/dashboard";
 import {
@@ -82,11 +82,12 @@ export async function getPerformanceView(
     .select({
       clvPp: clvRecords.clvPp,
       beatClose: clvRecords.beatClose,
-      computedAt: clvRecords.computedAt,
+      at: matches.kickoffAt,
       closingBasis: clvRecords.closingBasis,
     })
     .from(clvRecords)
-    .orderBy(asc(clvRecords.computedAt));
+    .innerJoin(matches, eq(clvRecords.matchId, matches.id))
+    .orderBy(asc(matches.kickoffAt));
 
   const perDay = new Map<string, { sum: number; n: number }>();
   let sumAll = 0;
@@ -96,7 +97,7 @@ export async function getPerformanceView(
   for (const r of rows) {
     const v = num(r.clvPp);
     if (v === null) continue;
-    const day = romeDay.format(new Date(r.computedAt));
+    const day = romeDay.format(new Date(r.at));
     const cur = perDay.get(day) ?? { sum: 0, n: 0 };
     cur.sum += v;
     cur.n += 1;
