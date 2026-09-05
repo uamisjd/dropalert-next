@@ -19,6 +19,11 @@
  * Perché di default non scrive: un ricalcolo che riscrive la misura di validità
  * dell'intero osservatorio va prima letto. Il passaggio a secco stampa gli
  * stessi numeri che scriverebbe, riga per riga nei primi casi.
+ *
+ * Quanto scrive: con `--apply` la scrittura riguarda **ogni** riga che cambia,
+ * mentre `SHOW` limita solo l'elenco stampato. Le due cose erano legate insieme
+ * e le prime dieci righe erano anche le uniche riscritte: il riepilogo contava
+ * riparazioni che il registro non riceveva.
  */
 import { and, eq } from "drizzle-orm";
 import { db, sql } from "@/db/client";
@@ -116,17 +121,7 @@ async function main(): Promise<void> {
     const decision = decideRebase(row, reference);
     summary = accumulate(summary, row, decision);
 
-    if (
-      (decision.action === "repair" || decision.action === "refresh") &&
-      shown.length < SHOW
-    ) {
-      shown.push(
-        `- riga ${r.id}: CLV ${row.clvPp} → ${decision.update.clvPp} pp ` +
-          `(${decision.deltaPp > 0 ? "+" : ""}${decision.deltaPp}), ` +
-          `chiusura ${row.closingPrice} → ${decision.update.closingPrice} ` +
-          `[${r.closingBasis} → ${decision.update.closingBasis}]`,
-      );
-
+    if (decision.action === "repair" || decision.action === "refresh") {
       if (APPLY) {
         await db
           .update(clvRecords)
@@ -140,6 +135,14 @@ async function main(): Promise<void> {
             computedAt: new Date(),
           })
           .where(eq(clvRecords.id, r.id));
+      }
+      if (shown.length < SHOW) {
+        shown.push(
+          `- riga ${r.id}: CLV ${row.clvPp} → ${decision.update.clvPp} pp ` +
+            `(${decision.deltaPp > 0 ? "+" : ""}${decision.deltaPp}), ` +
+            `chiusura ${row.closingPrice} → ${decision.update.closingPrice} ` +
+            `[${r.closingBasis} → ${decision.update.closingBasis}]`,
+        );
       }
     }
   }
