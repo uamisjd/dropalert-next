@@ -362,6 +362,12 @@ export function MatchQuantPanel({ signal, series, allSeries }: Props) {
                   <div className="text-base font-bold text-slate-900 tabular-nums">
                     @{x.v.toFixed(2)}
                   </div>
+                  {x.v < 1.01 ? (
+                    <div className="mt-1 text-[10px] leading-tight text-amber-700">
+                      sotto 1,00: la terna letta rende questo esito così probabile che nessuna
+                      quota reale lo esprime
+                    </div>
+                  ) : null}
                 </div>
               ))}
             </div>

@@ -271,6 +271,10 @@ osserva — lo scarto è il doppio.
 
 ## 5. Come si verifica
 
+> Le decisioni che restano aperte — CLV a basi miste, seconda fonte, finestre di
+> raccolta — sono spiegate in modo piano, con i comandi e il «chi fa che cosa», in
+> `docs/DECISIONI-APERTE.md`.Qui solo i comandi di verifica.
+
 ```bash
 npm run audit:value-bets    # VERIFICA a 7 controlli della pagina, oggi: dopo la patch è un guard
                             # (esito OK/ATTENZIONE per proprietà), non più una radiografia

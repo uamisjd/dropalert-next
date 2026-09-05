@@ -132,7 +132,7 @@ export function GreenUpCalculator() {
             {/* Profitto Netto */}
             <div className="rounded-xl bg-emerald-500/20 p-3.5 ring-1 ring-emerald-400/40">
               <div className="text-[10px] font-bold uppercase tracking-wider text-emerald-300">
-                {mode === "equal_profit" ? "Profitto Netto Garantito" : "Vincita Netta Freebet"}
+                {mode === "equal_profit" ? "Profitto netto, uguale su tutti gli esiti" : "Vincita Netta Freebet"}
               </div>
               <div className="mt-1 text-2xl font-black tabular-nums text-emerald-400">
                 {mode === "equal_profit"

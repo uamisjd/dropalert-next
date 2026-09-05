@@ -232,7 +232,7 @@ nello stesso momento e allo stesso importo, non lo è.
                 </div>
                 <div className="rounded-xl bg-emerald-600 px-3.5 py-2 text-center text-white">
                   <div className="text-[10px] font-bold uppercase opacity-90">
-                    ROI Garantito
+                    ROI su queste quote
                   </div>
                   <div className="text-lg font-extrabold tabular-nums">
                     +{result.profitPct.toFixed(2)}%
@@ -241,6 +241,13 @@ nello stesso momento e allo stesso importo, non lo è.
               </div>
             )}
           </div>
+
+          <p className="mt-3 text-[11px] leading-relaxed text-slate-500">
+            Il vantaggio esiste solo se tutte le quote indicate sono disponibili{" "}
+            <strong>nello stesso istante e per l&#39;intero importo</strong>. Qui non entrano
+            commissioni dell&#39;exchange né limiti di puntata: è aritmetica su numeri che
+            inserisci tu, non un&#39;operazione che il sito abbia osservato da qualche parte.
+          </p>
 
           {/* Ripartizione Dettagliata Puntate */}
           {result.isArbitrage && (
