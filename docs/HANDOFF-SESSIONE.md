@@ -4,9 +4,10 @@
 > PR #11 (ramo `arena/01a0707a-dropalert-next` → `main`): MERGIATA.
 > PR #12 (ramo `arena/01a07101-dropalert-next` → `main`): MERGIATA su richiesta
 > dell'utente in questa sessione — è il primo fix descritto in §8.
-> PR #13 (ramo `arena/01a0717b-dropalert-next` → `main`): APERTA, check
-> `Verifica` e Vercel verdi — contiene profilo collect-only, diagnostica health
-> e test descritti in §8–§9.
+> PR #13 (ramo `arena/01a0717b-dropalert-next` → `main`): merge autorizzato
+> dall'utente il 05.09; contiene profilo collect-only, diagnostica health,
+> separazione dei due heartbeat e scansione concorrente descritti in §8–§9.
+> Stato canonico: `https://github.com/uamisjd/dropalert-next/pull/13`.
 > Gli orari di questo
 > documento sono in UTC quando hanno la `Z`; le pagine del sito li mostrano in
 > ora italiana (estate = UTC+2) — non confondere i due, il «giro delle 10:22»
@@ -236,6 +237,51 @@ Stato sul ramo della sessione: il lavoro tecnico verificabile dei vecchi punti
 2, 3 e 7 è completato; il workflow Actions resta intatto e completo, e nessuna
 soglia di pressione è stata toccata. Restano i controlli che richiedono il nuovo
 deploy o il trascorrere della finestra temporale.
+
+### Istruzioni vincolanti per il nuovo agente dopo il merge di #13
+
+Eseguire questa checklist in ordine e riportare gli esiti in §8 con timestamp in
+ora italiana. Non confondere un check CI, una raccolta Vercel e un ciclo Actions:
+sono tre prove diverse.
+
+1. **Confermare merge e deploy del commit di #13.** Usare
+   `gh pr view 13 --json state,mergedAt,mergeCommit,url`, poi controllare che
+   `Verifica` su `main` e il deploy Production Vercel siano verdi. Verificare il
+   sito tramite l'alias canonico `https://dropalert-next.vercel.app`, non tramite
+   vecchi deployment immutabili.
+2. **Verificare il primo fallback realmente ammesso dal gate.** Non basta un ping
+   saltato. Dopo un `lastPingSkipped: false`, `/api/cron/status` deve mostrare
+   `lastCycleMode: "collect_only"`, `lastCollectionAt` recente,
+   `lastCycleTruncated: false` e `lastFullCycleAt` invariato fino al successivo
+   Actions. In `/api/health` il relativo `scheduler-cycle` deve avere
+   `finishedAt` valorizzato entro 300 s, con `mode: "collect_only"`; nella
+   risposta della rotta o nel `meta` del run, analisi, chiusure e notifiche
+   devono risultare `executed: false`, non zeri spacciati per lavoro svolto.
+3. **Verificare il full Actions corretto, senza lanciarlo manualmente per
+   sostituire la prova.** Servono 2–3 run schedulati spontanei consecutivi in
+   `success`, ciascuno sotto i 10 minuti. Il run deve essere `mode: "full"`,
+   avanzare `lastFullCycleAt` ed eseguire analisi/chiusure/notifiche anche quando
+   il gate salta una raccolta recente. Il run 33967658782 del 05.09 è
+   `cancelled` e non conta. Se un nuovo run scade ancora, individuare dai log la
+   fase lenta e annotare il fallimento: non promuoverlo a successo e non
+   trasformare Actions in collect-only.
+4. **Controllare la diagnostica degli orfani.** In `/api/health`, ogni stato DB
+   `running` vecchio di oltre 15 minuti deve essere esposto come
+   `status: "aborted"`, con `storedStatus: "running"` e `finishedAt: null`. Non
+   aggiornare manualmente quelle righe: sono prova storica del timeout.
+5. **Applicare il gate RPM una sola volta, non prima del 06.09.2026 ore 13:30
+   italiane.** Nello stesso campione registrare `sources[0].status` e
+   `dataGaps.byReason.rate_limited`. Rallentare 12→8 soltanto se lo stato è
+   ancora `degraded` **AND** il contatore è `> 95`. Se manca una delle due
+   condizioni, non cambiare alcuna variabile e scrivere in §8 esattamente
+   **«valutata e respinta»**. I campioni precedenti, fermi a 95, non autorizzano
+   una decisione anticipata.
+6. **Non modificare `.github/workflows/collect.yml` durante questa verifica.**
+   Actions deve restare il ciclo completo; il fallback deve restare
+   collect-only. Non cablare `scripts/gate-check.sh` e non cambiare cadenze o
+   limiti finché i campioni sopra non indicano un problema specifico.
+
+### Dettaglio tecnico di riferimento
 
 1. **Verifica a caldo dopo il prossimo deploy (primi 30 min).**
    - `GET /api/cron/status` → un giro esterno concluso deve avere
