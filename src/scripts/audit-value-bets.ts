@@ -4,14 +4,14 @@
  *
  *   npm run audit:value-bets            (markdown su stdout, solo letture)
  *
- * È il guard dell'audit `docs/STUDIO-VALUE-BETS.md`: i sei controlli sotto sono le
+ * È il guard dell'audit `docs/STUDIO-VALUE-BETS.md`: i sette controlli sotto sono le
  * proprietà che la pagina deve mantenere perché i suoi numeri siano una misura e non
  * un'opinione. Ognuna ha un verdetto esplicito (OK / ATTENZIONE), così non serve
  * rileggere il codice per sapere se qualcosa è tornato indietro.
  */
-import { inArray } from "drizzle-orm";
-import { db, sql } from "@/db/client";
-import { matches } from "@/db/schema";
+import { and, eq, gt, inArray, sql } from "drizzle-orm";
+import { db, sql as raw } from "@/db/client";
+import { matches, oddsSnapshots } from "@/db/schema";
 import { getValueOpportunities } from "@/lib/repo/value-bets";
 
 const mean = (xs: number[]): number | null =>
@@ -62,6 +62,30 @@ async function main(): Promise<void> {
     return m ? m.settledAt !== null || m.status === "finished" : false;
   }).length;
   const edges = rows.map((o) => o.edgePct);
+
+  /* 7 — la regola della terna simultanea è stretta, o i dati non la permettono? */
+  const playable = await db
+    .select({ id: matches.id })
+    .from(matches)
+    .where(and(gt(matches.kickoffAt, now), eq(matches.status, "scheduled")));
+  const playableIds = playable.map((r) => r.id);
+  let instants = 0;
+  let completeInstants = 0;
+  if (playableIds.length > 0) {
+    const groups = await db
+      .select({
+        market: oddsSnapshots.market,
+        collectedAt: oddsSnapshots.collectedAt,
+        selections: sql<number>`count(distinct ${oddsSnapshots.selection})::int`,
+      })
+      .from(oddsSnapshots)
+      .where(inArray(oddsSnapshots.matchId, playableIds))
+      .groupBy(oddsSnapshots.matchId, oddsSnapshots.market, oddsSnapshots.collectedAt);
+    instants = groups.length;
+    completeInstants = groups.filter(
+      (g) => g.selections >= (g.market === "1x2" ? 3 : 2),
+    ).length;
+  }
   const fakeFair = rows.filter(
     (o) => Math.abs(o.fairOdds / o.currentOdds - 1.045) < 0.0005,
   ).length;
@@ -96,6 +120,15 @@ async function main(): Promise<void> {
       name: "il divario medio non è un margine di comodo",
       ok: Math.abs(data.averageEdgePct) < 12,
       detail: `media ${data.averageEdgePct.toFixed(2)} pp — un valore intorno a −4/+5 pp è il margine della linea; un ordine di grandezza diverso qui significa una formula reinventata`,
+    },
+    {
+      name: "la terna simultanea esiste nei dati (non è la regola a azzerare la lista)",
+      ok: rows.length > 0 || completeInstants > 0,
+      detail:
+        `${playableIds.length} partite giocabili in archivio · ${instants} istanti di ` +
+        `lettura · ${completeInstants} con linea completa per il no-vig. Se questo è 0 ` +
+        `mentre gli istanti sono molti, il problema è la scrittura del collettore: ` +
+        `npm run test:line-shape dice se la forma della fonte è cambiata.`,
     },
     {
       name: "contatori di scarto esposti",
@@ -164,11 +197,11 @@ async function main(): Promise<void> {
       ? "Tutti i controlli passano: la pagina espone solo divari calcolati su letture reali."
       : `${failed} controlli da leggere: niente è stato modificato da questo script, che fa solo letture.`,
   );
-  await sql.end();
+  await raw.end();
 }
 
 main().catch(async (err) => {
   console.error("Verifica fallita:", err);
-  await sql.end();
+  await raw.end();
   process.exit(1);
 });

@@ -2,7 +2,6 @@
  * Pagina /strumenti — Suite Completa di Calcolo Quantitativo per Scommettitori e Trader.
  */
 import type { Metadata } from "next";
-import Link from "next/link";
 import { MarginCalculator } from "@/components/tools/MarginCalculator";
 import { VarianceSimulator } from "@/components/tools/VarianceSimulator";
 import { SurebetCalculator } from "@/components/tools/SurebetCalculator";

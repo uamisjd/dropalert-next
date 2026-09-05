@@ -22,7 +22,7 @@
  *    progetto: nessuna selezione da eseguire). La Kelly come calcolatrice con numeri
  *    inseriti a mano vive in `/strumenti`.
  */
-import { and, desc, eq, gte, inArray, isNull } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, isNull, sql } from "drizzle-orm";
 import { db } from "@/db/client";
 import { matches, oddsSnapshots, type MarketType, type SelectionCode } from "@/db/schema";
 import { NOVIG_METHOD } from "../drop/novig";
@@ -79,8 +79,6 @@ export interface ValueScannerResult {
 
 /** Finestra di lettura delle linee: più vecchia di così è un'altra fotografia. */
 const LINE_WINDOW_HOURS = 12;
-/** tetto di righe lette da `odds_snapshots` per passata di scansione */
-const LINE_ROW_CAP = 4000;
 
 const EMPTY: ValueScannerResult["skipped"] = {
   kickoffPassed: 0,
@@ -110,10 +108,16 @@ export interface LineRow {
  * Raggruppa le letture in linee candidate: una riga per
  * (partita, mercato, bookmaker), con le sole selezioni rilevate ALLO STESSO ISTANTE.
  *
- * La regola è tutta qui, ed è il motivo per cui la funzione è separata dalla query:
- * mescolare selezioni letture a minuti diversi darebbe un margine che nessuno ha
- * mai offerto. La lettura più recente vince e non eredita nulla dalla precedente —
- * se è arrivata a metà, la linea resta a metà e chi chiama il divario lo dichiara.
+ * La regola è verificata sui dati, non assunta: il collettore scrive le tre colonne
+ * della stessa riga d'elenco con lo stesso `observedAt` (`toQuoteDTOs`, un solo
+ * `fetchedAt` per giro) e il salto di stabilità è per partita, non per selezione —
+ * quindi o si scrive la terna intera o non si scrive niente. `npm run
+ * test:line-shape` lo blocca sull'HTML reale congelato dell'18/08.
+ *
+ * In generale:
+ * mescolare selezioni lette a minuti diversi darebbe un margine che nessuno ha mai
+ * offerto. La lettura più recente vince e non eredita nulla dalla precedente: se è
+ * arrivata a metà, la linea resta a metà e il divario non viene calcolato.
  *
  * Input ordinato come viene dalla banca dati (non è richiesto: l'ordine è ricostruito).
  */
@@ -152,12 +156,48 @@ export function groupLatestLines(rows: LineRow[]): Map<string, LineReading[]> {
   return byMarket;
 }
 
+/**
+ * Letture delle linee, in due passi — e il secondo è il motivo per cui non si può
+ * fare in uno solo.
+ *
+ * Passo 1: per ogni (partita, mercato, bookmaker) l'istante più recente entro la
+ * finestra. Passo 2: le sole righe di quegli istanti. Una query unica con `limit`
+ * globale, ordinata per tempo, avrebbe affamato le partite con molte letture (una
+ * partita monitorata ogni cinque minuti produce ~430 righe in 12 ore per mercato:
+ * il tetto se le sarebbe mangiate tutte, e le altre partite avrebbero risultato
+ * "nessuna linea" per un motivo che non sta nei dati).
+ *
+ * Le letture marcate `isStale` dalla fonte restano fuori: sono quote arrivate
+ * più vecchie della soglia, e una linea mezza vecchia non è una linea.
+ */
 async function loadLines(
   matchIds: number[],
   since: Date,
 ): Promise<Map<string, LineReading[]>> {
-  if (matchIds.length === 0) return new Map();
+  const groups = await db
+    .select({
+      matchId: oddsSnapshots.matchId,
+      market: oddsSnapshots.market,
+      bookmakerId: oddsSnapshots.bookmakerId,
+      newestAt: sql<Date>`max(${oddsSnapshots.collectedAt})`,
+    })
+    .from(oddsSnapshots)
+    .where(
+      and(
+        inArray(oddsSnapshots.matchId, matchIds),
+        gte(oddsSnapshots.collectedAt, since),
+        eq(oddsSnapshots.isStale, false),
+      ),
+    )
+    .groupBy(
+      oddsSnapshots.matchId,
+      oddsSnapshots.market,
+      oddsSnapshots.bookmakerId,
+    );
 
+  if (groups.length === 0) return new Map();
+
+  const instants = [...new Set(groups.map((g) => g.newestAt))];
   const rows = await db
     .select({
       matchId: oddsSnapshots.matchId,
@@ -170,10 +210,12 @@ async function loadLines(
     })
     .from(oddsSnapshots)
     .where(
-      and(inArray(oddsSnapshots.matchId, matchIds), gte(oddsSnapshots.collectedAt, since)),
+      and(
+        inArray(oddsSnapshots.matchId, matchIds),
+        inArray(oddsSnapshots.collectedAt, instants),
+      ),
     )
-    .orderBy(desc(oddsSnapshots.collectedAt))
-    .limit(LINE_ROW_CAP);
+    .orderBy(desc(oddsSnapshots.collectedAt));
 
   return groupLatestLines(rows as LineRow[]);
 }

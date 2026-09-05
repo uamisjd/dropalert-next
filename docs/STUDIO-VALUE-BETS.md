@@ -234,8 +234,29 @@ Tre cose trovate **durante** l'applicazione, che l'audit non elencava:
   `?? 3.3`, `?? 3.4`: quando la terna mancava, inventava i prezzi per riempire. Ora le sintetiche
   esistono solo con la terna reale, e la simulazione fantasma non c'è più.
 
+**Il punto 3 dell'audit («la regola della terna simultanea potrebbe azzerare la lista
+per un motivo tecnico») è chiuso sui dati, non in linea di principio.** `loadLines` è
+passata a una query in due passi (prima l'istante più recente per
+(partita, mercato, bookmaker), poi solo le righe di quegli istanti): il `limit` globale
+precedente poteva affamare una partita con molte letture; le letture marcate
+`isStale` dalla fonte restano fuori. La catena parser → `toQuoteDTOs` → raggruppamento
+→ divario è verificata su HTML reale congelato da **`npm run test:line-shape`** (40
+asserzioni): sull'elenco drop dell'18/08 ogni riga pubblica **le tre colonne con lo
+stesso `observedAt`**, quindi 6/6 terne simultanee e 6/6 divari calcolabili — la lista
+vuota in produzione vuol dire «non c'è nulla da misurare», non «la regola è troppo
+stretta». Lo stesso test blocca il caso contrario: un giro che porta una sola colonna
+non eredita le altre due.
+
+Un numero che vale da solo, misurato da quello stesso test: le terne reali dell'elenco
+hanno overround **8,66% – 11,58% (mediana 10,04%)**. Il margine che il vecchio codice
+assumeva per tutte le quote del mondo era 4,5%: non era sbagliato di segno, era
+sbagliato **di ordine di grandezza**, e su leghe periferiche — le stesse che questo sito
+osserva — lo scarto è il doppio.
+
 **Che cosa resta com'era (e non è un dettaglio minore):**
 
+- **il guard ora è a sette controlli**, il nuovo dice se sono i dati a non permettere la
+  misura (`istanti con linea completa: X su Y`, calcolato sulle sole partite giocabili).
 - **la linea sharp vera non c'è.** `perBookmakerOdds` è spento: il divario è auto-confronto dello
   stesso bookmaker, non un +EV. Con questi dati la lista sarà quasi sempre corta e negativa — è il
   risultato atteso, non un guasto. Rimuovere il limite significa R2/R3 del backlog, cioè la seconda
@@ -251,15 +272,16 @@ Tre cose trovate **durante** l'applicazione, che l'audit non elencava:
 ## 5. Come si verifica
 
 ```bash
-npm run audit:value-bets    # VERIFICA a 6 controlli della pagina, oggi: dopo la patch è un guard
+npm run audit:value-bets    # VERIFICA a 7 controlli della pagina, oggi: dopo la patch è un guard
                             # (esito OK/ATTENZIONE per proprietà), non più una radiografia
 npm run test:quant          # include [2b]: «linea incompleta → nessun numero», «nessun pavimento»
 npm run test:value-lines    # 12 asserzioni sulla costruzione della linea (stessa ora, stesso libro)
+npm run test:line-shape     # 40 asserzioni: la forma reale delle linee (HTML congelato) + i margini
 npm run study:finished > /tmp/studio.md && sed -n '/## S9/,$p' /tmp/studio.md   # la misura della §3
 npm run lint && npm run typecheck && npm run build
 ```
 
-I controlli di `src/scripts/audit-value-bets.ts`, ora che la pagina è sistemata, sono sei proprietà
+I controlli di `src/scripts/audit-value-bets.ts`, ora che la pagina è sistemata, sono sette proprietà
 da mantenere: solo kickoff futuri; nessuna partita con verdetto a registro; nessuna riga con
 `fair = quota × 1,045`; divari negativi visibili; media dei divari nell'ordine del margine di una
 linea (non oltre); contatori di scarto coerenti con i segnali letti. Ognuno ha `OK` o

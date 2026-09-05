@@ -128,6 +128,39 @@ console.log("\n[2b] Divario vs linea no-vig (`computeValueGap`)");
   assert(tiny.ok === true && tiny.edgePct < 0, `nessun pavimento: edge ${tiny.ok ? tiny.edgePct : "n/d"}% mostrato`);
 }
 
+console.log("\n[1b] Proporzionale e scala dei tick");
+{
+  // Il proporzionale è la definizione: fair = 1 / (implicita / overround)
+  const prop = devigProportional([2.0, 3.4, 3.9]);
+  assert(prop !== null, "devig proporzionale calcolato su terna valida");
+  if (prop) {
+    const overround = 1 / 2.0 + 1 / 3.4 + 1 / 3.9;
+    assert(
+      Math.abs(prop.fairProbabilities[0] - 1 / 2.0 / overround) < 1e-4,
+      `proporzionale = implicita / overround (${prop.fairProbabilities[0]})`,
+    );
+    assert(
+      Math.abs(prop.fairProbabilities.reduce((a, b) => a + b, 0) - 1) < 1e-4,
+      "le probabilità proporzionali sommano a 1",
+    );
+  }
+
+  /* La scala dei tick non è lineare: il gradino cambia per fascia, e questo è il
+   * motivo per cui «tot tick di green-up» non è una misura di prezzo. */
+  assert(calculateTickDistance(1.5, 1.51) === 1, "1,50 → 1,51 = 1 tick (gradino 0,01 sotto 2,00)");
+  assert(calculateTickDistance(2.0, 2.04) === 2, "2,00 → 2,04 = 2 tick (gradino 0,02 fra 2 e 3)");
+  assert(calculateTickDistance(3.0, 3.1) === 2, "3,00 → 3,10 = 2 tick (gradino 0,05 fra 3 e 4)");
+  assert(
+    calculateTickDistance(6.0, 6.05) === 0,
+    "6,00 → 6,05 = 0 tick: sopra 6,00 il gradino è 0,20 e quel prezzo non esiste sulla scala",
+  );
+  assert(calculateTickDistance(2.02, 2.0) === -1, "il segno segue la direzione del movimento");
+  assert(
+    calculateTickDistance(1.5, 1.7) > calculateTickDistance(6.0, 6.2),
+    "stesso scarto relativo, molti più tick sul favorito: i tick non sono una misura di prezzo",
+  );
+}
+
 console.log("\n[3] Money Management & Criterio di Kelly");
 {
   // Quota 2.00 con probabilità 55% -> Full Kelly = (0.55 * 1 - 0.45) / 1 = 10%
