@@ -13,6 +13,7 @@ import {
   ACTIVE_ALGORITHM,
   CONFIDENCE_BANDS,
   CONFIDENCE_WEIGHTS,
+  COVERAGE_WEIGHTS,
   ENGINE_VERSION,
   FLASH_WINDOW_MINUTES,
   FULLY_SUSTAINED_MINUTES,
@@ -421,7 +422,10 @@ export function computeCoverage(
   }
 
   const score = clamp(
-    bookRatio * 0.45 + depthRatio * 0.3 + (hasSharp ? 0.15 : 0) + (hasOpeningLine ? 0.1 : 0),
+    bookRatio * COVERAGE_WEIGHTS.bookRatio +
+      depthRatio * COVERAGE_WEIGHTS.depthRatio +
+      (hasSharp ? COVERAGE_WEIGHTS.sharp : 0) +
+      (hasOpeningLine ? COVERAGE_WEIGHTS.openingLine : 0),
     0,
     1,
   );

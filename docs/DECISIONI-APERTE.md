@@ -58,7 +58,7 @@ non posso inventarmi la seconda fonte.
 che solo corretta: R2 = quota per singolo bookmaker, R3 = linea sharp vera.
 
 **Che fare.** Scegliere la fonte (OddsAPI ha un piano gratuito con copertura per-bookmaker;
-il budget attuale è **3 crediti su 49 al mese**, quindi lo spazio c'è) e scrivere la
+il budget mensile dichiarato dal codice è **490 crediti su 500** (`ODDS_MONTHLY_CAP`, con 10 crediti di margine sul limite reale del piano gratuito)) e scrivere la
 mappatura `bookmaker → id fonte`. Se vuoi, preparo il `docs/RESEARCH-BACKLOG.md` con i
 passi e la stima di crediti, senza toccare il codice.
 

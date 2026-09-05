@@ -12,6 +12,7 @@
 import { and, asc, desc, eq, gte, inArray, sql as raw } from "drizzle-orm";
 import { db } from "@/db/client";
 import {
+  bookmakers,
   clvRecords,
   collectorRuns,
   dataGaps,
@@ -48,6 +49,19 @@ import {
 import { getContextSummaries } from "@/lib/repo/context";
 import { getNewsCounts } from "@/lib/repo/news";
 import { normalizeDisplayName } from "@/lib/providers/betexplorer/parse";
+import {
+  clvBasisMix,
+  describeClvBasisMix,
+  type ClvBasisMix,
+} from "@/lib/view/clv-basis";
+import {
+  bandReachability,
+  describeCeiling,
+  FULL_PICTURE_BOOKS,
+  scoreCeiling,
+  type ScoreCeiling,
+} from "@/lib/view/score-ceiling";
+import { perBookmakerOddsUnavailable } from "@/lib/providers/registry";
 
 /* ------------------------------------------------------------------ */
 /* Soglie di lettura                                                   */
@@ -63,6 +77,18 @@ export const CLV_INCONCLUSIVE_BELOW = 30;
 /** Riga fissa che accompagna ogni numero di CLV provvisorio. */
 export const CLV_MATURITY_NOTE =
   "Con campioni piccoli il CLV oscillante non prova nulla. Serve storico.";
+
+/**
+ * Tetto dell'indice nel caso in cui non si riesca a leggere la configurazione:
+ * si dichiara il caso più prudente (fonte singola) invece di una copertura
+ * non verificata.
+ */
+export const SINGLE_SOURCE_CEILING = scoreCeiling({
+  booksObserved: 1,
+  booksExpected: FULL_PICTURE_BOOKS,
+  sharpAvailable: false,
+  hasOpeningLine: true,
+});
 
 /* ------------------------------------------------------------------ */
 /* Livello del segnale                                                 */
@@ -329,11 +355,36 @@ export interface ClvMaturity {
     avgClvPp: number | null;
     beatCloseRate: number | null;
     inconclusive: boolean;
+    /** la fascia sta sopra il tetto strutturale dell'indice */
+    unreachable: boolean;
   }>;
   /** partite monitorate che devono ancora superare il kickoff */
   pendingClosings: number;
   nextClosingAt: string | null;
   note: string;
+  /**
+   * Su quali basi è misurato il CLV che questa sezione riassume.
+   *
+   * Non è un dettaglio tecnico: il prezzo del segnale è sempre grezzo, mentre
+   * la chiusura può essere fair no-vig oppure grezza a seconda della
+   * completezza del mercato (`clv_records.closing_basis`). Mescolare le due
+   * cose deprime il CLV di un importo meccanico — misurato a −1,86 pp
+   * sull'archivio congelato, `docs/STUDIO-PARTITE-FINITE.md` §1.1 — quindi la
+   * composizione va letta PRIMA del numero, non dopo.
+   */
+  basis: ClvBasisMix;
+  /** la stessa composizione, in una frase pubblicata accanto al numero */
+  basisNote: string;
+  /**
+   * Tetto strutturale dell'indice grezzo con la fonte attuale.
+   *
+   * Serve alla tabella qui sotto: una fascia sopra il tetto non è «poco
+   * popolata», è irraggiungibile per costruzione, e leggerla come un risultato
+   * sarebbe un errore. Misurato sul motore: 50,13 con una sola linea di
+   * consenso, 37,60 con il moltiplicatore di iper-reazione.
+   */
+  ceiling: ScoreCeiling;
+  ceilingNote: string;
 }
 
 export interface DashboardFilters {
@@ -866,6 +917,7 @@ export async function getClvMaturity(now = new Date()): Promise<ClvMaturity> {
         clvPp: clvRecords.clvPp,
         beatClose: clvRecords.beatClose,
         signalScore: clvRecords.signalScore,
+        closingBasis: clvRecords.closingBasis,
       })
       .from(clvRecords),
     db
@@ -889,6 +941,12 @@ export async function getClvMaturity(now = new Date()): Promise<ClvMaturity> {
     .filter((v): v is number => v !== null);
   const beat = records.filter((r) => r.beatClose).length;
 
+  const basis = clvBasisMix(records);
+  const ceiling = await currentScoreCeiling();
+  const reachableByKey = new Map(
+    bandReachability(SCORE_BUCKETS, ceiling.maxRaw).map((b) => [b.key, !b.empty]),
+  );
+
   const buckets = SCORE_BUCKETS.map((b) => {
     const rows = records.filter((r) => {
       const score = num(r.signalScore);
@@ -910,6 +968,8 @@ export async function getClvMaturity(now = new Date()): Promise<ClvMaturity> {
           ? round(rows.filter((r) => r.beatClose).length / rows.length, 4)
           : null,
       inconclusive: rows.length < CLV_INCONCLUSIVE_BELOW,
+      /** la fascia sta sopra il tetto strutturale: nessuna osservazione può caderci */
+      unreachable: reachableByKey.get(b.key) === false,
     };
   });
 
@@ -926,7 +986,59 @@ export async function getClvMaturity(now = new Date()): Promise<ClvMaturity> {
     pendingClosings: pending[0]?.n ?? 0,
     nextClosingAt: pending[0]?.kickoffAt ? toIso(pending[0].kickoffAt) : null,
     note: CLV_MATURITY_NOTE,
+    basis,
+    basisNote: describeClvBasisMix(basis),
+    ceiling,
+    ceilingNote: describeCeiling(ceiling),
   };
+}
+
+/**
+ * Configurazione con cui il motore sta lavorando adesso, letta dai dati.
+ *
+ * Il tetto dell'indice dipende da quanti bookmaker il sistema riesce a vedere:
+ * con una fonte che espone solo il consenso è per forza una linea sola. Se una
+ * fonte per singolo bookmaker diventa attiva, il tetto sale da solo e le fasce
+ * alte della tabella CLV smettono di essere marcate irraggiungibili — senza
+ * che nessuno debba ricordarsi di aggiornare una costante.
+ */
+async function currentScoreCeiling(): Promise<ScoreCeiling> {
+  if (perBookmakerOddsUnavailable()) {
+    /* la fonte espone una sola linea di consenso, dichiarata non sharp */
+    return scoreCeiling({
+      booksObserved: 1,
+      booksExpected: FULL_PICTURE_BOOKS,
+      sharpAvailable: false,
+      hasOpeningLine: true,
+    });
+  }
+
+  try {
+    const [row] = await db
+      .select({
+        books: raw<number>`count(distinct ${oddsSnapshots.bookmakerId})::int`,
+        sharps: raw<number>`count(distinct case when ${bookmakers.isSharp} then ${oddsSnapshots.bookmakerId} end)::int`,
+      })
+      .from(oddsSnapshots)
+      .leftJoin(bookmakers, eq(bookmakers.id, oddsSnapshots.bookmakerId));
+
+    const books = row?.books ?? 0;
+    return scoreCeiling({
+      booksObserved: books,
+      booksExpected: FULL_PICTURE_BOOKS,
+      sharpAvailable: (row?.sharps ?? 0) > 0,
+      hasOpeningLine: true,
+    });
+  } catch {
+    /* lettura non riuscita: si dichiara il caso più prudente, non si inventa
+       una copertura che non abbiamo verificato */
+    return scoreCeiling({
+      booksObserved: 1,
+      booksExpected: FULL_PICTURE_BOOKS,
+      sharpAvailable: false,
+      hasOpeningLine: true,
+    });
+  }
 }
 
 /* ------------------------------------------------------------------ */
@@ -980,6 +1092,10 @@ export async function getDashboardData(
         pendingClosings: 0,
         nextClosingAt: null,
         note: CLV_MATURITY_NOTE,
+        basis: clvBasisMix([]),
+        basisNote: describeClvBasisMix(clvBasisMix([])),
+        ceiling: SINGLE_SOURCE_CEILING,
+        ceilingNote: describeCeiling(SINGLE_SOURCE_CEILING),
       },
       generatedAt: now.toISOString(),
     };

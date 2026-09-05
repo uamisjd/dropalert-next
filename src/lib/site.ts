@@ -40,6 +40,7 @@ export const PUBLIC_PAGES = [
   "/domani",
   "/coverage",
   "/metodologia",
+  "/guida",
   "/privacy",
   "/gioco-responsabile",
   "/performance",

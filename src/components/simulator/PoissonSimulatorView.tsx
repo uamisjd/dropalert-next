@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useMemo } from "react";
+import Link from "next/link";
 import { simulateDixonColes } from "@/lib/quant/dixon-coles";
 import { calculateEV } from "@/lib/quant/ev-engine";
 
@@ -269,7 +270,9 @@ export function PoissonSimulatorView() {
       {/* Matrice dei Risultati Esatti (Heatmap) */}
       <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm sm:p-7">
         <h3 className="text-base font-bold text-slate-950">
-          Matrice delle Probabilità dei Risultati Esatti (0-0 a 5-5)
+          Matrice delle Probabilità dei Risultati Esatti (0-0 a{" "}
+          {simulation.scoreMatrix.length - 1}-
+          {simulation.scoreMatrix.length - 1})
         </h3>
         <p className="mt-1 text-xs text-slate-500">
           Probabilità percentuale e quota fair no-vig teorica per ciascun punteggio finale.
@@ -280,7 +283,10 @@ export function PoissonSimulatorView() {
             <thead>
               <tr className="border-b border-slate-200 text-slate-500">
                 <th className="p-2 font-bold">Casa \ Ospite</th>
-                {[0, 1, 2, 3, 4, 5].map((y) => (
+                {/* le intestazioni derivano dalla matrice, non da un elenco
+                    scritto a mano: se il lato cambia, cambia anche il titolo
+                    della tabella invece di restare indietro di una colonna */}
+                {simulation.scoreMatrix[0].map((_, y) => (
                   <th key={y} className="p-2 font-bold">{y} gol</th>
                 ))}
               </tr>
@@ -330,6 +336,70 @@ export function PoissonSimulatorView() {
           ))}
         </div>
       </div>
+
+      {/* Dichiarazione di stato del modello.
+          Ogni altra pagina di contenuto di questo sito chiude con una sezione
+          che dice che cosa misura e che cosa no: questa mancava, e qui manca
+          su un calcolatore che stampa la parola «EV» accanto a una quota.
+          Il vincolo è scritto in docs/RESEARCH-BACKLOG.md, voce 7: nessun
+          output di un modello di gol entra nel punteggio, nel CLV o nelle
+          pagine di segnale prima di un backtest out-of-sample passato e
+          dichiarato. Quel backtest non esiste: lo si dice qui. */}
+      <section className="mt-8 rounded-2xl border border-slate-200 bg-white p-5 text-xs text-slate-600 shadow-sm sm:p-6">
+        <h3 className="text-sm font-bold tracking-wide text-slate-900 uppercase">
+          Che cosa è questo modello, e che cosa non è
+        </h3>
+        <div className="mt-3 grid gap-4 sm:grid-cols-3">
+          <div>
+            <h4 className="font-semibold text-slate-800">1. I numeri li inserisci tu</h4>
+            <p className="mt-1 leading-relaxed">
+              I gol attesi non arrivano da nessuna base dati: il sito non legge
+              formazioni, infortuni né statistiche di tiro. Lambda e mu sono i
+              tuoi, e la matrice è la conseguenza aritmetica di quelli. Cambia
+              di un decimo un gol atteso e cambiano tutte le quote della
+              tabella: è la sensibilità del modello, non informazione sulla
+              partita.
+            </p>
+          </div>
+          <div>
+            <h4 className="font-semibold text-slate-800">
+              2. Non è stato validato sul mercato
+            </h4>
+            <p className="mt-1 leading-relaxed">
+              Questo modello non è mai stato confrontato con le quote reali su
+              un campione fuori dai dati di stima, e quindi non entra
+              nell&apos;indice di fiducia, nel CLV né in nessuna card di
+              segnale: la regola del progetto è che un modello non validato non
+              alimenta l&apos;interfaccia. L&apos;«EV» che leggi è la differenza
+              fra la tua ipotesi e la quota che hai scritto: misura la distanza
+              fra due numeri, non un vantaggio.
+            </p>
+          </div>
+          <div>
+            <h4 className="font-semibold text-slate-800">3. I limiti del modello</h4>
+            <p className="mt-1 leading-relaxed">
+              Poisson bivariato con la correzione di Dixon-Coles sui punteggi
+              bassi: assume gol indipendenti nel tempo e un&apos;intensità
+              costante per tutta la partita. Non conosce il rosso al
+              20&apos;, il vantaggio da gestire, i supplementari. La matrice si
+              ferma a {simulation.scoreMatrix.length - 1} gol per squadra e le
+              probabilità sono rinormalizzate su quella griglia.
+            </p>
+          </div>
+        </div>
+        <p className="mt-4 border-t border-slate-100 pt-3 text-[11px] leading-relaxed text-slate-400">
+          Nessuna selezione è indicata e nessuna puntata è calcolata: per
+          giocare con i numeri — margine, Kelly, varianza — ci sono gli&nbsp;
+          <Link href="/strumenti" className="underline">
+            strumenti
+          </Link>
+          , dove i valori li inserisci tu. Per i limiti personali,&nbsp;
+          <Link href="/gioco-responsabile" className="underline">
+            gioco responsabile
+          </Link>
+          .
+        </p>
+      </section>
     </div>
   );
 }

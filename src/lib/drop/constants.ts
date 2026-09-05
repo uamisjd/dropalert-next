@@ -91,6 +91,22 @@ export const CONFIDENCE_BANDS = {
   high: 78,
 } as const;
 
+/**
+ * Peso interno delle quattro componenti della copertura dati. Somma = 1.
+ *
+ * Sono esportate perché il tetto raggiungibile dell'indice dipende da queste
+ * frazioni tanto quanto dai pesi delle componenti: con una sola linea di
+ * consenso e nessuna linea sharp, `bookRatio` vale 1/4 e il termine sharp
+ * vale zero, e la copertura si ferma a 0,5125 invece di 1. Chi calcola quel
+ * tetto deve leggere gli stessi numeri che usa il motore, non una copia.
+ */
+export const COVERAGE_WEIGHTS = {
+  bookRatio: 0.45,
+  depthRatio: 0.3,
+  sharp: 0.15,
+  openingLine: 0.1,
+} as const;
+
 /** Copertura dati minima sotto la quale non esponiamo una banda. */
 export const MIN_COVERAGE_FOR_BAND = 0.35;
 

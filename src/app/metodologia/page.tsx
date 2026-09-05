@@ -85,6 +85,34 @@ export default function MetodologiaPage() {
           della partita. Sotto le 30 osservazioni lo dichiariamo non
           concludente, e i valori negativi restano pubblicati come sono.
         </p>
+        <p className="mt-2 text-sm leading-relaxed text-slate-700">
+          Due soglie diverse, perché servono a due cose diverse: sotto le{" "}
+          <strong>10</strong> osservazioni non pubblichiamo nemmeno
+          l&apos;intervallo di confidenza al 95% (sotto quella soglia un
+          intervallo è rumore vestito da precisione); sotto le{" "}
+          <strong>30</strong> il valore resta marcato non concludente anche
+          quando è positivo. La seconda è deliberatamente più severa della
+          prima: un campione piccolo che oscilla non prova nulla.
+        </p>
+        <p className="mt-2 text-sm leading-relaxed text-slate-700">
+          E una cautela che vale più delle soglie: <strong>le due metà del CLV
+          non stanno sempre sulla stessa base</strong>. Il prezzo del segnale è
+          sempre grezzo, margine del bookmaker incluso; la chiusura invece è
+          fair no-vig dove il mercato era completo e grezza dove non lo era.
+          Confrontare un prezzo con margine contro una probabilità senza
+          margine deprime il CLV di un importo meccanico che non ha nulla a che
+          vedere con la bravura: sull&apos;archivio congelato di questo progetto
+          quell&apos;importo misura <strong>−1,86 punti percentuali</strong> di
+          media, con il 20,6% delle osservazioni che cambierebbe verso
+          (<code className="rounded bg-slate-100 px-1">docs/STUDIO-PARTITE-FINITE.md</code>,
+          §1.1). La base usata per ogni osservazione è registrata e oggi è
+          dichiarata in{" "}
+          <Link href="/performance" className="font-semibold text-cyan-700 hover:underline">
+            /performance
+          </Link>{" "}
+          accanto al numero: un riepilogo a basi miste lo dice, invece di
+          lasciare che la media sembri un verdetto.
+        </p>
       </section>
 
       <section className="mt-5">

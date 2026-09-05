@@ -15,6 +15,7 @@ const LINKS: Array<{ href: string; label: string; badge?: string; highlight?: bo
   { href: "/domani", label: "Domani" },
   { href: "/performance", label: "Performance" },
   { href: "/coverage", label: "Copertura" },
+  { href: "/guida", label: "Come si legge" },
   { href: "/metodologia", label: "Metodo" },
 ];
 

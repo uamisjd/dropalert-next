@@ -1,0 +1,74 @@
+name: Ribasatura CLV (manuale)
+
+# Solo lancio manuale, e di default a secco.
+#
+# Perché un pulsante e non un comando in chat: lo script scrive sul database di
+# produzione, e la connection string non deve passare da una conversazione.
+# Qui `DATABASE_URL` arriva dai secrets del repository e non viene mai
+# stampata (l'output è filtrato come in `audit.yml`).
+#
+#   gh workflow run "Ribasatura CLV (manuale)" --ref <branch> -f mode=dry-run
+#   gh workflow run "Ribasatura CLV (manuale)" --ref <branch> -f mode=apply
+#
+# Oppure, dal sito: Actions → «Ribasatura CLV (manuale)» → Run workflow →
+# scegli `dry-run` o `apply`.
+#
+# Il passaggio a secco stampa esattamente ciò che `apply` scriverebbe: si legge
+# prima, si applica dopo. Un ricalcolo che riscrive la misura di validità
+# dell'osservatorio non va eseguito alla cieca.
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "dry-run = solo lettura, apply = scrive"
+        type: choice
+        default: "dry-run"
+        options:
+          - dry-run
+          - apply
+
+concurrency:
+  group: dropalert-rebase-clv
+  cancel-in-progress: false
+
+jobs:
+  rebase:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+
+    steps:
+      - name: Codice
+        uses: actions/checkout@v4
+
+      - name: Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Dipendenze
+        run: npm ci --include=dev
+
+      - name: Verifica configurazione database
+        run: |
+          if [ -z "$DATABASE_URL" ]; then
+            echo "::error::DATABASE_URL non configurato fra i secrets del repository."
+            exit 1
+          fi
+
+      # Se il client fallisce, l'errore di `postgres` include la connection
+      # string nel message: la si maschera in uscita, come negli altri workflow.
+      - name: Ribasatura (${{ inputs.mode }})
+        run: |
+          if [ "${{ inputs.mode }}" = "apply" ]; then
+            echo "::warning::Modalità apply: le righe di CLV verranno riscritte."
+            npm run clv:rebase -- --apply 2>&1 \
+              | sed -E 's#(postgres(ql)?://)[^[:space:]\"'\"'\"']*#\1<redacted>#g'
+          else
+            npm run clv:rebase 2>&1 \
+              | sed -E 's#(postgres(ql)?://)[^[:space:]\"'\"'\"']*#\1<redacted>#g'
+          fi

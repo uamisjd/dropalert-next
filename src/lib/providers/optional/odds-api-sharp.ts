@@ -12,6 +12,14 @@
  * quelle di BetExplorer; questa fonte serve solo a dire se una linea sharp
  * conferma, smentisce o non è osservabile.
  */
+import type { SelectionCode } from "@/db/schema";
+import {
+  bookSpread,
+  extractBookLines,
+  isSharpBookmaker,
+  type BookLine,
+  type TheOddsApiEvent,
+} from "./the-odds-api-odds";
 import {
   SHARP_BOOKS,
   readOddsApiKey,
@@ -20,7 +28,24 @@ import {
 } from "./odds-api-budget";
 
 const ENDPOINT = "https://api.the-odds-api.com/v4/sports";
-const TIMEOUT_MS = 8_000;
+/* La risposta contiene tutti i book della regione, non più tre: il timeout è
+   un po' più largo per non trasformare un payload più ricco in un errore. */
+const TIMEOUT_MS = 12_000;
+
+/** Dispersione misurata fra i prezzi di più book. `null` se non misurabile. */
+export type SpreadView = {
+  count: number;
+  min: number;
+  max: number;
+  spread: number;
+};
+
+/** Prezzo di un singolo bookmaker nella stessa lettura (nessun credito in più). */
+export interface SharpBookLine {
+  key: string;
+  price: number;
+  isSharp: boolean;
+}
 
 /** Fotografia della linea sharp per una partita. */
 export interface SharpSnapshot {
@@ -29,6 +54,17 @@ export interface SharpSnapshot {
   /** prezzo decimale della selezione osservata */
   price: number | null;
   verdict: SharpVerdict;
+  /**
+   * Tutti i bookmaker che hanno quotato la selezione osservata, dalla stessa
+   * risposta. Serve a mostrare la dispersione fra i book sharp invece di un
+   * solo prezzo preso come se fosse «la» linea: con un unico numero non si
+   * distingue una linea condivisa da un'opinione isolata.
+   */
+  books: SharpBookLine[];
+  /** dispersione fra i soli book sharp; `null` se c'è meno di un confronto */
+  spread: SpreadView | null;
+  /** dispersione fra tutti i book della regione che quotano la selezione */
+  marketSpread: SpreadView | null;
   /** crediti residui dichiarati dal provider, quando li espone */
   remainingFromProvider: number | null;
   readAt: string;
@@ -161,8 +197,13 @@ export async function fetchSharpLine(
   const url =
     `${ENDPOINT}/${encodeURIComponent(params.sportKey)}/odds` +
     `?apiKey=${encodeURIComponent(apiKey)}` +
-    `&regions=eu&markets=h2h&oddsFormat=decimal` +
-    `&bookmakers=${SHARP_BOOKS.join(",")}`;
+    /* Nessun filtro `bookmakers=`: la documentazione della fonte stabilisce
+       che il costo è `mercati × regioni`, non per bookmaker. Con un mercato
+       (`h2h`) e una regione (`eu`) la chiamata costa 1 credito sia che si
+       chiedano tre book sia che si chiedano tutti. Chiedere tutti i book è
+       quindi gratis rispetto a chiederne tre, ed è ciò che rende misurabile
+       la dispersione dell'intero mercato europeo invece che dei soli sharp. */
+    `&regions=eu&markets=h2h&oddsFormat=decimal`;
 
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
@@ -191,6 +232,54 @@ export async function fetchSharpLine(
       params.awayTeam,
     );
 
+    /* Stessa risposta, stessa chiamata già pagata: i prezzi per book si
+       leggono qui senza spendere un credito in più. La dispersione è l'unica
+       cosa che una fotografia consente di dire sui book — il movimento
+       richiederebbe due fotografie e non lo inventiamo. */
+    const parsed = extractBookLines(
+      (event ?? { id: "" }) as TheOddsApiEvent,
+      now,
+    ).lines.filter(
+      (l) =>
+        l.market === "1x2" && l.selection === (params.selection as SelectionCode),
+    );
+
+    const byKey = new Map<string, SharpBookLine>();
+    /* il prezzo che ha prodotto il verdetto va per primo, se c'è */
+    if (book !== null && price !== null) {
+      byKey.set(book, { key: book, price, isSharp: isSharpBookmaker(book) });
+    }
+    for (const l of parsed) {
+      if (!byKey.has(l.bookmakerKey)) {
+        byKey.set(l.bookmakerKey, {
+          key: l.bookmakerKey,
+          price: l.price,
+          isSharp: l.isSharp,
+        });
+      }
+    }
+    const allBooks = [...byKey.values()];
+    const asLines = (bs: SharpBookLine[]): BookLine[] =>
+      bs.map((b) => ({
+        bookmakerKey: b.key,
+        isSharp: b.isSharp,
+        market: "1x2" as const,
+        selection: params.selection as SelectionCode,
+        price: b.price,
+        observedAt: now,
+      }));
+    /* Due dispersioni distinte, perché dicono due cose diverse: quella fra i
+       book sharp misura se la linea "intelligente" è condivisa, quella fra
+       tutti i book misura quanto il mercato è d'accordo. Confonderle
+       significherebbe spacciare l'una per l'altra. */
+    const spread = bookSpread(
+      asLines(allBooks.filter((b) => b.isSharp)),
+      params.selection as SelectionCode,
+    );
+    const marketSpread = bookSpread(allBooks.length > 0 ? asLines(allBooks) : parsed,
+      params.selection as SelectionCode,
+    );
+
     return {
       ok: true,
       creditsUsed: 1,
@@ -202,6 +291,9 @@ export async function fetchSharpLine(
           params.consensusCurrent,
           price,
         ),
+        books: allBooks,
+        spread,
+        marketSpread,
         remainingFromProvider:
           remaining !== null && Number.isFinite(remaining) ? remaining : null,
         readAt: now.toISOString(),
@@ -217,4 +309,56 @@ export async function fetchSharpLine(
   } finally {
     clearTimeout(timer);
   }
+}
+
+/**
+ * Rende leggibile una fotografia scritta da una versione precedente.
+ *
+ * Le fotografie sono conservate in `system_state` per un giorno: quando si
+ * aggiunge un campo, quelle già scritte non lo hanno. Senza normalizzazione la
+ * pagina leggerebbe `snapshot.marketSpread.count` su `undefined` e si
+ * schianterebbe sulle partite lette ieri — un difetto che comparirebbe solo in
+ * produzione e solo per un giorno, il tipo peggiore. Un campo assente diventa
+ * "non misurabile", che è ciò che è davvero.
+ */
+export function normalizeSharpSnapshot(raw: unknown): SharpSnapshot | null {
+  if (typeof raw !== "object" || raw === null) return null;
+  const r = raw as Partial<SharpSnapshot> & Record<string, unknown>;
+  const spreadOf = (v: unknown): SpreadView | null => {
+    if (typeof v !== "object" || v === null) return null;
+    const s = v as Partial<SpreadView>;
+    if (
+      typeof s.count !== "number" ||
+      typeof s.min !== "number" ||
+      typeof s.max !== "number" ||
+      typeof s.spread !== "number"
+    ) {
+      return null;
+    }
+    return { count: s.count, min: s.min, max: s.max, spread: s.spread };
+  };
+  const books = Array.isArray(r.books)
+    ? r.books
+        .filter((b): b is SharpBookLine => {
+          if (typeof b !== "object" || b === null) return false;
+          const x = b as Partial<SharpBookLine>;
+          return typeof x.key === "string" && typeof x.price === "number";
+        })
+        .map((b) => ({ key: b.key, price: b.price, isSharp: b.isSharp === true }))
+    : [];
+  const verdict: SharpVerdict =
+    r.verdict === "conferma" || r.verdict === "smentisce"
+      ? r.verdict
+      : "non osservabile";
+  return {
+    book: typeof r.book === "string" ? r.book : null,
+    price: typeof r.price === "number" ? r.price : null,
+    verdict,
+    books,
+    spread: spreadOf(r.spread),
+    marketSpread: spreadOf(r.marketSpread),
+    remainingFromProvider:
+      typeof r.remainingFromProvider === "number" ? r.remainingFromProvider : null,
+    readAt: typeof r.readAt === "string" ? r.readAt : "",
+  };
 }
