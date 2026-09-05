@@ -151,8 +151,9 @@ l'opposto; (d) `clvRecords` fermo: analisi e chiusure le fa solo chi arriva in f
    occasioni; ora il test legge il cron **dal file**, quindi la copia non può più
    invecchiare in silenzio. `RUNNER_NOTE` dice anche della seconda gamba esterna e
    punta a `/api/cron/status`.
-4. `scripts/gate-check.sh` (non cablato nel workflow) allineato alla stessa regola;
-   `docs/SCHEDULING.md` aggiornato con la sezione «Il gate rispetta il tentativo».
+4. In #12 `scripts/gate-check.sh` (non cablato) rispettava anche il claim;
+   #13 lo riallinea all'heartbeat **full** per evitare starvation di Actions,
+   mentre il gate della fonte continua a rispettare il tentativo.
 
 **Baseline registrata alle 13:13 (ora italiana), prima del merge**: fonte passata
 da `ok` a **`degraded`** in ~40 minuti (latenza media 151 → 426 ms, circuito
@@ -181,8 +182,11 @@ fissato al 06.09 ore 13:30: oggi manca comunque la seconda condizione (`> 95`).
 
 1. `/api/cron/collect` usa ora un vero profilo `collect_only`: termina dopo la
    raccolta e lascia analisi, risultati, chiusure e notifiche al giro completo
-   di Actions. Chiude `scheduler-cycle` e aggiorna `scheduler:last_cycle`, quindi
-   non lascia più un outer-run condannato a restare `running`.
+   di Actions. Chiude `scheduler-cycle` e aggiorna
+   `scheduler:last_collection`; il claim tiene chiuso il gate della fonte,
+   quindi non lascia più un outer-run condannato a restare `running`.
+   `scheduler:last_cycle` resta invece l'heartbeat del giro completo: separarli
+   impedisce al fallback puntuale di affamare Actions per sempre.
 2. Il profilo serverless impone 15 righe/120 s alla fase di dettaglio e disattiva
    il retry da 60 s: dei 300 s ne restano almeno 180 per quote, DB e
    finalizzazione. Le esclusioni restano dichiarate come nostra scelta.
@@ -199,8 +203,9 @@ fissato al 06.09 ore 13:30: oggi manca comunque la seconda condizione (`> 95`).
    query ora escludono esplicitamente `finished_at is null`, e la metodologia
    pubblica lo dichiara.
 6. `test:pipeline` è entrato in `test:all` ed è stato eseguito davvero su una
-   PostgreSQL effimera: 43/43 casi verdi, incluso il fallback che chiude il run,
-   non finge fasi eseguite e avanza il gate. Anche l'intera `test:all`,
+   PostgreSQL effimera: 44/44 casi verdi, incluso il fallback che chiude il run,
+   non finge fasi eseguite, avanza il gate della fonte e non affama il full.
+   Anche l'intera `test:all`,
    typecheck, lint e build compilata sono verdi.
 
 **Verifica della preview di PR #13, ore 14:47 italiane.** `/api/health` ha
@@ -224,8 +229,9 @@ deploy o il trascorrere della finestra temporale.
 
 1. **Verifica a caldo dopo il prossimo deploy (primi 30 min).**
    - `GET /api/cron/status` → un giro esterno concluso deve avere
-     `lastCycleMode: "collect_only"`, `lastPingSkipped: false` e outer-run chiuso;
-     i ping fuori cadenza devono ancora avere `lastPingSkipped: true`.
+     `lastCycleMode: "collect_only"`, `lastCollectionAt` valorizzato,
+     `lastPingSkipped: false` e outer-run chiuso; `lastFullCycleAt` deve avanzare
+     solo col giro Actions. I ping fuori cadenza restano `lastPingSkipped: true`.
    - `GET /api/health` → `recentRuns`: nessun `scheduler-cycle` deve essere
      presentato come `running` oltre 15 minuti; per i vecchi orfani ci si aspetta
      `status: "aborted"` e `storedStatus: "running"`.
@@ -261,10 +267,11 @@ deploy o il trascorrere della finestra temporale.
    riporta l'esito in §8 come **«valutata e respinta»**.
 5. **Operazioni esterne residue.**
    - Non trasformare Actions in collect-only: `.github/workflows/collect.yml`
-     deve continuare a eseguire il ciclo `full`. L'inline gate può restare: ora
-     anche un fallback concluso aggiorna `scheduler:last_cycle`. Cablare
-     `scripts/gate-check.sh` sarebbe soltanto un'ottimizzazione dei minuti del
-     runner dopo un'interruzione e richiede una modifica esplicita del workflow.
+     deve continuare a eseguire il ciclo `full`. L'inline gate può restare:
+     legge `scheduler:last_cycle`, riservato all'ultimo full concluso, mentre il
+     fallback usa `scheduler:last_collection` + claim. `scripts/gate-check.sh`
+     è ora allineato alla stessa separazione; cablarlo resta un'ottimizzazione
+     opzionale che richiede una modifica esplicita del workflow.
    - La cadenza dello scheduler esterno non è nel repository: 15 min è innocuo
      per la fonte grazie al gate; 60 min riduce le sole function invocation.
 6. **Pulizia dei residui (non necessaria).** Le righe `collector_runs`
@@ -273,7 +280,7 @@ deploy o il trascorrere della finestra temporale.
    `storedStatus`. Non scrivere `aborted`/`partial` a mano nel DB: la proiezione
    risolve la diagnostica senza fabbricare una chiusura mai avvenuta.
 7. **Test pipeline — RISOLTO.** Eseguito contro PostgreSQL effimera dopo le
-   migrazioni (43/43) e aggiunto a `test:all`; di conseguenza anche `Verifica`,
+   migrazioni (44/44) e aggiunto a `test:all`; di conseguenza anche `Verifica`,
    che prepara PostgreSQL 17 e lancia `test:all`, lo eseguirà. Non rimuoverlo per
    rendere verde un ambiente locale senza DB: avviare invece PostgreSQL e usare
    una `DATABASE_URL` esplicita.

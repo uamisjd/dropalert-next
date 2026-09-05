@@ -19,6 +19,7 @@ import { systemState } from "@/db/schema";
 import {
   latestRunMoment,
   readCycleClaim,
+  readLastCollection,
   readLastCycle,
   readSchedulerConfig,
 } from "@/lib/pipeline/scheduler";
@@ -28,19 +29,20 @@ export const dynamic = "force-dynamic";
 
 export async function GET(): Promise<Response> {
   try {
-    const [row, closed, claim] = await Promise.all([
+    const [row, collection, fullCycle, claim] = await Promise.all([
       db
         .select({ value: systemState.value })
         .from(systemState)
         .where(eq(systemState.key, EXTERNAL_PING_KEY))
         .limit(1),
+      readLastCollection().catch(() => null),
       readLastCycle().catch(() => null),
       readCycleClaim().catch(() => null),
     ]);
 
-    /* il momento che tiene chiusa la porta: lo stesso che usa il gate */
+    /* il momento che tiene chiusa la porta della fonte: lo stesso del gate */
     const respected = latestRunMoment(
-      closed === null ? null : new Date(closed.at),
+      collection === null ? null : new Date(collection.at),
       claim,
     );
     const intervalMinutes = readSchedulerConfig().intervalMinutes;
@@ -61,8 +63,10 @@ export async function GET(): Promise<Response> {
         note: "Nessuna chiamata dallo scheduler esterno finora.",
         gate: {
           intervalMinutes,
-          lastCycleAt: closed?.at ?? null,
-          lastCycleMode: closed?.mode ?? null,
+          lastCycleAt: collection?.at ?? null,
+          lastCollectionAt: collection?.at ?? null,
+          lastCycleMode: collection?.mode ?? null,
+          lastFullCycleAt: fullCycle?.at ?? null,
           lastClaimAt: claim ? claim.toISOString() : null,
           minutesUntilNextRun,
         },
@@ -82,14 +86,17 @@ export async function GET(): Promise<Response> {
       lastPingSkipped: v.skipped ?? null,
       gate: {
         intervalMinutes,
-        lastCycleAt: closed?.at ?? null,
-        lastCycleMode: closed?.mode ?? null,
+        lastCycleAt: collection?.at ?? null,
+        lastCollectionAt: collection?.at ?? null,
+        lastCycleMode: collection?.mode ?? null,
+        lastFullCycleAt: fullCycle?.at ?? null,
         lastClaimAt: claim ? claim.toISOString() : null,
         minutesUntilNextRun,
-        /* un giro tentato più recente dell'ultimo giro chiuso è il segnale
+        /* un tentativo più recente dell'ultima raccolta chiusa è il segnale
            che una battuta è stata interrotta prima della fine */
         lastCycleTruncated:
-          claim !== null && (closed === null || claim.getTime() > Date.parse(closed.at)),
+          claim !== null &&
+          (collection === null || claim.getTime() > Date.parse(collection.at)),
       },
     });
   } catch {

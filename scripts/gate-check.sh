@@ -37,17 +37,15 @@ if ! command -v psql >/dev/null 2>&1; then
   exit 0
 fi
 
-# Si legge il più recente fra i due registri che il codice tiene:
-# `scheduler:last_cycle` (giro CHIUSO) e `scheduler:cycle_claim` (giro
-# TENTATO, scritto prima di toccare la fonte). È la stessa regola di
-# `readGateMoment`: leggere solo le chiusure fa ripartire la raccolta a ogni
-# battuta del chiamante quando un giro viene interrotto prima della fine —
-# misurato il 05/09/2026: giri reali a 15 minuti invece che a 45.
-# Max su stringhe ISO-8601 in UTC = max cronologico, e un formato inattivo
-# fallisce il `date -u -d` qui sotto, che risponde `true` (si esegue).
+# Questo è il gate del ciclo COMPLETO, non il gate della fonte. Legge soltanto
+# `scheduler:last_cycle`: il collect-only aggiorna invece last_collection +
+# claim. Se qui si rispettasse il claim del fallback, uno scheduler esterno
+# puntuale potrebbe impedire per sempre ad Actions di eseguire analisi,
+# chiusure e notifiche. Una volta avviato, `runCycle` applica autonomamente il
+# gate della fonte e può saltare la rete pur completando le fasi locali.
 LAST_AT="$(psql "$DATABASE_URL" -At -c \
-  "select max(value->>'at') from system_state \
-     where key in ('scheduler:last_cycle', 'scheduler:cycle_claim')" \
+  "select value->>'at' from system_state \
+     where key = 'scheduler:last_cycle' limit 1" \
   2>/dev/null || true)"
 
 if [ -z "$LAST_AT" ]; then

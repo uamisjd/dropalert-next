@@ -127,9 +127,10 @@ export async function GET(request: Request) {
        misurati ~430. Qui si esegue quindi il profilo `collect_only`: niente
        risultati, retry da 60 s, analisi, chiusure o notifiche. Quelle fasi
        restano ad Actions; questa rotta chiude invece il proprio run e scrive
-       `scheduler:last_cycle`, così non lascia più orfani `running` e anche il
-       gate pre-install del workflow vede il giro appena concluso. `force`
-       mai: la spaziatura minima resta l'autorità. */
+       `scheduler:last_collection`. Il claim tiene chiuso il gate della fonte,
+       mentre `scheduler:last_cycle` resta l'heartbeat del ciclo completo e non
+       viene avanzato dal fallback: altrimenti Actions potrebbe non partire più.
+       `force` mai: la spaziatura minima resta l'autorità. */
     await tracePing(false, new Date());
     const result = await runCycle({
       mode: "collect_only",

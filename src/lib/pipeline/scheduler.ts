@@ -55,18 +55,29 @@ export const DEFAULT_INTERVAL_MINUTES = 45;
 export const MIN_INTERVAL_MINUTES = 5;
 export const MAX_INTERVAL_MINUTES = 24 * 60;
 
-/** Chiave di stato che conserva l'esito dell'ultimo giro. */
+/**
+ * Ultimo ciclo completo. È la chiave storica letta dal gate pre-install di
+ * Actions: il fallback non deve aggiornarla, altrimenti potrebbe impedire per
+ * sempre l'esecuzione di analisi, chiusure e notifiche.
+ */
 export const LAST_CYCLE_KEY = "scheduler:last_cycle";
+
+/**
+ * Ultima raccolta conclusa, indipendentemente dal runner che l'ha eseguita.
+ * Il gate della fonte usa questa chiave insieme al claim; Actions e fallback
+ * possono così avere due cadenze distinte senza duplicare richieste esterne.
+ */
+export const LAST_COLLECTION_KEY = "scheduler:last_collection";
 
 /**
  * Chiave di stato che marca il TENTATIVO di giro, scritto prima di toccare
  * la fonte e non dopo la chiusura.
  *
- * Perché esiste: `scheduler:last_cycle` viene scritto solo a giro chiuso
- * (`writeLastCycle`, in fondo a `runCycle`). Un giro interrotto a metà — è
- * il caso del chiamante esterno, che su Vercel dispone di 300 secondi mentre
- * un giro completo ne misura ~430 — non lo scrive mai. Il gate quindi resta
- * a guardare un registro che non avanza e lascia passare ogni battuta
+ * Perché esiste: `scheduler:last_collection` viene scritto solo a raccolta
+ * chiusa. Un giro interrotto a metà — è il caso storico del chiamante esterno,
+ * che su Vercel dispone di 300 secondi mentre un giro completo ne misura ~430
+ * — non lo scrive mai. Il gate quindi resterebbe a guardare un registro che
+ * non avanza e lascerebbe passare ogni battuta
  * successiva: misurato il 05/09/2026, la seconda gamba ha raccolto alle
  * 12:15, 12:30 e 12:45 (ora italiana) invece che ogni 45 minuti, cioè ~11
  * richieste in più alla fonte ogni quarto d'ora. Il tentativo, non
@@ -126,15 +137,17 @@ export function readSchedulerConfig(): SchedulerConfig {
 export interface LastCycleState {
   at: string;
   status: "success" | "partial" | "failed";
-  /** assente nelle righe storiche; da ora distingue il giro completo dal fallback */
+  /** assente nelle righe storiche; distingue chi ha prodotto lo stato */
   mode?: CycleMode;
+  /** assente = vecchio stato, quando ogni ciclo comprendeva la raccolta */
+  collectionExecuted?: boolean;
   snapshotsWritten: number;
   signalsTouched: number;
   closingLinesCaptured: number;
   clvComputed: number;
 }
 
-/** Ultimo giro registrato, null se il sistema non ha mai girato. */
+/** Ultimo ciclo full registrato, null se il sistema non ha mai girato. */
 export async function readLastCycle(): Promise<LastCycleState | null> {
   const [row] = await db
     .select({ value: systemState.value })
@@ -145,7 +158,7 @@ export async function readLastCycle(): Promise<LastCycleState | null> {
   return row.value as LastCycleState;
 }
 
-/** Registra l'esito dell'ultimo giro (upsert). */
+/** Registra l'esito dell'ultimo ciclo full (upsert). */
 export async function writeLastCycle(state: LastCycleState): Promise<void> {
   await db
     .insert(systemState)
@@ -157,9 +170,38 @@ export async function writeLastCycle(state: LastCycleState): Promise<void> {
 }
 
 /**
+ * Ultima raccolta conclusa. Prima dell'introduzione della chiave dedicata,
+ * `last_cycle` rappresentava anche questo fatto: il fallback mantiene la
+ * compatibilità soltanto per gli stati legacy o con raccolta eseguita.
+ */
+export async function readLastCollection(): Promise<LastCycleState | null> {
+  const [row] = await db
+    .select({ value: systemState.value })
+    .from(systemState)
+    .where(eq(systemState.key, LAST_COLLECTION_KEY))
+    .limit(1);
+  if (row) return row.value as LastCycleState;
+
+  const legacy = await readLastCycle();
+  return legacy?.collectionExecuted === false ? null : legacy;
+}
+
+/** Registra una raccolta realmente terminata, qualunque sia il runner. */
+export async function writeLastCollection(state: LastCycleState): Promise<void> {
+  const value = { ...state, collectionExecuted: true };
+  await db
+    .insert(systemState)
+    .values({ key: LAST_COLLECTION_KEY, value, updatedAt: new Date() })
+    .onConflictDoUpdate({
+      target: systemState.key,
+      set: { value, updatedAt: new Date() },
+    });
+}
+
+/**
  * Marca l'inizio del giro, prima di qualsiasi richiesta alla fonte.
  *
- * È il gemello «sincero» di `writeLastCycle`: quello registra un fatto
+ * È il gemello «sincero» di `writeLastCollection`: quello registra un fatto
  * compiuto, questo registra un'intenzione. Serve perché la chiusura può non
  * arrivare mai (funzione interrotta dal budget del piano) e il gate non può
  * permettersi di comportarsi come se il giro non fosse mai partito.
@@ -190,8 +232,8 @@ export async function readCycleClaim(): Promise<Date | null> {
 }
 
 /**
- * L'istante che il gate deve rispettare: il più recente fra l'ultimo giro
- * chiuso e l'ultimo giro tentato.
+ * L'istante che il gate deve rispettare: il più recente fra l'ultima raccolta
+ * chiusa e l'ultimo tentativo verso la fonte.
  *
  * Pura, perché la regola «un tentativo conta quanto una chiusura per far
  * aspettare il giro dopo» è il punto intero del fix e va verificata senza
@@ -217,7 +259,7 @@ export function latestRunMoment(
  */
 export async function readGateMoment(): Promise<Date | null> {
   const [closed, claim] = await Promise.all([
-    readLastCycle()
+    readLastCollection()
       .then((l) => (l === null ? null : new Date(l.at)))
       .catch(() => null),
     readCycleClaim().catch(() => null),
@@ -736,7 +778,12 @@ export async function runCycle(options: CycleOptions = {}): Promise<CycleReport>
       });
 
       if (report.collect.executed) {
-        await writeLastCycle({
+        /* Non toccare `last_cycle`: il gate pre-install di Actions lo usa
+           come heartbeat del ciclo completo. Se il fallback lo avanzasse a
+           ogni raccolta, analisi/chiusure/notifiche potrebbero non partire
+           mai. La pressione sulla fonte è regolata da questa chiave dedicata
+           e dal claim. */
+        await writeLastCollection({
           at: now.toISOString(),
           status: report.status === "skipped" ? "success" : report.status,
           mode,
@@ -818,17 +865,24 @@ export async function runCycle(options: CycleOptions = {}): Promise<CycleReport>
       },
     });
 
+    const completedState: LastCycleState = {
+      at: now.toISOString(),
+      status: report.status === "skipped" ? "success" : report.status,
+      mode,
+      collectionExecuted: report.collect.executed,
+      snapshotsWritten: report.collect.snapshotsWritten,
+      signalsTouched: detection.created + detection.updated,
+      closingLinesCaptured: closing.linesCaptured,
+      clvComputed: closing.clvComputed,
+    };
+
     if (report.collect.executed) {
-      await writeLastCycle({
-        at: now.toISOString(),
-        status: report.status === "skipped" ? "success" : report.status,
-        mode,
-        snapshotsWritten: report.collect.snapshotsWritten,
-        signalsTouched: detection.created + detection.updated,
-        closingLinesCaptured: closing.linesCaptured,
-        clvComputed: closing.clvComputed,
-      });
+      await writeLastCollection(completedState);
     }
+    /* Il ciclo completo avanza il proprio heartbeat anche se una raccolta
+       recente è stata saltata: le fasi DB sono state realmente eseguite e il
+       gate pre-install non deve reinstallarle quattro volte l'ora. */
+    await writeLastCycle(completedState);
 
     return report;
   } catch (err) {
