@@ -11,6 +11,7 @@ const LINKS: Array<{ href: string; label: string; badge?: string; highlight?: bo
   { href: "/simulator", label: "Simulatore xG" },
   { href: "/strumenti", label: "Strumenti" },
   { href: "/preferite", label: "Preferite" },
+  { href: "/mio-bankroll", label: "💰 Bankroll" },
   { href: "/ieri", label: "Ieri" },
   { href: "/domani", label: "Domani" },
   { href: "/performance", label: "Performance" },

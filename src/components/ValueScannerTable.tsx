@@ -11,6 +11,8 @@ import {
   type OddsBand,
 } from "@/lib/view/scanner-filters";
 import { fmtDay, fmtTime } from "@/components/format";
+import { KellyInline } from "@/components/KellyInline";
+import { QuickBetButton } from "@/components/QuickBetButton";
 
 interface Props {
   scanner: ValueScannerResult;
@@ -235,6 +237,31 @@ export function ValueScannerTable({ scanner }: Props) {
                       {signed(opp.trueProbPct - opp.impliedProbPct, 1)} pp)
                     </div>
                   </div>
+
+                  {opp.edgePct > 0 && (
+                    <KellyInline
+                      offeredOdds={opp.currentOdds}
+                      trueProbPct={opp.trueProbPct}
+                      edgePct={opp.edgePct}
+                      compact
+                    />
+                  )}
+
+                  {opp.edgePct > 0 && (
+                    <QuickBetButton
+                      homeTeam={opp.homeTeam}
+                      awayTeam={opp.awayTeam}
+                      league={opp.league}
+                      market={opp.market}
+                      selection={opp.selection}
+                      selectionLabel={opp.selectionLabel}
+                      odds={opp.currentOdds}
+                      edgePct={opp.edgePct}
+                      kellyPct={opp.trueProbPct > 0 ? Math.max(0, (opp.trueProbPct - opp.impliedProbPct) * 0.25) : 0}
+                      kickoffAt={opp.kickoffAt instanceof Date ? opp.kickoffAt.toISOString() : String(opp.kickoffAt)}
+                      matchId={opp.matchId}
+                    />
+                  )}
 
                   <Link
                     href={`/matches/${opp.matchId}`}
