@@ -72,3 +72,22 @@ export function parseExclusion(message: string): {
     explanation: explanation.trim(),
   };
 }
+
+/**
+ * true solo per esclusioni determinate da un nostro limite esplicito.
+ * Queste omissioni rendono il giro parziale, ma non dicono che la fonte sia
+ * degradata: confondere le due cose falserebbe il gate operativo sui 429.
+ */
+export function isOwnChoiceExclusion(message: string): boolean {
+  const code = parseExclusion(message).code;
+  return (
+    code === EXCLUSION_CODES.OUT_OF_WINDOW ||
+    code === EXCLUSION_CODES.RUN_CAP ||
+    code === EXCLUSION_CODES.DETAIL_BUDGET
+  );
+}
+
+/** Un parziale è atteso solo se ogni omissione è una nostra scelta dichiarata. */
+export function onlyOwnChoiceExclusions(messages: string[]): boolean {
+  return messages.length > 0 && messages.every(isOwnChoiceExclusion);
+}

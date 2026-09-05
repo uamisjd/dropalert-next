@@ -62,6 +62,8 @@ import {
 } from "../runs";
 import { num } from "@/lib/drop/math";
 import type { DropAnalysis } from "@/lib/drop/types";
+import { getCoverageHistory } from "@/lib/repo/coverage-history";
+import { COLLECTOR_KEY } from "@/lib/providers/betexplorer/collect";
 
 /* ------------------------------------------------------------------ */
 /* Runner                                                              */
@@ -807,6 +809,101 @@ async function main(): Promise<void> {
     assert(row !== undefined, "run non registrato");
     assertEqual(row.collectorKey, "scheduler-cycle");
     assert(row.finishedAt !== null, "run non chiuso");
+  });
+
+  await test("il fallback collect-only chiude il run senza fingere analisi", async () => {
+    await borrowCycleState();
+    let received: Record<string, unknown> = {};
+    const report = await runCycle({
+      mode: "collect_only",
+      force: true,
+      trigger: "scheduled",
+      collector: async (options) => {
+        received = options as unknown as Record<string, unknown>;
+        return {
+          status: "success",
+          fixturesSeen: 3,
+          matchesUpserted: 3,
+          matchesCreated: 0,
+          snapshotsWritten: 9,
+          snapshotsSkipped: 0,
+          resultsUpdated: 0,
+          resultsPending: 0,
+          problems: [],
+          latencyMs: 10,
+          payloadBytes: 100,
+          trigger: "scheduled",
+          retry: { attempted: 0, recovered: 0, stillMissing: 0, refs: [] },
+        };
+      },
+    });
+
+    assertEqual(report.mode, "collect_only");
+    assertEqual(report.status, "success");
+    assertEqual(report.collect.executed, true);
+    assertEqual(report.detection.executed, false);
+    assertEqual(report.closing.executed, false);
+    assertEqual(report.notifications.executed, false);
+    assertEqual(received.withResults, false);
+    assertEqual(received.retryNotReached, false);
+    assertEqual(
+      (received.fixtureFetchLimits as { budgetMs?: number } | undefined)?.budgetMs,
+      120_000,
+    );
+
+    const [row] = await db
+      .select()
+      .from(collectorRuns)
+      .where(eq(collectorRuns.id, report.runId));
+    assert(row.finishedAt !== null, "il fallback deve chiudere finished_at");
+    assertEqual((row.meta as { mode?: string } | null)?.mode, "collect_only");
+
+    const last = await readLastCycle();
+    assert(last !== null, "il fallback concluso deve avanzare il gate");
+    assertEqual(last!.mode, "collect_only");
+    assertEqual(last!.snapshotsWritten, 9);
+  });
+
+  await test("la profondità esclude collector non conclusi", async () => {
+    const coverage = { football: 1, imported: 1, lost: 0, coverage: 1 };
+    const inserted = await db
+      .insert(collectorRuns)
+      .values([
+        {
+          collectorKey: COLLECTOR_KEY,
+          startedAt: new Date("2099-01-01T00:00:00.000Z"),
+          finishedAt: new Date("2099-01-01T00:00:01.000Z"),
+          status: "success",
+          meta: { trigger: "scheduled", coverage },
+        },
+        {
+          collectorKey: COLLECTOR_KEY,
+          startedAt: new Date("2099-01-01T00:01:00.000Z"),
+          status: "running",
+          meta: { trigger: "scheduled", coverage },
+        },
+      ])
+      .returning({ id: collectorRuns.id, finishedAt: collectorRuns.finishedAt });
+    const closedId = inserted.find((row) => row.finishedAt !== null)?.id;
+    const openId = inserted.find((row) => row.finishedAt === null)?.id;
+    assert(closedId !== undefined && openId !== undefined, "fixture run non create");
+
+    try {
+      const history = await getCoverageHistory(2, new Date("2099-01-01T00:02:00.000Z"));
+      assert(
+        history.points.some((point) => point.runId === closedId),
+        "la raccolta conclusa deve entrare nella serie",
+      );
+      assert(
+        !history.points.some((point) => point.runId === openId),
+        "la raccolta ancora aperta non deve entrare nella serie",
+      );
+      assertEqual(history.lastScheduledRun?.runId, closedId);
+    } finally {
+      await db
+        .delete(collectorRuns)
+        .where(inArray(collectorRuns.id, inserted.map((row) => row.id)));
+    }
   });
 
   await test("lo stato dell'ultimo giro è persistito e rileggibile", async () => {

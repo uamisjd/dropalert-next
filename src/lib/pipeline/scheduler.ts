@@ -19,7 +19,12 @@
 import { eq } from "drizzle-orm";
 import { db } from "@/db/client";
 import { systemState } from "@/db/schema";
-import { collectBetexplorer } from "@/lib/providers/betexplorer/collect";
+import {
+  collectBetexplorer,
+  type CollectOptions,
+  type CollectReport,
+} from "@/lib/providers/betexplorer/collect";
+import type { CycleMode } from "./cycle-mode";
 import { dispatchNotifications, pushConfigured } from "@/lib/repo/push";
 import { readLiveValues } from "@/lib/push/live";
 import type { RunTrigger } from "@/lib/cov/instrument";
@@ -121,6 +126,8 @@ export function readSchedulerConfig(): SchedulerConfig {
 export interface LastCycleState {
   at: string;
   status: "success" | "partial" | "failed";
+  /** assente nelle righe storiche; da ora distingue il giro completo dal fallback */
+  mode?: CycleMode;
   snapshotsWritten: number;
   signalsTouched: number;
   closingLinesCaptured: number;
@@ -412,7 +419,49 @@ export function schedulerHealth(
 /* Il giro                                                             */
 /* ------------------------------------------------------------------ */
 
+/**
+ * Profilo della seconda gamba serverless.
+ *
+ * La funzione ha 300 s totali. Il dettaglio della fonte ne può usare al
+ * massimo 120 e arricchire 15 righe: restano almeno 180 s per il rate limiter
+ * delle quote, le scritture e la chiusura del run. Il retry da 60 s e i
+ * risultati restano al giro completo di Actions: farli partire qui renderebbe
+ * di nuovo possibile un timeout senza `finished_at`.
+ */
+export const SERVERLESS_DETAIL_BUDGET_MS = 120_000;
+export const SERVERLESS_DETAIL_ROW_CAP = 15;
+
+export interface CycleCollectionPolicy {
+  withResults: boolean;
+  retryNotReached: boolean;
+  fixtureFetchLimits: CollectOptions["fixtureFetchLimits"];
+}
+
+/** Pura: rende verificabile che il fallback non possa ereditare il profilo lungo. */
+export function collectionPolicyFor(
+  mode: CycleMode,
+  config: SchedulerConfig,
+): CycleCollectionPolicy {
+  if (mode === "full") {
+    return {
+      withResults: config.withResults,
+      retryNotReached: true,
+      fixtureFetchLimits: undefined,
+    };
+  }
+  return {
+    withResults: false,
+    retryNotReached: false,
+    fixtureFetchLimits: {
+      maxRows: Math.min(config.maxFixtures, SERVERLESS_DETAIL_ROW_CAP),
+      budgetMs: SERVERLESS_DETAIL_BUDGET_MS,
+    },
+  };
+}
+
 export interface CycleOptions {
+  /** `full` per Actions; `collect_only` per la seconda gamba entro 300 s */
+  mode?: CycleMode;
   /** salta la raccolta e analizza soltanto ciò che è già a registro */
   skipCollect?: boolean;
   /** ignora l'intervallo minimo (uso manuale e test di percorso) */
@@ -431,6 +480,8 @@ export interface CycleOptions {
    * API e pulsante restano `manual`, che è anche il default.
    */
   trigger?: RunTrigger;
+  /** dipendenza iniettabile nei test di persistenza; in esercizio resta quella reale */
+  collector?: (options: CollectOptions) => Promise<CollectReport>;
 }
 
 /** Esito della fase di notifica, dichiarata anche quando non parte nulla. */
@@ -447,10 +498,12 @@ export interface NotificationsReport {
 
 export interface CycleReport {
   status: "success" | "partial" | "failed" | "skipped";
+  mode: CycleMode;
   runId: number;
   startedAt: string;
   durationMs: number;
   config: SchedulerConfig;
+  collectionPolicy: CycleCollectionPolicy;
   gate: { run: boolean; reason: string; waitedMinutes: number | null };
   collect: {
     executed: boolean;
@@ -461,6 +514,7 @@ export interface CycleReport {
     problems: string[];
   };
   detection: {
+    executed: boolean;
     matchesProcessed: number;
     marketsAnalyzed: number;
     created: number;
@@ -468,6 +522,7 @@ export interface CycleReport {
     gapsRecorded: number;
   };
   closing: {
+    executed: boolean;
     matchesProcessed: number;
     linesCaptured: number;
     fairLinesCaptured: number;
@@ -539,6 +594,9 @@ async function runNotifications(
 export async function runCycle(options: CycleOptions = {}): Promise<CycleReport> {
   const now = options.now ?? new Date();
   const config = readSchedulerConfig();
+  const mode = options.mode ?? "full";
+  const collectionPolicy = collectionPolicyFor(mode, config);
+  const collector = options.collector ?? collectBetexplorer;
   const handle = await startRun("scheduler-cycle");
   const errors: string[] = [];
 
@@ -554,10 +612,12 @@ export async function runCycle(options: CycleOptions = {}): Promise<CycleReport>
 
   const report: CycleReport = {
     status: "success",
+    mode,
     runId: handle.id,
     startedAt: now.toISOString(),
     durationMs: 0,
     config,
+    collectionPolicy,
     gate: {
       run: gate.run,
       reason: gate.reason,
@@ -572,6 +632,7 @@ export async function runCycle(options: CycleOptions = {}): Promise<CycleReport>
       problems: [],
     },
     detection: {
+      executed: false,
       matchesProcessed: 0,
       marketsAnalyzed: 0,
       created: 0,
@@ -579,6 +640,7 @@ export async function runCycle(options: CycleOptions = {}): Promise<CycleReport>
       gapsRecorded: 0,
     },
     closing: {
+      executed: false,
       matchesProcessed: 0,
       linesCaptured: 0,
       fairLinesCaptured: 0,
@@ -607,10 +669,13 @@ export async function runCycle(options: CycleOptions = {}): Promise<CycleReport>
          comportamento precedente */
       await writeCycleClaim(now).catch(() => undefined);
       try {
-        const collected = await collectBetexplorer({
+        const collected = await collector({
           horizonHours: config.horizonHours,
           maxFixtures: config.maxFixtures,
-          withResults: config.withResults,
+          withResults: collectionPolicy.withResults,
+          retryNotReached: collectionPolicy.retryNotReached,
+          fixtureFetchLimits: collectionPolicy.fixtureFetchLimits,
+          cycleMode: mode,
           /* il giro porta la firma di chi lo ha chiesto: solo i giri
              schedulati fanno profondità di serie */
           trigger: options.trigger ?? "manual",
@@ -624,19 +689,70 @@ export async function runCycle(options: CycleOptions = {}): Promise<CycleReport>
           problems: collected.problems.slice(0, 20),
         };
         if (collected.status === "failed") {
-          report.status = "partial";
-          errors.push("raccolta fallita: analisi eseguita sui soli dati già a registro.");
+          report.status = mode === "collect_only" ? "failed" : "partial";
+          errors.push(
+            mode === "collect_only"
+              ? "raccolta fallita: il fallback non esegue fasi locali."
+              : "raccolta fallita: analisi eseguita sui soli dati già a registro.",
+          );
         }
       } catch (err) {
-        report.status = "partial";
+        report.status = mode === "collect_only" ? "failed" : "partial";
         const message = err instanceof Error ? err.message : String(err);
         errors.push(`raccolta interrotta: ${message}`);
       }
     }
 
+    /* Il fallback serverless ha finito qui il proprio lavoro. Chiuderlo
+       esplicitamente è il punto della modalità: niente zeri spacciati per
+       analisi eseguite e nessuna riga `running` lasciata dal timeout. */
+    if (mode === "collect_only") {
+      if (!report.collect.executed && errors.length === 0) {
+        report.status = "skipped";
+      } else if (report.collect.status === "partial") {
+        report.status = "partial";
+      }
+      report.errors = errors;
+      report.durationMs = Date.now() - now.getTime();
+
+      await finishRun(handle, {
+        status: report.status === "skipped" ? "success" : report.status,
+        matchesSeen: report.collect.fixturesSeen,
+        snapshotsWritten: report.collect.snapshotsWritten,
+        signalsTouched: 0,
+        errors,
+        meta: {
+          mode,
+          trigger: options.trigger ?? "manual",
+          intervalMinutes: config.intervalMinutes,
+          intervalSource: config.source,
+          collectExecuted: report.collect.executed,
+          collectionPolicy,
+          analysisExecuted: false,
+          closingExecuted: false,
+          notificationsExecuted: false,
+          gate: gate.reason,
+        },
+      });
+
+      if (report.collect.executed) {
+        await writeLastCycle({
+          at: now.toISOString(),
+          status: report.status === "skipped" ? "success" : report.status,
+          mode,
+          snapshotsWritten: report.collect.snapshotsWritten,
+          signalsTouched: 0,
+          closingLinesCaptured: 0,
+          clvComputed: 0,
+        });
+      }
+      return report;
+    }
+
     /* --- 2. analisi -------------------------------------------------- */
     const detection = await detectAll(now, { matchIds: options.matchIds });
     report.detection = {
+      executed: true,
       matchesProcessed: detection.matchesProcessed,
       marketsAnalyzed: detection.marketsAnalyzed,
       created: detection.created,
@@ -648,6 +764,7 @@ export async function runCycle(options: CycleOptions = {}): Promise<CycleReport>
     /* --- 3. chiusura e CLV ------------------------------------------- */
     const closing = await runClosingJob(now, { matchIds: options.matchIds });
     report.closing = {
+      executed: true,
       matchesProcessed: closing.matchesProcessed,
       linesCaptured: closing.linesCaptured,
       fairLinesCaptured: closing.fairLinesCaptured,
@@ -683,9 +800,14 @@ export async function runCycle(options: CycleOptions = {}): Promise<CycleReport>
       signalsTouched: detection.created + detection.updated,
       errors,
       meta: {
+        mode,
+        trigger: options.trigger ?? "manual",
         intervalMinutes: config.intervalMinutes,
         intervalSource: config.source,
         collectExecuted: report.collect.executed,
+        collectionPolicy,
+        analysisExecuted: report.detection.executed,
+        closingExecuted: report.closing.executed,
         gate: gate.reason,
         closingLinesCaptured: closing.linesCaptured,
         fairLinesCaptured: closing.fairLinesCaptured,
@@ -700,6 +822,7 @@ export async function runCycle(options: CycleOptions = {}): Promise<CycleReport>
       await writeLastCycle({
         at: now.toISOString(),
         status: report.status === "skipped" ? "success" : report.status,
+        mode,
         snapshotsWritten: report.collect.snapshotsWritten,
         signalsTouched: detection.created + detection.updated,
         closingLinesCaptured: closing.linesCaptured,

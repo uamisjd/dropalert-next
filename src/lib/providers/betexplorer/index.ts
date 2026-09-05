@@ -41,6 +41,7 @@ import {
   partial,
   type DateRange,
   type FixtureDTO,
+  type FixtureFetchLimits,
   type FixtureRef,
   type OddsProvider,
   type OddsQuoteDTO,
@@ -246,7 +247,10 @@ export function createBetexplorerProvider(
      * ADESSO, non è filtrabile per data senza query string (vietate).
      * Il filtro sulla finestra si applica dopo, sugli orari certi.
      */
-    async fetchFixtures(window: DateRange): Promise<ProviderResult<FixtureDTO[]>> {
+    async fetchFixtures(
+      window: DateRange,
+      limits: FixtureFetchLimits = {},
+    ): Promise<ProviderResult<FixtureDTO[]>> {
       const outcome = await fetchPage(DROPPING_ODDS_PATH, { fetchImpl });
 
       /* si conserva l'elenco grezzo appena scaricato: la misura di
@@ -279,13 +283,27 @@ export function createBetexplorerProvider(
       const ordered = [...parsed.fixtures].sort(
         (a, b) => (b.dropPercent ?? -1) - (a.dropPercent ?? -1),
       );
-      const detailRows = ordered.slice(0, detailRowCap);
-      for (const skipped of ordered.slice(detailRowCap)) {
+      /* Il chiamante può soltanto stringere i limiti del provider. Il
+         profilo serverless usa questa porta per garantirsi il tempo di
+         chiudere il run prima del timeout, senza cambiare il giro Actions. */
+      const requestedRows = limits.maxRows;
+      const effectiveRowCap =
+        requestedRows === undefined || !Number.isFinite(requestedRows)
+          ? detailRowCap
+          : Math.min(detailRowCap, Math.max(0, Math.floor(requestedRows)));
+      const requestedBudget = limits.budgetMs;
+      const effectiveBudgetMs =
+        requestedBudget === undefined || !Number.isFinite(requestedBudget)
+          ? detailBudgetMs
+          : Math.max(0, Math.min(detailBudgetMs, requestedBudget));
+
+      const detailRows = ordered.slice(0, effectiveRowCap);
+      for (const skipped of ordered.slice(effectiveRowCap)) {
         missing.push(
           taggedExclusion(
             skipped.providerMatchId,
             EXCLUSION_CODES.DETAIL_BUDGET,
-            `pagina di dettaglio non visitata: oltre il tetto di ${detailRowCap} righe per giro, si visitano i cali maggiori.`,
+            `pagina di dettaglio non visitata: oltre il tetto di ${effectiveRowCap} righe per giro, si visitano i cali maggiori.`,
           ),
         );
       }
@@ -295,7 +313,7 @@ export function createBetexplorerProvider(
          quelle mai raggiunte quando il budget scade a metà. */
       let visitedCount = 0;
       for (const row of detailRows) {
-        if (Date.now() - detailStartedAt > detailBudgetMs) break;
+        if (Date.now() - detailStartedAt >= effectiveBudgetMs) break;
         visitedCount += 1;
         const detail = await fetchPage(row.sourceUrl, { fetchImpl });
         if (!detail.ok) {
@@ -345,7 +363,7 @@ export function createBetexplorerProvider(
             taggedExclusion(
               row.providerMatchId,
               EXCLUSION_CODES.DETAIL_BUDGET,
-              `pagina di dettaglio non visitata: budget di ${Math.round(detailBudgetMs / 1000)} s per giro esaurito, si riprova al prossimo giro.`,
+              `pagina di dettaglio non visitata: budget di ${Math.max(0, Math.round(effectiveBudgetMs / 1000))} s per giro esaurito, si riprova al prossimo giro.`,
             ),
           );
         }

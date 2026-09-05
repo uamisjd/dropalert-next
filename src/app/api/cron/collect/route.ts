@@ -7,9 +7,10 @@
  * su un'infrastruttura diversa, evita che un solo scheduler distratto fermi
  * l'osservatorio.
  *
- * Non duplica la raccolta: chiama lo stesso ciclo, e il gate interno
- * `COLLECT_INTERVAL_MINUTES` decide se c'è davvero qualcosa da fare. Se
- * l'ultimo giro è recente questa rotta esce senza toccare la fonte.
+ * Non duplica la raccolta: usa lo stesso gate e la stessa fase di raccolta
+ * del ciclo, ma con il profilo serverless `collect_only`. Se l'ultimo giro è
+ * recente questa rotta esce senza toccare la fonte; se parte, termina prima
+ * delle fasi locali che non entrano nel budget della funzione.
  *
  * CADENZA, limite dichiarato: il piano Hobby di Vercel accetta SOLO cron
  * giornalieri — una schedule più fitta fa fallire il deploy con «Hobby
@@ -44,10 +45,9 @@ import {
 
 export const dynamic = "force-dynamic";
 /**
- * Tetto di durata, misurato sul campo: con 60 secondi la chiamata è andata
- * in `FUNCTION_INVOCATION_TIMEOUT` (28/08/2026). Un giro completo — raccolta,
- * analisi, chiusure — impiega di più, e il piano Hobby concede fino a 300
- * secondi: tanto vale dichiararli, invece di far fallire il giro a metà.
+ * Tetto della piattaforma. Il profilo usato sotto riserva metà di questo
+ * tempo alla finalizzazione: la fase di dettaglio ha un budget di 120 s e
+ * un tetto di 15 righe; non partono le fasi lunghe del giro completo.
  */
 export const maxDuration = 300;
 
@@ -97,12 +97,10 @@ export async function GET(request: Request) {
     );
   }
   try {
-    /* USCITA ANTICIPATA, questione di budget non di eleganza: `runCycle`
-       rispetta il gate sulla raccolta ma prosegue comunque con analisi e
-       chiusure, e misurato in produzione costa oltre 200 secondi anche
-       quando non raccoglie nulla. Con uno scheduler esterno che bussa ogni
-       quarto d'ora quel lavoro inutile divorerebbe le 4 CPU-ore mensili del
-       piano. Qui si legge soltanto l'istante dell'ultimo giro — chiuso *o
+    /* USCITA ANTICIPATA, questione di budget non di eleganza: con uno
+       scheduler esterno che bussa ogni quarto d'ora non ha senso aprire e
+       chiudere un run solo per scoprire che il gate nega la raccolta. Qui si
+       legge soltanto l'istante dell'ultimo giro — chiuso *o
        tentato*, `readGateMoment`: un giro troncato a metà dal budget della
        funzione conta come lavoro fatto, altrimenti ogni battuta del
        chiamante tornerebbe a premere sulla fonte ogni quarto d'ora invece
@@ -125,15 +123,24 @@ export async function GET(request: Request) {
       });
     }
 
-    /* stesso ciclo di Actions: raccolta, analisi, chiusura. `force` mai:
-       la spaziatura minima resta l'autorità, anche quando il cron insiste */
+    /* La seconda gamba ha un budget di 300 s, mentre il giro completo ne ha
+       misurati ~430. Qui si esegue quindi il profilo `collect_only`: niente
+       risultati, retry da 60 s, analisi, chiusure o notifiche. Quelle fasi
+       restano ad Actions; questa rotta chiude invece il proprio run e scrive
+       `scheduler:last_cycle`, così non lascia più orfani `running` e anche il
+       gate pre-install del workflow vede il giro appena concluso. `force`
+       mai: la spaziatura minima resta l'autorità. */
     await tracePing(false, new Date());
     const result = await runCycle({
+      mode: "collect_only",
       force: false,
-      /* «scheduled» è ciò che fa avanzare la profondità della serie: un giro
-         marcato manuale non conterebbe come osservazione programmata */
+      /* La raccolta completata è un punto valido della serie di copertura:
+         misura ciò che la fonte ha mostrato, non l'esecuzione dell'analisi. */
       trigger: "scheduled",
     });
+    /* Difesa dalla gara fra i due runner: il secondo controllo dentro
+       runCycle può trovare un claim scritto dopo l'uscita anticipata. */
+    if (result.status === "skipped") await tracePing(true, new Date());
     return NextResponse.json({ ok: true, runner: "vercel-cron", result });
   } catch (error) {
     /* rotta protetta da segreto, ma il principio è lo stesso delle altre:

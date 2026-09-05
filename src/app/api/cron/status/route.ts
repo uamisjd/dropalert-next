@@ -62,6 +62,7 @@ export async function GET(): Promise<Response> {
         gate: {
           intervalMinutes,
           lastCycleAt: closed?.at ?? null,
+          lastCycleMode: closed?.mode ?? null,
           lastClaimAt: claim ? claim.toISOString() : null,
           minutesUntilNextRun,
         },
@@ -82,6 +83,7 @@ export async function GET(): Promise<Response> {
       gate: {
         intervalMinutes,
         lastCycleAt: closed?.at ?? null,
+        lastCycleMode: closed?.mode ?? null,
         lastClaimAt: claim ? claim.toISOString() : null,
         minutesUntilNextRun,
         /* un giro tentato più recente dell'ultimo giro chiuso è il segnale

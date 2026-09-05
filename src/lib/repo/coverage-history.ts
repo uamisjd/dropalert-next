@@ -10,7 +10,7 @@
  * zero. Confondere le due cose farebbe apparire un crollo dove c'è solo
  * assenza di misura.
  */
-import { and, desc, eq, sql as raw } from "drizzle-orm";
+import { and, desc, eq, isNotNull, sql as raw } from "drizzle-orm";
 import { db } from "@/db/client";
 import { collectorRuns } from "@/db/schema";
 import { COLLECTOR_KEY } from "@/lib/providers/betexplorer/collect";
@@ -127,6 +127,7 @@ async function readLastScheduledRun(): Promise<ScheduledRun | null> {
       .where(
         and(
           eq(collectorRuns.collectorKey, COLLECTOR_KEY),
+          isNotNull(collectorRuns.finishedAt),
           raw`${collectorRuns.meta}->>'trigger' = 'scheduled'`,
         ),
       )
@@ -162,7 +163,15 @@ export async function getCoverageHistory(
       meta: collectorRuns.meta,
     })
     .from(collectorRuns)
-    .where(eq(collectorRuns.collectorKey, COLLECTOR_KEY))
+    /* Una misura entra nella serie solo quando il collector l'ha chiusa.
+       I vecchi outer-cycle troncati non invalidano una raccolta provider già
+       finita; una riga provider ancora aperta, invece, non è un punto. */
+    .where(
+      and(
+        eq(collectorRuns.collectorKey, COLLECTOR_KEY),
+        isNotNull(collectorRuns.finishedAt),
+      ),
+    )
     .orderBy(desc(collectorRuns.startedAt))
     .limit(limit);
 

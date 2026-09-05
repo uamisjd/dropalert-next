@@ -206,6 +206,21 @@ export interface RateLimitConfig {
 }
 
 /**
+ * Limiti di una singola lettura delle fixture.
+ *
+ * Sono facoltativi e possono solo stringere i limiti configurati dal
+ * provider. Servono ai runner con un budget più corto (per esempio una
+ * funzione serverless): il lavoro non raggiunto resta dichiarato dal
+ * provider, invece di lasciare l'intero giro aperto per timeout.
+ */
+export interface FixtureFetchLimits {
+  /** massimo di righe da arricchire con letture di dettaglio */
+  maxRows?: number;
+  /** budget della fase di dettaglio, in millisecondi */
+  budgetMs?: number;
+}
+
+/**
  * Contratto che ogni fonte deve rispettare.
  *
  * I metodi non lanciano per errori previsti (rete, parsing, blocco):
@@ -219,7 +234,10 @@ export interface OddsProvider {
   readonly capabilities: ProviderCapabilities;
   readonly rateLimit: RateLimitConfig;
 
-  fetchFixtures(window: DateRange): Promise<ProviderResult<FixtureDTO[]>>;
+  fetchFixtures(
+    window: DateRange,
+    limits?: FixtureFetchLimits,
+  ): Promise<ProviderResult<FixtureDTO[]>>;
   fetchOdds(fixture: FixtureRef): Promise<ProviderResult<OddsQuoteDTO[]>>;
   /**
  * Risultati finali per competizione. `leagues` è l'elenco

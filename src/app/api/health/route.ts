@@ -16,6 +16,8 @@ import {
   oddsSnapshots,
 } from "@/db/schema";
 import { listRecentRuns, listSourceHealth } from "@/lib/pipeline/runs";
+import { publicRunStatus } from "@/lib/pipeline/run-status";
+import { isCycleMode } from "@/lib/pipeline/cycle-mode";
 import {
   describeRegistry,
   initProviders,
@@ -24,8 +26,16 @@ import {
 
 export const dynamic = "force-dynamic";
 
+function cycleModeOf(meta: unknown): "full" | "collect_only" | null {
+  if (typeof meta !== "object" || meta === null) return null;
+  const mode = (meta as { mode?: unknown; cycleMode?: unknown }).mode ??
+    (meta as { cycleMode?: unknown }).cycleMode;
+  return isCycleMode(mode) ? mode : null;
+}
+
 export async function GET() {
-  const startedAt = Date.now();
+  const generatedAt = new Date();
+  const startedAt = generatedAt.getTime();
   initProviders();
 
   try {
@@ -136,7 +146,13 @@ export async function GET() {
       lastRun: lastRun
         ? {
             collectorKey: lastRun.collectorKey,
-            status: lastRun.status,
+            status: publicRunStatus(
+              lastRun.status,
+              lastRun.startedAt,
+              generatedAt,
+            ),
+            storedStatus: lastRun.status,
+            mode: cycleModeOf(lastRun.meta),
             startedAt: lastRun.startedAt.toISOString(),
             finishedAt: lastRun.finishedAt?.toISOString() ?? null,
             durationMs: lastRun.durationMs,
@@ -145,11 +161,14 @@ export async function GET() {
         : null,
       recentRuns: runs.map((r) => ({
         collectorKey: r.collectorKey,
-        status: r.status,
+        status: publicRunStatus(r.status, r.startedAt, generatedAt),
+        storedStatus: r.status,
+        mode: cycleModeOf(r.meta),
         startedAt: r.startedAt.toISOString(),
+        finishedAt: r.finishedAt?.toISOString() ?? null,
         durationMs: r.durationMs,
       })),
-      generatedAt: new Date().toISOString(),
+      generatedAt: generatedAt.toISOString(),
     });
   } catch (err) {
     /* il dettaglio resta nei log del server: la risposta dichiara lo stato
