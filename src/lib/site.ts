@@ -28,7 +28,12 @@ export const SITE_TITLE =
 export const SITE_DESCRIPTION =
   "Monitoraggio statistico dei movimenti di quota nel calcio: ampiezza, conferme, persistenza e qualità del dato. Non è un servizio di pronostici.";
 
-/** Pagine pubbliche sempre presenti in sitemap. */
+/** Pagine pubbliche sempre presenti in sitemap.
+ *
+ * `/preferite` è esclusa di proposito: la lista vive nel localStorage del
+ * visitatore, quindi per un crawler è sempre lo stesso guscio vuoto
+ * (vedi anche il `noindex` nel suo layout). Segnalarla in sitemap
+ * significherebbe chiedere l'indicizzazione di una pagina sottile. */
 export const PUBLIC_PAGES = [
   "/",
   "/ieri",
@@ -37,7 +42,10 @@ export const PUBLIC_PAGES = [
   "/metodologia",
   "/privacy",
   "/gioco-responsabile",
-  "/preferite",
   "/performance",
   "/strumenti",
+  "/value-bets",
+  "/trading",
+  "/surebet",
+  "/simulator",
 ] as const;

@@ -455,11 +455,43 @@ export default async function MatchDetailPage({
   /* stessa logica della home: la pagina è dinamica per via del parametro,
      quindi si conserva la lettura invece della pagina */
   const bucket = Math.floor(now.getTime() / (DATA_REVALIDATE_SECONDS * 1000));
-  const detail = await cachedRead(
-    (id: number, at: number) => getMatchDetail(id, new Date(at)),
-    ["match-detail", String(matchId), String(bucket)],
-    ["match-detail"],
-  )(matchId, bucket * DATA_REVALIDATE_SECONDS * 1000);
+  /* il dettaglio può mancare per due motivi diversi: partita inesistente
+     (404, vedi sotto) oppure registro non leggibile (errore dichiarato in
+     pagina, mai un 500 con stack trace). Le due strade restano separate. */
+  let detail: Awaited<ReturnType<typeof getMatchDetail>>;
+  try {
+    detail = await cachedRead(
+      (id: number, at: number) => getMatchDetail(id, new Date(at)),
+      ["match-detail", String(matchId), String(bucket)],
+      ["match-detail"],
+    )(matchId, bucket * DATA_REVALIDATE_SECONDS * 1000);
+  } catch (error) {
+    console.error(
+      `[matches/${matchId}] dettaglio non leggibile:`,
+      error instanceof Error ? error.message : error,
+    );
+    return (
+      <main className="mx-auto w-full max-w-4xl flex-1 px-4 py-6 sm:py-8">
+        <Link
+          href="/"
+          className="mb-4 inline-flex items-center gap-1 text-xs font-medium text-slate-600 hover:text-slate-950"
+        >
+          <span aria-hidden>←</span> Tutti i movimenti
+        </Link>
+        <h1 className="text-xl font-bold tracking-tight text-slate-900">
+          Partita <span className="tabular-nums">{matchId}</span>
+        </h1>
+        <div className="mt-4 rounded-lg border border-orange-300 bg-orange-50 p-4 text-sm text-orange-900">
+          <p className="font-medium">DATI NON LEGGIBILI</p>
+          <p className="mt-1 text-xs leading-relaxed">
+            Il dettaglio di questa partita non è leggibile in questo momento:
+            il registro non risponde. Nessun valore viene mostrato al suo
+            posto e nessun esito viene ipotizzato. Riprova più tardi.
+          </p>
+        </div>
+      </main>
+    );
+  }
   if (!detail) notFound();
 
   /* Un solo sistema di contesto e un solo sistema di notizie. La vecchia

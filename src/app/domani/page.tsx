@@ -28,6 +28,7 @@ export const metadata = {
   title: "Domani — programma dall'archivio — DropAlert",
   description:
     "Le partite di domani che l'archivio del monitor ha già incontrato, con le ultime quote osservate. Non è un calendario completo.",
+  alternates: { canonical: "/domani" },
 };
 
 function OddsRow({ match }: { match: TomorrowMatch }) {

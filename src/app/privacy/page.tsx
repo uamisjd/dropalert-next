@@ -12,6 +12,7 @@ export const metadata: Metadata = {
   title: "Privacy — DropAlert",
   description:
     "Informativa privacy di DropAlert: titolare, dati trattati, cookie e localStorage, diritti dell'interessato e contatti.",
+  alternates: { canonical: "/privacy" },
 };
 
 /* pagina di solo testo: si può servire dalla cache di bordo a lungo */

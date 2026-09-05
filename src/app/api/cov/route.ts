@@ -87,14 +87,17 @@ export async function GET(request: Request): Promise<NextResponse> {
       disclaimer: DISCLAIMER,
     });
   } catch (error) {
-    /* mai riempire il buco con stime: si dichiara il guasto */
+    /* mai riempire il buco con stime: si dichiara il guasto. Il dettaglio
+       resta nei log del server, senza esporre l'SQL al client. */
+    console.error(
+      "[api/cov] lettura copertura fallita:",
+      error instanceof Error ? error.message : error,
+    );
     return NextResponse.json(
       {
         status: "DATI PARZIALI",
         detail:
-          error instanceof Error
-            ? error.message
-            : "Errore non identificato nella lettura della copertura.",
+          "Copertura non leggibile in questo momento. Il dettaglio è registrato nei log del server.",
         latest: null,
         history: null,
         tookMs: Date.now() - startedAt,

@@ -24,6 +24,7 @@ export const metadata = {
   title: "Ieri — segnali ed esiti — DropAlert",
   description:
     "I movimenti rilevati sulle partite di ieri, con l'esito descrittivo centrata o mancata calcolato dai gol finali. Non è un rendimento né un consiglio.",
+  alternates: { canonical: "/ieri" },
 };
 
 const VERDICT_STYLES: Record<string, string> = {

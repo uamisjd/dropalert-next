@@ -15,7 +15,7 @@ import { ValueScannerTable } from "@/components/ValueScannerTable";
 import { fmtDateTime } from "@/components/format";
 
 export const metadata: Metadata = {
-  title: "Divario di prezzo contro linea no-vig — DropAlert Pro",
+  title: "Divario di prezzo contro linea no-vig — DropAlert",
   description:
     "Quanto margine resta dentro l'ultima quota letta, confronto per confronto, sulle partite non ancora al kickoff. Nessuna puntata consigliata: è una misura.",
   alternates: { canonical: "/value-bets" },

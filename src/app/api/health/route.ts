@@ -152,13 +152,19 @@ export async function GET() {
       generatedAt: new Date().toISOString(),
     });
   } catch (err) {
+    /* il dettaglio resta nei log del server: la risposta dichiara lo stato
+       senza esporre l'SQL o i messaggi interni del driver al client */
+    console.error(
+      "[api/health] lettura stato fallita:",
+      err instanceof Error ? err.message : err,
+    );
     return NextResponse.json(
       {
         status: "error",
         statusLabel:
           "SISTEMA NON DISPONIBILE — impossibile leggere lo stato dal database.",
         database: { reachable: false, latencyMs: Date.now() - startedAt },
-        detail: err instanceof Error ? err.message : String(err),
+        detail: "Stato non leggibile. Il dettaglio è registrato nei log del server.",
       },
       { status: 503 },
     );

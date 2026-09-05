@@ -27,8 +27,11 @@ const PRIORITY: Record<string, number> = {
   "/privacy": 0.3,
   "/gioco-responsabile": 0.4,
   "/performance": 0.5,
-  "/preferite": 0.2,
   "/strumenti": 0.6,
+  "/value-bets": 0.7,
+  "/trading": 0.6,
+  "/surebet": 0.5,
+  "/simulator": 0.5,
 };
 
 async function upcomingMatchIds(

@@ -5,7 +5,7 @@ import type { Metadata } from "next";
 import { PoissonSimulatorView } from "@/components/simulator/PoissonSimulatorView";
 
 export const metadata: Metadata = {
-  title: "xG & Dixon-Coles Poisson Match Simulator — DropAlert Pro",
+  title: "xG & Dixon-Coles Poisson Match Simulator — DropAlert",
   description:
     "Simulatore statistico di partite basato su Expected Goals (xG) e modello Dixon-Coles. Matrice risultati esatti 0-0 a 5-5 e quote fair indipendenti.",
   alternates: { canonical: "/simulator" },

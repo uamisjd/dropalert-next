@@ -15,7 +15,7 @@ import { TradingTerminalView } from "@/components/trading/TradingTerminalView";
 import { fmtDateTime } from "@/components/format";
 
 export const metadata: Metadata = {
-  title: "Escursione dei prezzi e green-up a ritroso — DropAlert Pro",
+  title: "Escursione dei prezzi e green-up a ritroso — DropAlert",
   description:
     "Quanto si è mossa una quota fra apertura e ultima lettura, in tick, e quanto varrebbe chiudere la posizione fra quei due prezzi. Nessun exchange è collegato.",
   alternates: { canonical: "/trading" },

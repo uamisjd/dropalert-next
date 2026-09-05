@@ -10,7 +10,7 @@ import { GreenUpCalculator } from "@/components/trading/GreenUpCalculator";
 import { HELPLINE } from "@/components/SiteFooter";
 
 export const metadata: Metadata = {
-  title: "Strumenti di Calcolo Quantitativo — DropAlert Pro",
+  title: "Strumenti di Calcolo Quantitativo — DropAlert",
   description:
     "Suite completa di calcolatori per scommesse e trading sportivo: Margine e quote Fair No-Vig, Simulatore di Varianza, Surebet, Dutching e Green-Up Exchange.",
   alternates: { canonical: "/strumenti" },

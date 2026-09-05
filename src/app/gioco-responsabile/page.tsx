@@ -13,6 +13,7 @@ export const metadata: Metadata = {
   title: "Gioco responsabile — DropAlert",
   description:
     "Avvertenze sul gioco d'azzardo, segnali di rischio e contatti di aiuto. DropAlert è un osservatorio statistico, non un servizio di pronostici.",
+  alternates: { canonical: "/gioco-responsabile" },
 };
 
 export const revalidate = 86400;

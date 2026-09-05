@@ -24,7 +24,7 @@ export function SiteNav() {
         <Link
           href="/"
           className="flex shrink-0 items-center gap-2 text-sm font-black tracking-tight text-slate-950"
-          aria-label="DropAlert Pro — quant terminal"
+          aria-label="DropAlert — osservatorio sui movimenti di quota"
         >
           <span
             aria-hidden

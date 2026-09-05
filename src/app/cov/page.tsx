@@ -30,6 +30,8 @@ export const metadata = {
   title: "Copertura della raccolta — DropAlert",
   description:
     "Quante righe dell'elenco della fonte diventano dato utile, e dove finiscono quelle che non ci arrivano.",
+  /* l'URL pubblico è /coverage (rewrite): il canonical dice quello vero */
+  alternates: { canonical: "/coverage" },
 };
 
 export default async function CoveragePage() {

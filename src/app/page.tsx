@@ -47,6 +47,25 @@ import {
    freschezza del dato resta dichiarata in pagina dal pannello «Stato dati». */
 export const revalidate = 300;
 
+/* titolo e descrizione arrivano dal layout; qui canonical + regola sui filtri.
+   La home legge i filtri dalla query string (?level=, ?league=, ?when= …):
+   quelle varianti sono fette duplicate della stessa lista, quindi non si
+   indicizzano (ma si seguono i link). Solo la home pulita resta indicizzata. */
+export async function generateMetadata({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}): Promise<import("next").Metadata> {
+  const sp = await searchParams;
+  const filtered = ["level", "league", "team", "sort", "when"].some(
+    (k) => sp[k] !== undefined,
+  );
+  return {
+    ...(filtered ? { robots: { index: false, follow: true } } : {}),
+    alternates: { canonical: "/" },
+  };
+}
+
 const VALID_LEVELS: SignalLevel[] = ["forte", "reale", "debole", "nessuno"];
 
 function parseFilters(

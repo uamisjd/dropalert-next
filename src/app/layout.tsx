@@ -12,7 +12,8 @@ export const metadata: Metadata = {
   },
   description: SITE_DESCRIPTION,
   applicationName: SITE_NAME,
-  alternates: { canonical: "/" },
+  /* nessun canonical globale: ogni pagina dichiara il proprio. Un canonical
+     "/" ereditato direbbe ai motori che tutte le pagine sono la home. */
   /* le anteprime social dicono le stesse cose della pagina, compreso il
      limite: nessun pronostico. Il disclaimer non si perde nella condivisione */
   openGraph: {

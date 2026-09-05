@@ -39,7 +39,7 @@
     "test:odds-budget": "tsx src/lib/providers/optional/__tests__/odds-budget.test.ts",
     "test:analysis": "tsx src/lib/context/__tests__/analysis.test.ts",
     "test:cov-view": "tsx src/lib/cov/__tests__/view.test.ts",
-    "test:scheduler": "tsx --env-file=.env src/lib/pipeline/__tests__/scheduler.test.ts",
+    "test:scheduler": "tsx --env-file-if-exists=.env src/lib/pipeline/__tests__/scheduler.test.ts",
     "test:settle": "tsx src/lib/settle/__tests__/outcome.test.ts",
     "test:shape": "tsx src/lib/shape/__tests__/features.test.ts",
     "test:context": "tsx src/lib/context/__tests__/pure.test.ts",

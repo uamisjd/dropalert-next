@@ -103,10 +103,16 @@ export async function GET(request: Request) {
       },
     });
   } catch (err) {
+    /* il dettaglio resta nei log del server: la risposta non espone mai
+       l'SQL o i messaggi interni del driver al client */
+    console.error(
+      "[api/signals] lettura fallita:",
+      err instanceof Error ? err.message : err,
+    );
     return NextResponse.json(
       {
         error: "errore nel recupero dei segnali",
-        detail: err instanceof Error ? err.message : String(err),
+        detail: "Lettura non riuscita. Il dettaglio è registrato nei log del server.",
       },
       { status: 500 },
     );

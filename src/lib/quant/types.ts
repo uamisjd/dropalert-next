@@ -1,5 +1,5 @@
 /**
- * Tipi per il motore quantitativo di DropAlert Pro.
+ * Tipi per il motore quantitativo di DropAlert.
  * Copre: Value Betting (+EV), Dixon-Coles/Poisson, Shin Devig, Kelly Staking,
  * Surebet/Arbitraggio, Dutching e Trading Exchange (Green-Up/Scalping).
  */
