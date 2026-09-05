@@ -8,8 +8,6 @@
  */
 import { round, isValidPrice } from "@/lib/drop/math";
 import { getBestFairOdds } from "./devig-advanced";
-import { calculateKellyStake } from "./kelly";
-import type { ValueOpportunity } from "./types";
 
 export interface EVCalculation {
   offeredOdds: number;
@@ -123,55 +121,13 @@ export function findValueFromSharpPrices(
   return results;
 }
 
-/**
- * Calcola l'opportunità +EV a partire dal movimento del prezzo osservato
- * (se il mercato è crollato da 2.30 a 1.95 e un book è fermo a 2.15).
+/*
+ * `evaluateDroppingSignalValue` è stata rimossa (audit `docs/STUDIO-VALUE-BETS.md`):
+ * derivava la «fair» dividendo il consenso corrente per 1,045 — un margine ipotizzato,
+ * non misurato — e valutava l'edge sul prezzo di apertura, cioè su un'offerta che non
+ * esiste più. La misura difendibile sta in `../quant/value-gap.ts`: linea completa dello
+ * stesso bookmaker con lo stesso no-vig del CLV, prezzo valutato quello eseguibile.
+ *
+ * Resta qui `findValueFromSharpPrices`, che invece due linee vere le confronta: serve
+ * appena la fonte esporrà le quote per singolo bookmaker (`perBookmakerOdds`).
  */
-export function evaluateDroppingSignalValue(params: {
-  openingPrice: number;
-  currentConsensusPrice: number;
-  offeredPrice: number;
-  sustainedMinutes: number;
-  sharpConfirms: boolean | null;
-  confidenceScore: number;
-}): {
-  edgePct: number;
-  fairOdds: number;
-  isActionableValue: boolean;
-  strategy: ValueOpportunity["strategy"];
-  recommendedKellyPct: number;
-} {
-  const { openingPrice, currentConsensusPrice, offeredPrice, sharpConfirms } = params;
-
-  // Stima della quota fair dal consenso corrente de-viggato
-  // Ipotizziamo un margine medio standard del 5% sul consenso
-  const implied = 1 / currentConsensusPrice;
-  // Fair prob approssimata rimuovendo un margine stimato
-  const fairProb = implied / 1.045;
-  const fairOdds = round(1 / fairProb, 3);
-
-  const ev = calculateEV(offeredPrice, { fairOdds, trueProb: fairProb });
-  const edgePct = ev ? ev.edgePct : 0;
-
-  let strategy: ValueOpportunity["strategy"] = "value_bet";
-  if (sharpConfirms) {
-    strategy = "steam_chase";
-  } else if (offeredPrice > currentConsensusPrice) {
-    strategy = "market_lag";
-  }
-
-  const kelly = calculateKellyStake({
-    offeredOdds: offeredPrice,
-    trueProbability: fairProb,
-    bankroll: 1000,
-    tier: "quarter",
-  });
-
-  return {
-    edgePct,
-    fairOdds,
-    isActionableValue: edgePct >= 1.5,
-    strategy,
-    recommendedKellyPct: kelly.recommendedStakePct,
-  };
-}

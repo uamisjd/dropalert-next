@@ -6,6 +6,15 @@
 
 export type FractionalKellyTier = "eighth" | "quarter" | "half" | "full";
 
+/**
+ * Divario fra l'ultima lettura del consenso e la linea senza margine (no-vig) dello
+ * STESSO bookmaker sullo STESSO mercato, su una partita non ancora al kickoff.
+ *
+ * Non è un consiglio e non contiene sizing: i campi «puntata consigliata» / euro sono
+ * stati tolti perché calcolati su un prezzo non più eseguibile (audit
+ * `docs/STUDIO-VALUE-BETS.md`). La Kelly, come calcolatrice con numeri inseriti a
+ * mano, vive in `/strumenti`.
+ */
 export interface ValueOpportunity {
   id: string | number;
   matchId: number;
@@ -16,20 +25,37 @@ export interface ValueOpportunity {
   market: "1x2" | "ou_2_5" | "btts" | string;
   selection: string;
   selectionLabel: string;
+  /** ultima lettura del consenso: il solo prezzo davvero eseguibile */
   currentOdds: number;
+  /** apertura, per leggere il movimento: NON è un'offerta acquistabile */
   openingOdds?: number;
+  /** quota senza margine della linea completa (non una stima) */
   fairOdds: number;
+  /** margine rimosso da quella linea: 6.1 = 6,1% di overround osservato */
+  lineMarginPct: number;
+  /** bookmaker con terna completa su questo mercato alla stessa ora di lettura */
+  booksWithLine: number;
+  /** probabilità della linea no-vig, in % */
   trueProbPct: number;
+  /** probabilità implicita nella quota corrente, in % */
   impliedProbPct: number;
-  edgePct: number; // EV % (es. +6.5%)
-  expectedValue: number; // edge come decimale (es. 0.065)
+  /**
+   * Divario fra linea no-vig e quota corrente, in punti percentuali.
+   * Nessun pavimento: i valori negativi si mostrano.
+   */
+  edgePct: number;
+  /** lo stesso numero in frazione */
+  expectedValue: number;
+  /** variazione di quota dall'apertura, %: il movimento, non il valore */
+  dropPct: number | null;
+  /** minuti dall'ultima lettura della linea; null se non nota */
+  lineAgeMinutes: number | null;
+  /** chiave del collector che ha prodotto la linea */
+  lineSource: string;
+  /** true solo se la fonte ha davvero una conferma sharp: qui mai, con un bookmaker */
   sharpConfirmed: boolean;
-  sharpPrice?: number;
-  confidenceScore: number;
-  recommendedKellyPct: number; // es. 1.63% del bankroll
-  recommendedStakeEuros?: number;
-  strategy: "value_bet" | "steam_chase" | "market_lag" | "model_discrepancy";
-  status: "active" | "live" | "closed";
+  /** per costruzione solo partite non ancora al kickoff */
+  status: "upcoming";
 }
 
 export interface AdvancedDevigResult {

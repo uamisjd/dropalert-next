@@ -84,7 +84,9 @@ export function SurebetCalculator() {
             Calcolatore Surebet & Arbitraggio Matematico
           </h2>
           <p className="mt-1 text-xs text-slate-500">
-            Calcola la distribuzione ideale del capitale tra diversi operatori per garantire un profitto certo al 100%.
+            Distribuisce l&apos;importo sulle quote che inserisci, così che il risultato sia lo
+stesso a ogni esito. La distribuzione è matematica; l&apos;esistenza di quelle quote,
+nello stesso momento e allo stesso importo, non lo è.
           </p>
         </div>
 
@@ -138,7 +140,7 @@ export function SurebetCalculator() {
               onChange={(e) => setRoundStakes(e.target.checked)}
               className="h-4 w-4 rounded border-slate-300 text-cyan-600 focus:ring-cyan-500"
             />
-            <span>Arrotonda puntate all'euro intero (anti-limitazione)</span>
+            <span>Arrotonda gli importi all&apos;euro intero</span>
           </label>
         </div>
       </div>
@@ -230,7 +232,7 @@ export function SurebetCalculator() {
                 </div>
                 <div className="rounded-xl bg-emerald-600 px-3.5 py-2 text-center text-white">
                   <div className="text-[10px] font-bold uppercase opacity-90">
-                    ROI Garantito
+                    ROI su queste quote
                   </div>
                   <div className="text-lg font-extrabold tabular-nums">
                     +{result.profitPct.toFixed(2)}%
@@ -239,6 +241,13 @@ export function SurebetCalculator() {
               </div>
             )}
           </div>
+
+          <p className="mt-3 text-[11px] leading-relaxed text-slate-500">
+            Il vantaggio esiste solo se tutte le quote indicate sono disponibili{" "}
+            <strong>nello stesso istante e per l&#39;intero importo</strong>. Qui non entrano
+            commissioni dell&#39;exchange né limiti di puntata: è aritmetica su numeri che
+            inserisci tu, non un&#39;operazione che il sito abbia osservato da qualche parte.
+          </p>
 
           {/* Ripartizione Dettagliata Puntate */}
           {result.isArbitrage && (

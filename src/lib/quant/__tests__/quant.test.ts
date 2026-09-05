@@ -9,7 +9,8 @@
  *  - Quote Sintetiche
  */
 import { devigShin, devigPower, devigProportional, getBestFairOdds } from "../devig-advanced";
-import { calculateEV, findValueFromSharpPrices, evaluateDroppingSignalValue } from "../ev-engine";
+import { calculateEV, findValueFromSharpPrices } from "../ev-engine";
+import { computeValueGap } from "../value-gap";
 import { calculateKellyStake } from "../kelly";
 import { simulateDixonColes, estimateTeamExpectancy } from "../dixon-coles";
 import { calculateArbitrage, calculateDutching } from "../arbitrage";
@@ -70,6 +71,94 @@ console.log("\n[2] Expected Value (+EV) ed Edge %");
   assert(valueOutcomes.length === 3, "Valutati 3 esiti");
   assert(valueOutcomes[0].hasValue === true, "Esito 1 identificato come +EV rispetto a Sharp");
   assert(valueOutcomes[0].edgePct > 5.0, "Edge superiore al 5%");
+}
+
+console.log("\n[2b] Divario vs linea no-vig (`computeValueGap`)");
+{
+  // Terna completa con margine: la fair è sopra la quota, il divario è negativo
+  // per costruzione — ed è giusto che sia così: il margine c'è, il valore no.
+  const gap = computeValueGap({
+    market: "1x2",
+    selection: "home",
+    currentPrice: 2.0,
+    line: { home: 2.0, draw: 3.4, away: 3.9 },
+  });
+  assert(gap.ok === true, "linea completa: divario calcolato");
+  if (gap.ok) {
+    assert(gap.marginPct > 4 && gap.marginPct < 10, `margine osservato sulla linea: ${gap.marginPct}%`);
+    assert(gap.fairOdds > 2.0, `fair sopra la quota grezza (${gap.fairOdds})`);
+    assert(gap.edgePct < 0, `divario negativo su quota = linea del book: ${gap.edgePct}%`);
+    /* il divario dev'essere esattamente fairProb × prezzo − 1, né più né meno */
+    assert(
+      Math.abs(gap.edgePct - (100 * (2.0 / gap.fairOdds) - 100)) < 0.05,
+      `divario = fairProb × prezzo − 1 (${gap.edgePct}% vs fair ${gap.fairOdds})`,
+    );
+    assert(gap.selectionsUsed === 3, "terna completa usata: 3 selezioni");
+  }
+
+  // Quota più generosa della media del mercato: divario positivo
+  const good = computeValueGap({
+    market: "1x2",
+    selection: "home",
+    currentPrice: 2.2,
+    line: { home: 2.0, draw: 3.4, away: 3.9 },
+  });
+  assert(good.ok === true && good.edgePct > 0, "quota sopra fair: divario positivo");
+
+  // Terna incompleta: nessun numero, e il motivo scritto
+  const missing = computeValueGap({
+    market: "1x2",
+    selection: "home",
+    currentPrice: 2.0,
+    line: { home: 2.0, draw: 3.4 },
+  });
+  assert(missing.ok === false, "linea incompleta: nessun divario, nessuna stima");
+  assert(
+    missing.ok === false && missing.reason.includes("away"),
+    "il motivo dice quale selezione manca",
+  );
+
+  // Il pavimento a +0,5% non c'è più: un divario lievemente negativo resta negativo
+  const tiny = computeValueGap({
+    market: "ou_2_5",
+    selection: "over",
+    currentPrice: 1.9,
+    line: { over: 1.9, under: 1.95 },
+  });
+  assert(tiny.ok === true && tiny.edgePct < 0, `nessun pavimento: edge ${tiny.ok ? tiny.edgePct : "n/d"}% mostrato`);
+}
+
+console.log("\n[1b] Proporzionale e scala dei tick");
+{
+  // Il proporzionale è la definizione: fair = 1 / (implicita / overround)
+  const prop = devigProportional([2.0, 3.4, 3.9]);
+  assert(prop !== null, "devig proporzionale calcolato su terna valida");
+  if (prop) {
+    const overround = 1 / 2.0 + 1 / 3.4 + 1 / 3.9;
+    assert(
+      Math.abs(prop.fairProbabilities[0] - 1 / 2.0 / overround) < 1e-4,
+      `proporzionale = implicita / overround (${prop.fairProbabilities[0]})`,
+    );
+    assert(
+      Math.abs(prop.fairProbabilities.reduce((a, b) => a + b, 0) - 1) < 1e-4,
+      "le probabilità proporzionali sommano a 1",
+    );
+  }
+
+  /* La scala dei tick non è lineare: il gradino cambia per fascia, e questo è il
+   * motivo per cui «tot tick di green-up» non è una misura di prezzo. */
+  assert(calculateTickDistance(1.5, 1.51) === 1, "1,50 → 1,51 = 1 tick (gradino 0,01 sotto 2,00)");
+  assert(calculateTickDistance(2.0, 2.04) === 2, "2,00 → 2,04 = 2 tick (gradino 0,02 fra 2 e 3)");
+  assert(calculateTickDistance(3.0, 3.1) === 2, "3,00 → 3,10 = 2 tick (gradino 0,05 fra 3 e 4)");
+  assert(
+    calculateTickDistance(6.0, 6.05) === 0,
+    "6,00 → 6,05 = 0 tick: sopra 6,00 il gradino è 0,20 e quel prezzo non esiste sulla scala",
+  );
+  assert(calculateTickDistance(2.02, 2.0) === -1, "il segno segue la direzione del movimento");
+  assert(
+    calculateTickDistance(1.5, 1.7) > calculateTickDistance(6.0, 6.2),
+    "stesso scarto relativo, molti più tick sul favorito: i tick non sono una misura di prezzo",
+  );
 }
 
 console.log("\n[3] Money Management & Criterio di Kelly");

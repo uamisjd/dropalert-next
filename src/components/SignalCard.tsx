@@ -1,8 +1,11 @@
 /**
  * Card di una partita con movimento di quota rilevato — Modalità Quant / Pro.
  *
- * Mostra il percorso del prezzo (apertura → picco → corrente), variazione in pp,
- * conferme sharp, metriche di Expected Value (+EV) e Kelly Staking.
+ * Mostra il percorso del prezzo (apertura → picco → corrente), la variazione in
+ * punti percentuali e i tick del movimento. Le metriche di «+EV» e lo stake Kelly che
+ * stavano qui sono stati tolti: si fondavano su una fair ipotizzata (margine 4,5%
+ * fisso) e su un prezzo di apertura non più acquistabile. L'audit è in
+ * `docs/STUDIO-VALUE-BETS.md`.
  */
 import Link from "next/link";
 import type { DashboardSignal } from "@/lib/repo/dashboard";
@@ -30,10 +33,7 @@ import {
 } from "@/lib/view/plain";
 import { Info } from "./Info";
 import { Sparkline } from "./Sparkline";
-import { calculateEV } from "@/lib/quant/ev-engine";
-import { calculateKellyStake } from "@/lib/quant/kelly";
 import { calculateTickDistance } from "@/lib/quant/exchange-trading";
-import { round } from "@/lib/drop/math";
 
 function PriceStep({
   label,
@@ -97,41 +97,19 @@ export function SignalCard({
     signal.openingPrice !== null &&
     Math.abs(signal.peakPrice - signal.openingPrice) > 0.0005;
 
-  // Calcoli quantitativi (+EV, Fair Odds, Kelly, Ticks)
-  const currentPrice = signal.currentPrice;
-  const openingPrice = signal.openingPrice;
-
-  let fairOdds: number | null = null;
-  let edgePct: number | null = null;
-  let kellyPct: number | null = null;
-  let tickDist = 0;
-
-  if (currentPrice && currentPrice > 1.01) {
-    const implied = 1 / currentPrice;
-    const fairProb = Math.min(0.95, implied / 1.045);
-    fairOdds = round(1 / fairProb, 2);
-
-    const priceToEvaluate = openingPrice && openingPrice > currentPrice
-      ? openingPrice
-      : currentPrice * 1.04;
-
-    const ev = calculateEV(priceToEvaluate, { fairOdds, trueProb: fairProb });
-    if (ev) {
-      edgePct = ev.edgePct;
-    }
-
-    const kelly = calculateKellyStake({
-      offeredOdds: priceToEvaluate,
-      trueProbability: fairProb,
-      bankroll: 1000,
-      tier: "quarter",
-    });
-    kellyPct = kelly.recommendedStakePct;
-
-    if (openingPrice) {
-      tickDist = calculateTickDistance(openingPrice, currentPrice);
-    }
-  }
+  /* I chip «Fair / Edge / Kelly» sono usciti da questa card (audit
+   * `docs/STUDIO-VALUE-BETS.md` §2). La «fair» era la quota corrente divisa per un
+   * margine ipotizzato (1,045) e l'edge era misurato sul prezzo di APERTURA, cioè su
+   * un'offerta che nessuno può più comprare: in una card del dashboard, che è la
+   * prima cosa che chi arriva legge, un numero costruito è peggio di nessun numero.
+   * Il divario legittimo — contro la linea no-vig completa dello stesso bookmaker —
+   * sta in `/value-bets` e nel pannello quantitativo della partita. Qui resta la
+   * misura del movimento, che è reale: i tick fra apertura e ultima lettura.
+   */
+  const tickDist =
+    signal.openingPrice && signal.currentPrice
+      ? calculateTickDistance(signal.openingPrice, signal.currentPrice)
+      : 0;
 
   return (
     <article className="group relative rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition-all hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-md focus-within:border-cyan-600 sm:p-5">
@@ -261,36 +239,6 @@ export function SignalCard({
 
       {/* andamento della quota */}
       <Sparkline signal={signal} />
-
-      {/* Box Quantitativo Alpha (+EV & Kelly & Ticks) */}
-      {fairOdds !== null && (
-        <div className="mb-3 grid grid-cols-3 gap-2 rounded-xl bg-slate-900 p-2.5 text-center text-white">
-          <div>
-            <div className="text-[10px] font-semibold text-slate-400 uppercase">
-              Fair No-Vig
-            </div>
-            <div className="text-sm font-bold text-white tabular-nums">
-              @{fairOdds.toFixed(2)}
-            </div>
-          </div>
-          <div>
-            <div className="text-[10px] font-bold text-emerald-400 uppercase">
-              Edge (+EV)
-            </div>
-            <div className="text-sm font-black text-emerald-400 tabular-nums">
-              {edgePct && edgePct > 0 ? `+${edgePct.toFixed(1)}%` : "0.0%"}
-            </div>
-          </div>
-          <div>
-            <div className="text-[10px] font-semibold text-cyan-300 uppercase">
-              Stake Kelly (¼)
-            </div>
-            <div className="text-sm font-bold text-cyan-300 tabular-nums">
-              {kellyPct ? `${kellyPct.toFixed(1)}%` : "1.0%"}
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* le due misure del movimento */}
       <div className="mb-3 grid grid-cols-2 gap-3">

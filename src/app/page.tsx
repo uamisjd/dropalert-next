@@ -181,10 +181,12 @@ export default async function Home({
             Intelligence Quantitativa sul Calcio.
           </h1>
           <p className="mt-3 text-sm leading-relaxed text-slate-300 sm:text-base">
-            Monitoraggio dei flussi di mercato in tempo reale, rilevamento automatico di{" "}
-            <strong className="text-emerald-400">Value Bets (+EV)</strong>, calcolo delle quote fair{" "}
-            <strong>No-Vig (Shin / Power)</strong>, dimensionamento tramite{" "}
-            <strong>Criterio di Kelly</strong> e strumenti di <strong>Green-Up & Trading Exchange</strong>.
+            Monitoraggio dei flussi di mercato in tempo reale: apertura, picco e ultima
+            lettura di ogni quota, {" "}
+            <strong className="text-emerald-400">divario contro la linea senza margine</strong>{" "}
+            (no-vig proporzionale, lo stesso della chiusura usata per il CLV) e{" "}
+            <strong>escursione in tick</strong> dei movimenti. Sono misure, con i loro buchi
+            dichiarati: nessuna previsione, nessun consiglio, nessuna puntata suggerita.
           </p>
 
           <nav
@@ -196,21 +198,21 @@ export default async function Home({
               className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-500 px-3.5 py-2 font-bold text-slate-950 shadow-sm transition-colors hover:bg-emerald-400"
             >
               <span>💎</span>
-              <span>Value Bets Scanner (+EV)</span>
+              <span>Divario di prezzo (no-vig)</span>
             </Link>
             <Link
               href="/trading"
               className="inline-flex items-center gap-1.5 rounded-xl border border-white/20 bg-white/10 px-3.5 py-2 font-semibold text-white transition-colors hover:bg-white/20"
             >
               <span>⚡</span>
-              <span>Trading & Green-Up</span>
+              <span>Escursione &amp; Green-Up</span>
             </Link>
             <Link
               href="/surebet"
               className="inline-flex items-center gap-1.5 rounded-xl border border-white/20 bg-white/10 px-3.5 py-2 font-semibold text-white transition-colors hover:bg-white/20"
             >
               <span>⚖️</span>
-              <span>Surebet & Dutching</span>
+              <span>Surebet &amp; Dutching (calcolo)</span>
             </Link>
             <Link
               href="/simulator"

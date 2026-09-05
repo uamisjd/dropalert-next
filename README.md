@@ -163,14 +163,19 @@ npm run test:pipeline    # test della pipeline (richiede PostgreSQL)
 npm run test:providers   # test delle fondamenta dei collector
 npm run test:betexplorer # test dell'adapter su HTML reale congelato
 npm run test:tools       # strumenti di calcolo (margine, varianza)
+npm run test:value-lines   # come si costruisce una linea di prezzo per il divario (puro)
+npm run test:line-shape    # la forma reale delle linee 1X2, sull'HTML congelato del provider
 npm run test:client      # componenti in un DOM reale (jsdom + React 19)
-npm run test:all         # tutte le suite (26)
+npm run test:all         # tutte le suite (28)
 npm run job:analyze      # solo analisi + chiusura, senza rete
 npm run job:collect      # giro completo: raccolta + analisi + chiusura + notifiche
 npm run job:collect -- --force         # ignora l'intervallo minimo
 npm run job:collect -- --no-collect    # solo consolidamento, nessuna rete
 npm run job:collect -- --collect-only --max 10 --no-results
 npm run job:verify-results       # verifica partita → risultato su dati reali
+npm run audit:value-bets         # verifica della pagina «Divario di prezzo»: 6 controlli (kickoff futuro, verdetti, fair reale, nessun pavimento)
+npm run audit:finished           # audit dello storico «partite finite» (solo letture, markdown su stdout)
+npm run study:finished           # studio quantitativo sui CSV congelati (zero rete, zero DB)
 npm run validate         # typegen + typecheck + test + build
 npm run db:generate      # genera migrazione da schema.ts
 npm run db:migrate       # applica migrazioni

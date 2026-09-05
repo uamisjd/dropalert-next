@@ -31,6 +31,16 @@ export function PoissonSimulatorView() {
     return calculateEV(o, { fairOdds: simulation.fairOdds.homeWin });
   }, [marketOddsHome, simulation.fairOdds.homeWin]);
 
+  const evDraw = useMemo(() => {
+    const o = Number.parseFloat(marketOddsDraw.replace(",", ".")) || 0;
+    return calculateEV(o, { fairOdds: simulation.fairOdds.draw });
+  }, [marketOddsDraw, simulation.fairOdds.draw]);
+
+  const evAway = useMemo(() => {
+    const o = Number.parseFloat(marketOddsAway.replace(",", ".")) || 0;
+    return calculateEV(o, { fairOdds: simulation.fairOdds.awayWin });
+  }, [marketOddsAway, simulation.fairOdds.awayWin]);
+
   const evOver25 = useMemo(() => {
     const o = Number.parseFloat(marketOddsOver25.replace(",", ".")) || 0;
     return calculateEV(o, { fairOdds: simulation.fairOdds.over25 });
@@ -143,24 +153,37 @@ export function PoissonSimulatorView() {
             </div>
           </div>
 
-          {/* Confronto Quota 1 */}
-          <div className="mt-3 border-t border-slate-100 pt-3">
-            <div className="text-[11px] text-slate-500">Quota Bookmaker su Esito 1:</div>
-            <div className="mt-1 flex items-center gap-2">
-              <input
-                type="text"
-                value={marketOddsHome}
-                onChange={(e) => setMarketOddsHome(e.target.value)}
-                className="w-20 rounded-lg border border-slate-300 px-2 py-1 text-xs font-bold text-slate-900"
-              />
-              <span
-                className={`text-xs font-extrabold ${
-                  evHome && evHome.hasEdge ? "text-emerald-600" : "text-rose-600"
-                }`}
-              >
-                {evHome && evHome.hasEdge ? `+${evHome.edgePct}% EV 💎` : `${evHome?.edgePct}% EV`}
-              </span>
-            </div>
+          {/* Confronto con le quote del mercato, sulle tre selezioni */}
+          <div className="mt-3 space-y-2 border-t border-slate-100 pt-3">
+            <p className="text-[11px] text-slate-500">
+              Quote del mercato da confrontare con il modello: sono valori che inserisci
+              tu, e il confronto è fra la tua quota e la fair del modello — non contro i
+              dati del sito, che qui non vengono letti.
+            </p>
+            {[
+              { label: "Esito 1", value: marketOddsHome, set: setMarketOddsHome, ev: evHome },
+              { label: "Esito X", value: marketOddsDraw, set: setMarketOddsDraw, ev: evDraw },
+              { label: "Esito 2", value: marketOddsAway, set: setMarketOddsAway, ev: evAway },
+            ].map((x) => (
+              <div key={x.label} className="flex items-center gap-2">
+                <span className="w-14 text-[11px] text-slate-500">{x.label}</span>
+                <input
+                  type="text"
+                  value={x.value}
+                  onChange={(e) => x.set(e.target.value)}
+                  className="w-20 rounded-lg border border-slate-300 px-2 py-1 text-xs font-bold text-slate-900"
+                />
+                <span
+                  className={`text-xs font-extrabold ${
+                    x.ev && x.ev.hasEdge ? "text-emerald-600" : "text-rose-600"
+                  }`}
+                >
+                  {x.ev && x.ev.hasEdge
+                    ? `+${x.ev.edgePct}% EV`
+                    : `${x.ev?.edgePct ?? "n/d"}% EV`}
+                </span>
+              </div>
+            ))}
           </div>
         </div>
 
