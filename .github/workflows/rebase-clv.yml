@@ -62,13 +62,23 @@ jobs:
 
       # Se il client fallisce, l'errore di `postgres` include la connection
       # string nel message: la si maschera in uscita, come negli altri workflow.
+      #
+      # La riga `sed` va tenuta IDENTICA a quella di `audit.yml`: in un blocco
+      # `run: |` il backslash è letterale, quindi `\"` dentro la classe di
+      # caratteri non protegge nulla — spezza la quotatura e il passo muore in
+      # parsing ("syntax error near unexpected token") prima di lanciare lo
+      # script. Le virgolette entrano nel pattern con `"'"'"'`, non con `\"`.
+      #
+      # `sed` chiude la pipe con 0 anche se lo script è fallito e il `bash -e`
+      # di Actions non ha `pipefail`: senza `PIPESTATUS[0]` il passo sarebbe
+      # verde a prescindere — inaccettabile per un `apply`.
       - name: Ribasatura (${{ inputs.mode }})
         run: |
+          args=()
           if [ "${{ inputs.mode }}" = "apply" ]; then
             echo "::warning::Modalità apply: le righe di CLV verranno riscritte."
-            npm run clv:rebase -- --apply 2>&1 \
-              | sed -E 's#(postgres(ql)?://)[^[:space:]\"'\"'\"']*#\1<redacted>#g'
-          else
-            npm run clv:rebase 2>&1 \
-              | sed -E 's#(postgres(ql)?://)[^[:space:]\"'\"'\"']*#\1<redacted>#g'
+            args+=(--apply)
           fi
+          npm run clv:rebase -- "${args[@]}" 2>&1 \
+            | sed -E 's#(postgres(ql)?://)[^[:space:]"'"'"']*#\1<redacted>#g'
+          exit "${PIPESTATUS[0]}"
