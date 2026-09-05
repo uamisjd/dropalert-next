@@ -3,8 +3,10 @@
 > Documento di continuità fra sessioni di lavoro. Ultimo aggiornamento: 2026-09-05.
 > PR #11 (ramo `arena/01a0707a-dropalert-next` → `main`): MERGIATA.
 > PR #12 (ramo `arena/01a07101-dropalert-next` → `main`): MERGIATA su richiesta
-> dell'utente in questa sessione — è il fix descritto in §8, e il piano per
-> ripartire è in §9. Gli orari di questo
+> dell'utente in questa sessione — è il primo fix descritto in §8.
+> PR #13 (ramo `arena/01a0717b-dropalert-next` → `main`): APERTA — contiene il
+> profilo collect-only, la diagnostica health e i test descritti in §8–§9.
+> Gli orari di questo
 > documento sono in UTC quando hanno la `Z`; le pagine del sito li mostrano in
 > ora italiana (estate = UTC+2) — non confondere i due, il «giro delle 10:22»
 > è le 12:22 a Napoli.
@@ -102,7 +104,8 @@ niente link a bookmaker, niente stime spacciate per dati.
 - Produzione: alias canonico `https://dropalert-next.vercel.app`; il deploy di
   #12 verificato è `dropalert-next-69uclcngb-sima14.vercel.app`. Non usare il
   vecchio URL `i31uaax6b`: è un deployment immutabile precedente al fix.
-- PR #11: `https://github.com/uamisjd/dropalert-next/pull/11`.
+- PR #11: `https://github.com/uamisjd/dropalert-next/pull/11`; PR #13:
+  `https://github.com/uamisjd/dropalert-next/pull/13`.
 - Workflow: `Osservazione DropAlert` (.github/workflows/collect.yml),
   `Verifica`, `Verifica dati reali (manuale)`.
 - Doc di metodo: `docs/STUDIO-VALUE-BETS.md`, `docs/STUDIO-PARTITE-FINITE.md`,
@@ -173,8 +176,7 @@ Alle 14:13 la fonte era `ok`, alle 14:33 era tornata `degraded`, mentre
 oscillazione è precisamente il motivo per cui non si può anticipare il verdetto
 fissato al 06.09 ore 13:30: oggi manca comunque la seconda condizione (`> 95`).
 
-**Intervento preparato in questa sessione (da considerare live solo dopo il
-merge della relativa PR).**
+**Intervento preparato in PR #13 (da considerare live solo dopo il merge).**
 
 1. `/api/cron/collect` usa ora un vero profilo `collect_only`: termina dopo la
    raccolta e lascia analisi, risultati, chiusure e notifiche al giro completo
