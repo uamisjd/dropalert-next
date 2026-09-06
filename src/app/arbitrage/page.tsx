@@ -1,22 +1,25 @@
 /**
  * Pagina /arbitrage — scanner di opportunità di surebet cross-bookmaker.
  *
- * Questa pagina è per il proprietario del sito. Rileva opportunità di
- * arbitraggio confrontando le quote migliori disponibili per ogni selezione
- * di un mercato su bookmaker diversi.
+ * Rileva opportunità di arbitraggio confrontando le quote migliori
+ * disponibili per ogni selezione di un mercato su bookmaker diversi.
  *
  * Un'opportunità esiste quando la somma delle probabilità implicite
  * (1/quota) è < 1, ovvero quando si può scommettere su tutti gli esiti
  * e garantire un profitto indipendentemente dal risultato.
  *
- * Uso personale: questa pagina non è nella navigazione pubblica.
+ * Raggiungibile dalla navigazione principale (voce «Arbitrage» in SiteNav,
+ * accanto a «Surebet (calcolo)», di cui è la versione automatica).
  * L'arbitraggio richiede account attivi su più bookmaker, liquidità
  * sufficiente, velocità di esecuzione e verifica dei limiti di puntata.
  */
 import type { Metadata } from "next";
 import Link from "next/link";
 import { scanArbitrage } from "@/lib/quant/arbitrage";
-import { ArbitrageTable } from "@/components/ArbitrageTable";
+import {
+  ArbitrageTable,
+  type ArbitrageRow,
+} from "@/components/ArbitrageTable";
 import { fmtDateTime } from "@/components/format";
 
 export const metadata: Metadata = {
@@ -44,6 +47,16 @@ export default async function ArbitragePage() {
     result.opportunities.length > 0
       ? Math.max(...result.opportunities.map((o) => o.profitPct))
       : 0;
+
+  /* Età della lettura calcolata qui (server), alla generazione: la tabella è
+     un client component e non deve chiamare Date.now() nel render. */
+  const opportunities: ArbitrageRow[] = result.opportunities.map((opp) => ({
+    ...opp,
+    lineAgeMinutes: Math.max(
+      0,
+      Math.round((now.getTime() - opp.collectedAt.getTime()) / 60_000),
+    ),
+  }));
 
   return (
     <main className="mx-auto w-full max-w-5xl flex-1 px-4 py-5">
@@ -141,18 +154,18 @@ export default async function ArbitragePage() {
       )}
 
       {result.opportunities.length > 0 && (
-        <ArbitrageTable opportunities={result.opportunities} />
+        <ArbitrageTable opportunities={opportunities} />
       )}
 
       <section className="mt-8 rounded-2xl border border-slate-200 bg-white p-5 text-xs text-slate-600 shadow-sm sm:p-6">
         <h2 className="text-sm font-bold tracking-wide text-slate-900 uppercase">
-          Come funziona l'arbitraggio
+          Come funziona l&apos;arbitraggio
         </h2>
         <div className="mt-3 grid gap-4 sm:grid-cols-2">
           <div>
             <h3 className="font-semibold text-slate-800">1. Surebet matematica</h3>
             <p className="mt-1 leading-relaxed">
-              Un'opportunità di arbitraggio esiste quando la somma delle
+              Un&apos;opportunità di arbitraggio esiste quando la somma delle
               probabilità implicite (1/quota) delle migliori quote disponibili
               per ogni selezione è &lt; 1. In quel caso, scommettendo
               proporzionalmente su tutti gli esiti si garantisce un profitto.
@@ -161,19 +174,20 @@ export default async function ArbitragePage() {
           <div>
             <h3 className="font-semibold text-slate-800">2. Requisiti pratici</h3>
             <p className="mt-1 leading-relaxed">
-              L'arbitraggio richiede: account attivi su più bookmaker, liquidità
-              sufficiente su tutti i bookmaker, velocità di esecuzione (le quote
-              cambiano in secondi), verifica dei limiti di puntata. Senza questi
-              requisiti, l'opportunità resta teorica.
+              L&apos;arbitraggio richiede: account attivi su più bookmaker,
+              liquidità sufficiente su tutti i bookmaker, velocità di
+              esecuzione (le quote cambiano in secondi), verifica dei limiti di
+              puntata. Senza questi requisiti, l&apos;opportunità resta teorica.
             </p>
           </div>
           <div>
             <h3 className="font-semibold text-slate-800">3. Rischi</h3>
             <p className="mt-1 leading-relaxed">
-              Le quote cambiano in secondi: un'opportunità rilevata ora potrebbe
-              non essere più eseguibile quando piazzi la scommessa. I bookmaker
-              limitano gli account che fanno arbitraggio. Le scommesse possono
-              essere annullate se il bookmaker rileva un errore nelle quote.
+              Le quote cambiano in secondi: un&apos;opportunità rilevata ora
+              potrebbe non essere più eseguibile quando piazzi la scommessa. I
+              bookmaker limitano gli account che fanno arbitraggio. Le
+              scommesse possono essere annullate se il bookmaker rileva un
+              errore nelle quote.
             </p>
           </div>
           <div>
@@ -191,8 +205,8 @@ export default async function ArbitragePage() {
         </div>
         <p className="mt-4 border-t border-slate-100 pt-3 text-[11px] text-slate-400">
           Questa pagina è per uso personale. Le opportunità mostrate sono
-          calcoli matematici, non garanzie di profitto. L'arbitraggio comporta
-          rischi pratici significativi.
+          calcoli matematici, non garanzie di profitto. L&apos;arbitraggio
+          comporta rischi pratici significativi.
         </p>
       </section>
     </main>
