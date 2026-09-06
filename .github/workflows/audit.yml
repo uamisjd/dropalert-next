@@ -18,6 +18,15 @@ on:
           - value
           - finished
           - both
+          - smoke-odds
+      match_id:
+        description: "Solo per smoke-odds: id partita. Vuoto = ricerca partita (0 crediti)"
+        required: false
+        default: ""
+      ore:
+        description: "Solo per smoke-odds senza match_id: finestra di ricerca in ore"
+        required: false
+        default: "48"
 
 concurrency:
   group: dropalert-audit
@@ -30,6 +39,10 @@ jobs:
 
     env:
       DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      # Accettata con qualunque grafia già in uso: se la chiave sta su Vercel
+      # come `theoddsapiKey` basta ricrearla qui con lo stesso nome. Il valore
+      # non viene mai stampato.
+      THE_ODDS_API_KEY: ${{ secrets.THE_ODDS_API_KEY || secrets.ODDS_API_KEY || secrets.theoddsapiKey || secrets.THEODDSAPIKEY }}
 
     steps:
       - name: Codice
@@ -54,6 +67,7 @@ jobs:
       # Gli script non stampano la connection string, ma se il client fallisce
       # l'errore di `postgres` la include nell'message: si maschera in uscita.
       - name: Sguardo sui dati (read-only)
+        if: inputs.which != 'smoke-odds'
         run: |
           status=0
           run_one() {
@@ -72,3 +86,25 @@ jobs:
             *) run_one audit:value-bets; run_one audit:finished ;;
           esac
           exit $status
+
+      # Smoke test di The Odds API. Sta in questa workflow perché condivide
+      # l'unica cosa che serve davvero: il database reale raggiungibile da qui.
+      # Senza match_id cerca la partita (endpoint fuori quota, 0 crediti);
+      # con match_id esegue la lettura vera (1 credito). Vedi
+      # docs/SMOKE-THE-ODDS-API.md.
+      - name: Smoke The Odds API
+        if: inputs.which == 'smoke-odds'
+        run: |
+          echo "MARKER-SMOKE-ODDS-BRANCH-v1"
+          if [ -z "$THE_ODDS_API_KEY" ]; then
+            echo "::error::Chiave The Odds API assente fra i secrets (THE_ODDS_API_KEY / ODDS_API_KEY / theoddsapiKey)."
+            exit 1
+          fi
+          if [ -z "${{ inputs.match_id }}" ]; then
+            npm run odds:find -- --ore ${{ inputs.ore }} 2>&1 \
+              | sed -E 's#(postgres(ql)?://)[^[:space:]"'"'"']*#\1<redacted>#g'
+          else
+            npm run smoke:odds-api -- --match-id ${{ inputs.match_id }} 2>&1 \
+              | sed -E 's#(postgres(ql)?://)[^[:space:]"'"'"']*#\1<redacted>#g'
+          fi
+
