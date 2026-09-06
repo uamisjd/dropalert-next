@@ -112,7 +112,10 @@ async function loadMatchRow(matchId: number) {
  * Le variabili esplicite vincono: è l'unico modo onesto di correggere una
  * grafia senza modificare il codice della fonte.
  */
-async function resolveParams(matchId: number | null): Promise<ResolvedParams | { error: string }> {
+async function resolveParams(
+  matchId: number | null,
+  cliSportKey: string | null,
+): Promise<ResolvedParams | { error: string }> {
   const explicit = {
     sportKey: env("ODDS_API_SMOKE_SPORT_KEY"),
     fixtureKey: env("ODDS_API_SMOKE_FIXTURE_KEY"),
@@ -120,6 +123,10 @@ async function resolveParams(matchId: number | null): Promise<ResolvedParams | {
     awayTeam: env("ODDS_API_SMOKE_AWAY_TEAM"),
     kickoffAt: env("ODDS_API_SMOKE_KICKOFF_AT"),
   };
+  /* Una chiave sport esplicita (variabile o --sport-key) serve a verificare
+     una competizione fuori dalla mappa di budget: la mappa resta l'autorità
+     per la produzione, qui è una verifica consapevole e dichiarata. */
+  const overrideSportKey = explicit.sportKey ?? cliSportKey;
   const complete =
     explicit.sportKey !== null &&
     explicit.fixtureKey !== null &&
@@ -166,7 +173,7 @@ async function resolveParams(matchId: number | null): Promise<ResolvedParams | {
     return { error: `partita ${matchId} non presente in archivio.` };
   }
 
-  const resolution = resolveSmokeMatch(row, new Date());
+  const resolution = resolveSmokeMatch(row, new Date(), overrideSportKey);
   if (!resolution.ok) {
     return { error: `partita ${matchId} non leggibile sulla fonte: ${resolution.reason}` };
   }
@@ -190,7 +197,7 @@ async function resolveParams(matchId: number | null): Promise<ResolvedParams | {
   const origin: Record<keyof SmokeMatchParams, "ambiente" | "archivio"> = {
     matchId: "ambiente",
     fixtureKey: explicit.fixtureKey !== null ? "ambiente" : "archivio",
-    sportKey: explicit.sportKey !== null ? "ambiente" : "archivio",
+    sportKey: explicit.sportKey !== null || cliSportKey !== null ? "ambiente" : "archivio",
     homeTeam: explicit.homeTeam !== null ? "ambiente" : "archivio",
     awayTeam: explicit.awayTeam !== null ? "ambiente" : "archivio",
     kickoffAt: explicit.kickoffAt !== null ? "ambiente" : "archivio",
@@ -232,7 +239,8 @@ async function main(): Promise<number> {
     return EXIT_MISCONFIGURED;
   }
 
-  const resolved = await resolveParams(matchId);
+  const cliSportKey = argument("--sport-key");
+  const resolved = await resolveParams(matchId, cliSportKey);
   if ("error" in resolved) {
     console.error(`SMOKE NON ESEGUITO — ${resolved.error}`);
     return EXIT_MISCONFIGURED;

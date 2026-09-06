@@ -27,6 +27,10 @@ on:
         description: "Solo per smoke-odds senza match_id: finestra di ricerca in ore (72 = tutto l'archivio)"
         required: false
         default: "72"
+      sport_key:
+        description: "Solo per smoke-odds: chiave sport per una lega FUORI mappa (es. soccer_scotland_premiership). Vuoto = mappa di budget"
+        required: false
+        default: ""
 
 concurrency:
   group: dropalert-audit
@@ -100,11 +104,14 @@ jobs:
             echo "::error::Chiave The Odds API assente fra i secrets (THE_ODDS_API_KEY / ODDS_API_KEY / theoddsapiKey)."
             exit 1
           fi
-          if [ -z "${{ inputs.match_id }}" ]; then
-            npm run odds:find -- --ore ${{ inputs.ore }} 2>&1 \
-              | sed -E 's#(postgres(ql)?://)[^[:space:]"'"'"']*#\1<redacted>#g'
+          MASK='s#(postgres(ql)?://)[^[:space:]"'"'"']*#\1<redacted>#g'
+          if [ -n "${{ inputs.match_id }}" ]; then
+            SK=""; [ -n "${{ inputs.sport_key }}" ] && SK="--sport-key ${{ inputs.sport_key }}"
+            npm run smoke:odds-api -- --match-id ${{ inputs.match_id }} $SK 2>&1 | sed -E "$MASK"
+          elif [ -n "${{ inputs.sport_key }}" ]; then
+            # Sonda gratuita: trova l'id giusto per una lega fuori mappa.
+            npm run odds:find -- --sonda ${{ inputs.sport_key }} 2>&1 | sed -E "$MASK"
           else
-            npm run smoke:odds-api -- --match-id ${{ inputs.match_id }} 2>&1 \
-              | sed -E 's#(postgres(ql)?://)[^[:space:]"'"'"']*#\1<redacted>#g'
+            npm run odds:find -- --ore ${{ inputs.ore }} 2>&1 | sed -E "$MASK"
           fi
 

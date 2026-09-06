@@ -126,6 +126,50 @@ async function main(): Promise<void> {
     return;
   }
 
+  /* Sonda gratuita: per una chiave sport scelta a mano (anche fuori dalla
+     mappa di budget) confronta TUTTE le partite in archivio con gli eventi
+     della fonte e stampa il comando pronto. Serve a verificare l'infrastruttura
+     su una lega reale minore senza toccare la mappa di produzione. 0 crediti. */
+  const sonda = argument("--sonda");
+  if (sonda !== null) {
+    if (apiKey === null) {
+      console.error("SONDA NON ESEGUITA — serve la chiave (endpoint gratuito ma autenticato).");
+      process.exitCode = 2;
+      return;
+    }
+    const outcome = await fetchOddsApiEvents({ sportKey: sonda, apiKey: apiKey! });
+    if (!outcome.result.ok) {
+      console.error(`SONDA NON CONCLUSA — ${outcome.result.error.message}`);
+      process.exitCode = 1;
+      return;
+    }
+    const events = outcome.result.data;
+    console.log(`\nSONDA su [${sonda}]: ${events.length} eventi dalla fonte — crediti: ${outcome.creditsUsed ?? "non dichiarati"}`);
+    let found = 0;
+    for (const row of candidates) {
+      if (row.homeTeamName === null || row.awayTeamName === null) continue;
+      if (row.kickoffAt.getTime() <= now.getTime()) continue;
+      const diagnosis = diagnoseEventMatch(
+        { matchId: row.id, homeTeam: row.homeTeamName, awayTeam: row.awayTeamName, kickoffAt: row.kickoffAt },
+        events,
+      );
+      const head = `  #${String(row.id).padEnd(6)} ${romeTime.format(row.kickoffAt)}  ${row.homeTeamName} — ${row.awayTeamName}  [${row.leagueName}]`;
+      if (diagnosis.status === "unico") {
+        found += 1;
+        console.log(`${head}\n          OK — ${describeDiagnosis(diagnosis)}`);
+        console.log(`          comando: npm run smoke:odds-api -- --match-id ${row.id} --sport-key ${sonda}`);
+      } else {
+        console.log(`${head}\n          ${diagnosis.status}`);
+      }
+    }
+    console.log(`\ncrediti spesi dalla sonda: ${outcome.creditsUsed ?? 0}`);
+    if (found === 0) {
+      console.error("NESSUNA PARTITA DELL'ARCHIVIO COMBACIA CON QUESTA CHIAVE SPORT.");
+      process.exitCode = 3;
+    }
+    return;
+  }
+
   const readable = candidates.filter((c) => c.resolution.ok);
   const skipped = candidates.filter((c) => !c.resolution.ok);
 

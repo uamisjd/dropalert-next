@@ -262,5 +262,22 @@ test("stato inatteso parte lo stesso ma lo dichiara", () => {
   }
 });
 
+test("lega fuori mappa: rifiutata senza override, leggibile con chiave esplicita", () => {
+  const scotland = { ...row, leagueName: "Scotland: Premiership" };
+  const senza = resolveSmokeMatch(scotland, new Date("2026-09-10T12:00:00.000Z"));
+  assert(!senza.ok, "senza override la mappa di produzione rifiuta");
+
+  const con = resolveSmokeMatch(
+    scotland,
+    new Date("2026-09-10T12:00:00.000Z"),
+    "soccer_scotland_premiership",
+  );
+  assert(con.ok, "con override esplicito è leggibile");
+  if (con.ok) {
+    assert(con.params.sportKey === "soccer_scotland_premiership", "chiave esplicita usata");
+    assert(con.notes.some((n) => n.includes("fuori dalla mappa")), "l'override è dichiarato");
+  }
+});
+
 console.log(`\n${"─".repeat(60)}\nTest superati: ${passed} | falliti: ${failed}\n${"─".repeat(60)}\n`);
 if (failed > 0) process.exit(1);

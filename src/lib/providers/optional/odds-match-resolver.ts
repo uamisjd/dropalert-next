@@ -245,7 +245,11 @@ const NON_PLAYABLE = new Set(["finished", "postponed", "cancelled"]);
  * kickoff già passato, squadre mancanti. Confondere i due porta a spegnere una
  * fonte sana.
  */
-export function resolveSmokeMatch(row: DbMatchRow, now: Date): SmokeResolution {
+export function resolveSmokeMatch(
+  row: DbMatchRow,
+  now: Date,
+  overrideSportKey: string | null = null,
+): SmokeResolution {
   const kickoffAt = row.kickoffAt instanceof Date ? row.kickoffAt : new Date(row.kickoffAt);
   if (Number.isNaN(kickoffAt.getTime())) {
     return { ok: false, reason: "kickoff non interpretabile nel database." };
@@ -266,7 +270,10 @@ export function resolveSmokeMatch(row: DbMatchRow, now: Date): SmokeResolution {
     return { ok: false, reason: "nomi delle squadre mancanti nel database." };
   }
 
-  const sportKey = sportKeyFor(row.leagueName);
+  /* La chiave sport arriva dalla mappa di budget, a meno che lo smoke test non
+     ne passi una esplicita per verificare una competizione fuori mappa. In
+     produzione il override non esiste: la mappa resta l'unica autorità. */
+  const sportKey = overrideSportKey ?? sportKeyFor(row.leagueName);
   if (sportKey === null) {
     return {
       ok: false,
@@ -277,6 +284,11 @@ export function resolveSmokeMatch(row: DbMatchRow, now: Date): SmokeResolution {
   const notes: string[] = [];
   if (row.status !== "scheduled") {
     notes.push(`stato partita "${row.status}" (atteso "scheduled"): la lettura parte lo stesso.`);
+  }
+  if (overrideSportKey !== null) {
+    notes.push(
+      `chiave sport "${overrideSportKey}" fornita manualmente: competizione fuori dalla mappa di budget (solo verifica).`,
+    );
   }
 
   return {
