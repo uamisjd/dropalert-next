@@ -338,3 +338,30 @@ reale, contatori e snapshot sul percorso di produzione, su un campionato
 coperto *vero* (nome e orario presi dalla fonte). Cosa non dimostra: che la
 partita fosse già in archivio, cioè che il collettore BetExplorer l'avesse
 vista — per quello resta valido il lancio con archivio popolato.
+
+## 14. Esito della lettura di controllo con ripiego (06/09/2026)
+
+Run `34039039441` (workflow *Verifica dati reali (manuale)*, `which=control`,
+marcatore `MARKER-CONTROL-READ-v2`), finestra 72 h.
+
+- Archivio vuoto sul turno corrente → ripiego dalla fonte.
+- `[soccer_italy_serie_a]` 16 eventi in programma dalla fonte.
+- Partita scelta: **Bologna — Sassuolo**, dom 06/09 18:00 (ora italiana);
+  id evento `60776ba6c26557c9c5e6a34ae72e2ec8`, id sintetico `-1618439078`.
+- Percorso: `getSharpLine` (budget → mappa → decisione → lettura → contatori).
+- Budget dopo la lettura: mese **7/490**, oggi **3** (quota odierna 14).
+- ESITO: **linea sharp letta sul percorso di produzione** — book sharp
+  `pinnacle`, prezzo `1.95` (1x2/home), book osservati 24.
+- Verdetto: «non osservabile» — atteso e dichiarato: la lettura di controllo
+  passa consensus null (la partita non esiste in archivio, il sito non ha una
+  sua linea di consenso da confrontare). In produzione, con la partita in
+  archivio, il verdetto torna osservabile; il contratto price-evidence resta
+  l'autorità sul NO BET.
+- Costo: 1 credito (la scelta dalla fonte è gratuita).
+
+Cosa dimostra: il mapping della Serie A sulla fonte, la decisione di budget,
+il matching sui nomi reali della fonte, la lettura reale, l'incremento dei
+contatori in `system_state` e la scrittura della fotografia — tutto sul
+percorso di produzione, su un campionato coperto vero. Con questo esito il
+piano autorizza la PR di attivazione controllata (interruttore env, default
+spento), da mergiare solo con check verdi e ok esplicito.

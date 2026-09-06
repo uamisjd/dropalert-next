@@ -76,6 +76,11 @@ Stato reale:
   partita coperta dall'endpoint gratuito `/events` (id sintetico negativo) e
   legge comunque via `getSharpLine` (1 credito). Codice in
   `src/lib/repo/control-fallback.ts` + script; docs §13 di SMOKE-THE-ODDS-API.
+- **Lettura di controllo coperta VERDE** (run `34039039441`, 06/09/2026):
+  Bologna—Sassuolo da `soccer_italy_serie_a`, sharp `pinnacle 1.95`, 24 book,
+  budget 7/490 mese; verdetto «non osservabile» atteso (consensus null nel
+  controllo). Dettagli in SMOKE §14. Con questo esito è autorizzata la PR di
+  attivazione controllata (interruttore env già nel ramo, default spento).
 - Non aggiungere dati, Kelly, stake, +EV o «giocata consigliata» per riempire una
   lista. La calcolatrice manuale è separata dalla decisione e non va collegata al
   flusso operativo.

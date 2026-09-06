@@ -9,10 +9,11 @@
 
 ## 0. Stato in una riga
 
-Il provider è **SPENTO** (`ADAPTER_IMPLEMENTED` default off). L'infrastruttura è
-verificata su dati reali (1 credito); il percorso di produzione sui campionati
-coperti attende una lettura di controllo quando entra il prossimo turno.
-Nessuna PR di attivazione è aperta; nessun merge è stato fatto.
+Il provider è **SPENTO** (`ADAPTER_IMPLEMENTED` default off). Infrastruttura e
+percorso di produzione verificati su dati reali: smoke 1 credito (run
+`34036327654`) e lettura di controllo coperta con ripiego dalla fonte verde
+(run `34039039441`, Bologna—Sassuolo, pinnacle 1.95). Resta: mergiare la PR
+degli strumenti con check verdi + ok, poi i flag su Vercel.
 
 ---
 
@@ -115,9 +116,12 @@ Poi aprire/mergiare la PR di attivazione solo con «Verifica» verde.
 - [x] Interruttore di attivazione env-ready (default off).
 - [x] Lettura di controllo con ripiego dalla fonte (`which=control`): eseguibile
   ogni giorno su campionato coperto, anche con archivio vuoto.
-- [ ] **Lettura di controllo coperta verde** (lanciare ora; 1 credito).
-- [ ] PR separata di attivazione (da ramo nuovo, dopo merge strumenti).
-- [ ] Merge attivazione solo con check verdi + ok umano; flag su Vercel.
+- [x] **Lettura di controllo coperta verde** (run `34039039441`:
+  Bologna—Sassuolo, sharp `pinnacle 1.95`, 24 book, 1 credito).
+- [ ] PR strumenti/attivazione dal ramo di sessione: merge solo con «Verifica»
+  verde + ok umano.
+- [ ] Flag Vercel `ODDS_ADAPTER_IMPLEMENTED=true` (con `ODDS_API_ENABLED` e
+  chiave già presente) solo dopo il merge e l'ok.
 
 Quando il punto 4 sarà verde, l'agente prepara da solo la PR di attivazione e
 la lascia aperta; il merge e i flag restano all'umano.
