@@ -58,9 +58,15 @@ Stato reale:
   partita con `getMatchDetail` + `executablePriceFromSeries` e dichiara se esiste
   una linea individuale fresca. L'esecuzione è manuale anche da GitHub Actions
   (workflow `Smoke The Odds API`), dove `DATABASE_URL` è già un secret: la
-  procedura completa è in `docs/SMOKE-THE-ODDS-API.md`. **Lo smoke test live non è
-  ancora stato eseguito**: né la chiave né il database sono raggiungibili
-  dall'ambiente di sviluppo, quindi il provider resta SPENTO.
+  procedura completa è in `docs/SMOKE-THE-ODDS-API.md`.
+- **Smoke test live ESEGUITO con successo il 06/09/2026** (run `34036327654`): su
+  `#569 Hearts — Dundee FC` (`soccer_spl`, override fuori mappa) ha letto 54 quote
+  da 18 bookmaker (1 credito), scritto 54 snapshot in `odds_snapshots` e verificato
+  linee individuali fresche (età 0 min). Dettagli e limiti in
+  `docs/SMOKE-THE-ODDS-API.md` §11. **Non valida il percorso di produzione sui
+  campionati coperti** (nessuna partita coperta aveva quote vive oggi) e **non
+  accende il provider**: `ADAPTER_IMPLEMENTED` resta `false`; l'attivazione è una
+  PR separata e controllata.
 - Non aggiungere dati, Kelly, stake, +EV o «giocata consigliata» per riempire una
   lista. La calcolatrice manuale è separata dalla decisione e non va collegata al
   flusso operativo.

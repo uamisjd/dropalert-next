@@ -256,3 +256,23 @@ ancora dentro la finestra. Due strade, in ordine di preferenza:
 Allargare l'orizzonte aumenta le righe lette da BetExplorer in **un solo giro**;
 non cambia il budget di The Odds API, che resta governato da
 `odds-api-budget.ts` (lo smoke test costa 1 credito in tutto).
+
+## 11. Esito del primo smoke test live (06/09/2026)
+
+Eseguito su GitHub Actions (run `34036327654`) contro una partita **vera** già
+in archivio e presente sulla fonte: `#569 Hearts — Dundee FC`
+(`Scotland: Premiership`, chiave `soccer_spl` fornita come override perché fuori
+dalla mappa di budget). Costo totale: **1 credito** (pre-check gratuito + una
+lettura h2h×eu).
+
+| Gate | Risultato osservato |
+|---|---|
+| Chiamata reale | riuscita: 54 quote su 18 bookmaker |
+| Matching | evento unico, kickoff 2026-09-06T14:00Z verificato entro la tolleranza |
+| Persistenza | 54 snapshot in `odds_snapshots`, 0 duplicati, 18 anagrafiche bookmaker |
+| Freshness | linee individuali eseguibili (es. home 1.470 da `betfair_ex_eu`), età 0 min < soglia 90 |
+
+Cosa **non** dimostra: non valida il percorso di produzione sui campionati
+coperti (Serie A, EPL, …), che oggi non avevano partite con quote vive; quella
+verifica va fatta quando il prossimo turno entra nei movimenti. Non accende il
+provider: `ADAPTER_IMPLEMENTED` resta `false` e l'attivazione è una PR separata.
