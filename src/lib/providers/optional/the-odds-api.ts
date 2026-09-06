@@ -25,10 +25,16 @@ import {
 const KEY = "the-odds-api";
 
 /**
- * Resta false fino allo smoke test reale: i test fixture non dimostrano
- * raggiungibilità, quota residua né scrittura nel database di produzione.
+ * Interruttore di attivazione controllata.
+ *
+ * Resta `false` di default: una capacità prevista non deve comparire come
+ * disponibile. Diventa `true` solo impostando `ODDS_ADAPTER_IMPLEMENTED=true`
+ * nell'ambiente, dopo che lo smoke test live è riuscito (06/09/2026, run
+ * `34036327654`: chiamata reale, matching, 54 snapshot in `odds_snapshots`,
+ * freshness verificata). Senza il flag, il comportamento è identico a prima:
+ * l'adapter risponde `unsupported` e non dichiara quote per bookmaker.
  */
-export const ADAPTER_IMPLEMENTED = false;
+export const ADAPTER_IMPLEMENTED = envFlag("ODDS_ADAPTER_IMPLEMENTED", false);
 
 /** Il flag e la chiave accendono la fonte; la capacità resta però falsa finché l'adapter non è dichiarato implementato. */
 export function theOddsApiEnabled(): boolean {
@@ -90,8 +96,8 @@ export function createTheOddsApiProvider(): OddsProvider {
         detail: !enabled
           ? "Disattivata: servono ODDS_API_ENABLED=true e una chiave valida."
           : !ADAPTER_IMPLEMENTED
-            ? "Flag e chiave presenti, ma adapter in attesa di smoke test live e ingest persistente."
-            : "Fonte abilitata: smoke test live e persistenza ancora da verificare.",
+            ? "Flag e chiave presenti, ma adapter non dichiarato implementato: imposta ODDS_ADAPTER_IMPLEMENTED=true solo dopo uno smoke test live riuscito."
+            : "Adapter dichiarato implementato: letture per bookmaker governate dal budget in odds-api-budget.ts.",
         checkedAt: new Date(),
       };
     },
