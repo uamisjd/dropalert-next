@@ -5,6 +5,11 @@
 > fermasse. Queste regole esistono perché non riaccada. Sono corte e precise:
 > leggile prima di ogni push.
 
+> **Per The Odds API** (fonte a pagamento, provider spento): le regole specifiche
+> — chi fa cosa fra agente e umano, costi per azione, attivazione controllata —
+> stanno in `docs/REGOLE-OPERATIVE-ODDS.md`. Leggere anch'esse prima di toccare
+> quote, budget o attivazione.
+
 ## 1. Branch e merge
 
 - Lavora **solo sul ramo di sessione** (es. `arena/…`), mai direttamente su

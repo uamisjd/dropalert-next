@@ -1,0 +1,96 @@
+# Smoke test live di The Odds API — esecuzione manuale, mai schedulata.
+#
+# PERCHÉ ESISTE: il gate finale del provider è una chiamata reale con chiave
+# vera e database raggiungibile. Non può stare in `validate.yml` (che gira a
+# ogni PR e non deve toccare la fonte né spendere crediti) e non può stare nel
+# giro di raccolta (il provider è SPENTO: `ADAPTER_IMPLEMENTED = false`).
+#
+# PERCHÉ SU GITHUB ACTIONS: `DATABASE_URL` è già un secret di questo
+# repository ed è usato dal giro di osservazione, quindi il database reale è
+# raggiungibile da qui senza installare nulla in locale e senza che la chiave
+# passi mai da una chat o da un file.
+#
+# COSTI: "trova-partita" usa l'endpoint /events, che la fonte dichiara fuori
+# quota: 0 crediti. "smoke-test" fa UNA chiamata a 1 mercato × 1 regione:
+# 1 credito. Il budget mensile dichiarato in `odds-api-budget.ts` è 490.
+#
+# Due esecuzioni, non una: prima si individua la partita leggibile, poi si
+# spende il credito solo su quella.
+
+name: Smoke The Odds API
+
+on:
+  workflow_dispatch:
+    inputs:
+      modalita:
+        description: "trova-partita = 0 crediti · smoke-test = 1 credito"
+        type: choice
+        required: true
+        default: trova-partita
+        options:
+          - trova-partita
+          - smoke-test
+      match_id:
+        description: "Solo per smoke-test: id partita scelto col passo precedente"
+        required: false
+        default: ""
+      ore:
+        description: "Solo per trova-partita: finestra di ricerca in ore"
+        required: false
+        default: "48"
+
+# Una esecuzione alla volta: due smoke test in parallelo spenderebbero due
+# crediti sulla stessa partita e scriverebbero snapshot duplicati.
+concurrency:
+  group: dropalert-smoke-odds
+  cancel-in-progress: false
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      # Database reale (Neon), lo stesso del giro di osservazione.
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      # Si accetta qualunque grafia già in uso: se la chiave sta su Vercel come
+      # `theoddsapiKey`, basta ricrearla qui con lo stesso nome. Nessuna chiave
+      # viene stampata: il codice legge le variabili e non le logga.
+      THE_ODDS_API_KEY: ${{ secrets.THE_ODDS_API_KEY || secrets.ODDS_API_KEY || secrets.theoddsapiKey || secrets.THEODDSAPIKEY }}
+    steps:
+      - name: Variabili presenti?
+        run: |
+          if [ -z "$DATABASE_URL" ]; then
+            echo "MANCA IL SECRET DATABASE_URL: senza database lo smoke test non può scrivere."
+            exit 1
+          fi
+          if [ -z "$THE_ODDS_API_KEY" ]; then
+            echo "MANCA LA CHIAVE DI THE ODDS API."
+            echo "Crea un secret di repository chiamato THE_ODDS_API_KEY (Settings → Secrets and variables → Actions)."
+            echo "Se la chiave esiste già su Vercel come theoddsapiKey, copia quel valore: è la stessa chiave."
+            exit 1
+          fi
+          echo "DATABASE_URL presente, chiave presente."
+
+      - name: Parametri coerenti?
+        run: |
+          if [ "${{ inputs.modalita }}" = "smoke-test" ] && [ -z "${{ inputs.match_id }}" ]; then
+            echo "Per lo smoke-test serve il campo match_id."
+            echo "Esegui prima questa stessa workflow con modalita=trova-partita: stampa gli id utilizzabili."
+            exit 1
+          fi
+
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Installazione dipendenze
+        run: npm ci
+
+      - name: Trova partita leggibile (0 crediti)
+        if: inputs.modalita == 'trova-partita'
+        run: npm run odds:find -- --ore ${{ inputs.ore }}
+
+      - name: Smoke test live (1 credito)
+        if: inputs.modalita == 'smoke-test'
+        run: npm run smoke:odds-api -- --match-id ${{ inputs.match_id }}

@@ -48,9 +48,39 @@ Stato reale:
   squadre/kickoff e DTO per-bookmaker con fixture testabili. Esiste anche il
   percorso esplicito `collectAndPersistTheOddsApiOdds` verso `odds_snapshots`.
   `ADAPTER_IMPLEMENTED` resta però `false`: manca ancora lo smoke test con chiave
-  reale e database raggiungibile; nessuna attivazione è stata simulata. Lo smoke
-  test manuale è `npm run smoke:odds-api`: richiede variabili temporanee per una
-  partita reale, consuma un credito e scrive solo snapshot nella partita indicata.
+  reale e database raggiungibile; nessuna attivazione è stata simulata.
+- **Aggiornamento 2026-09-06 (dopo PR #21)**: lo smoke test non richiede più sei
+  variabili scritte a mano. `npm run odds:find` individua le partite leggibili
+  usando l'endpoint `/v4/sports/{sport}/events`, che la documentazione della fonte
+  dichiara **fuori quota** (0 crediti); `npm run smoke:odds-api -- --match-id <id>`
+  deriva sport, fixture, squadre e orario dall'archivio, fa un pre-check gratuito
+  di matching e solo allora spende **1 credito**. Dopo la scrittura rilegge la
+  partita con `getMatchDetail` + `executablePriceFromSeries` e dichiara se esiste
+  una linea individuale fresca. L'esecuzione è manuale anche da GitHub Actions
+  (workflow `Smoke The Odds API`), dove `DATABASE_URL` è già un secret: la
+  procedura completa è in `docs/SMOKE-THE-ODDS-API.md`.
+- **Smoke test live ESEGUITO con successo il 06/09/2026** (run `34036327654`): su
+  `#569 Hearts — Dundee FC` (`soccer_spl`, override fuori mappa) ha letto 54 quote
+  da 18 bookmaker (1 credito), scritto 54 snapshot in `odds_snapshots` e verificato
+  linee individuali fresche (età 0 min). Dettagli e limiti in
+  `docs/SMOKE-THE-ODDS-API.md` §11. **Non valida il percorso di produzione sui
+  campionati coperti** (nessuna partita coperta aveva quote vive oggi) e **non
+  accende il provider**: `ADAPTER_IMPLEMENTED` resta `false`; l'attivazione è una
+  PR separata e controllata.
+- **Regole operative e divisione del lavoro** (chi fa cosa fra agente e umano,
+  limiti dei permessi, costi per azione, checklist «cosa facciamo adesso»):
+  `docs/REGOLE-OPERATIVE-ODDS.md`. È il documento di regia da leggere prima di
+  qualunque intervento su The Odds API.
+- **Ripiego «dalla fonte» della lettura di controllo** (06/09/2026): se
+  l'archivio BetExplorer è vuoto sul turno corrente, `which=control` sceglie la
+  partita coperta dall'endpoint gratuito `/events` (id sintetico negativo) e
+  legge comunque via `getSharpLine` (1 credito). Codice in
+  `src/lib/repo/control-fallback.ts` + script; docs §13 di SMOKE-THE-ODDS-API.
+- **Lettura di controllo coperta VERDE** (run `34039039441`, 06/09/2026):
+  Bologna—Sassuolo da `soccer_italy_serie_a`, sharp `pinnacle 1.95`, 24 book,
+  budget 7/490 mese; verdetto «non osservabile» atteso (consensus null nel
+  controllo). Dettagli in SMOKE §14. Con questo esito è autorizzata la PR di
+  attivazione controllata (interruttore env già nel ramo, default spento).
 - Non aggiungere dati, Kelly, stake, +EV o «giocata consigliata» per riempire una
   lista. La calcolatrice manuale è separata dalla decisione e non va collegata al
   flusso operativo.

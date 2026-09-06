@@ -18,6 +18,20 @@ on:
           - value
           - finished
           - both
+          - smoke-odds
+          - control
+      match_id:
+        description: "Solo per smoke-odds: id partita. Vuoto = ricerca partita (0 crediti)"
+        required: false
+        default: ""
+      ore:
+        description: "Solo per smoke-odds senza match_id: finestra di ricerca in ore (72 = tutto l'archivio)"
+        required: false
+        default: "72"
+      sport_key:
+        description: "smoke-odds: chiave per lega FUORI mappa (es. soccer_spl). control: limita il ripiego dalla fonte a una chiave coperta (es. soccer_italy_serie_a). Vuoto = automatico"
+        required: false
+        default: ""
 
 concurrency:
   group: dropalert-audit
@@ -30,6 +44,10 @@ jobs:
 
     env:
       DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      # Accettata con qualunque grafia già in uso: se la chiave sta su Vercel
+      # come `theoddsapiKey` basta ricrearla qui con lo stesso nome. Il valore
+      # non viene mai stampato.
+      THE_ODDS_API_KEY: ${{ secrets.THE_ODDS_API_KEY || secrets.ODDS_API_KEY || secrets.theoddsapiKey || secrets.THEODDSAPIKEY }}
 
     steps:
       - name: Codice
@@ -54,6 +72,7 @@ jobs:
       # Gli script non stampano la connection string, ma se il client fallisce
       # l'errore di `postgres` la include nell'message: si maschera in uscita.
       - name: Sguardo sui dati (read-only)
+        if: inputs.which != 'smoke-odds' && inputs.which != 'control'
         run: |
           status=0
           run_one() {
@@ -72,3 +91,64 @@ jobs:
             *) run_one audit:value-bets; run_one audit:finished ;;
           esac
           exit $status
+
+      # Smoke test di The Odds API. Sta in questa workflow perché condivide
+      # l'unica cosa che serve davvero: il database reale raggiungibile da qui.
+      # Senza match_id cerca la partita (endpoint fuori quota, 0 crediti);
+      # con match_id esegue la lettura vera (1 credito). Vedi
+      # docs/SMOKE-THE-ODDS-API.md.
+      - name: Smoke The Odds API
+        if: inputs.which == 'smoke-odds'
+        run: |
+          echo "MARKER-SMOKE-ODDS-BRANCH-v1"
+          if [ -z "$THE_ODDS_API_KEY" ]; then
+            echo "::error::Chiave The Odds API assente fra i secrets (THE_ODDS_API_KEY / ODDS_API_KEY / theoddsapiKey)."
+            exit 1
+          fi
+          MASK='s#(postgres(ql)?://)[^[:space:]"'"'"']*#\1<redacted>#g'
+          if [ -n "${{ inputs.match_id }}" ]; then
+            SK=""; [ -n "${{ inputs.sport_key }}" ] && SK="--sport-key ${{ inputs.sport_key }}"
+            npm run smoke:odds-api -- --match-id ${{ inputs.match_id }} $SK 2>&1 | sed -E "$MASK"
+          elif [ -n "${{ inputs.sport_key }}" ]; then
+            # Sonda gratuita: trova l'id giusto per una lega fuori mappa.
+            npm run odds:find -- --sonda ${{ inputs.sport_key }} 2>&1 | sed -E "$MASK"
+          else
+            npm run odds:find -- --ore ${{ inputs.ore }} 2>&1 | sed -E "$MASK"
+          fi
+
+      # Lettura di controllo sul PERCORSO DI PRODUZIONE (getSharpLine) per un
+      # campionato coperto: budget → mappa → decisione → lettura reale →
+      # contatori in system_state. Se l'archivio ha il turno, legge da lì;
+      # altrimenti il ripiego sceglie la partita dall'endpoint GRATUITO
+      # /events sulle chiavi coperte (1 credito la lettura). Con
+      # --solo-archivio non spende nulla. Vedi docs/SMOKE-THE-ODDS-API.md.
+      - name: Lettura di controllo (produzione)
+        if: inputs.which == 'control'
+        run: |
+          echo "MARKER-CONTROL-READ-v2"
+          MASK='s#(postgres(ql)?://)[^[:space:]"'"'"']*#\1<redacted>#g'
+          if [ -z "$THE_ODDS_API_KEY" ]; then
+            echo "::error::Chiave The Odds API assente fra i secrets."
+            exit 1
+          fi
+          EXTRA=""
+          if [ -n "${{ inputs.sport_key }}" ]; then EXTRA="--sport-key ${{ inputs.sport_key }}"; fi
+          # shellcheck disable=SC2086
+          set +e
+          npm run odds:control -- --ore ${{ inputs.ore }} $EXTRA 2>&1 | tee /tmp/control.log | sed -E "$MASK"
+          code=${PIPESTATUS[0]}
+          set -e
+          # I log grezzi non sono scaricabili da fuori: l'esito viene fissato
+          # nel Summary del run e nelle annotazioni, così è leggibile dalla UI
+          # senza aprire il log del passo.
+          {
+            echo "## Lettura di controllo — esito"
+            echo '```'
+            grep -E "MARKER|origine|lega:|chiave sport|id evento|percorso:|ESITO|book sharp|prezzo|verdetto|book osservati|letti alle|  mese|  oggi|Crediti spesi|NESSUNA|RIPIEGO|ATTENZIONE" /tmp/control.log | sed -E "$MASK" || true
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          while IFS= read -r line; do
+            echo "::notice::$(echo "$line" | sed -E "$MASK")"
+          done < <(grep -E "ESITO|Crediti spesi|origine" /tmp/control.log | head -4)
+          exit "$code"
+

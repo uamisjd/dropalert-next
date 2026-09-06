@@ -49,6 +49,17 @@ const EXCLUDE = /\b(women|femminile|u1[5-9]|u2[0-3]|riserve|reserves|youth|prima
 const COPPA_TRAVESTITA = /\b(cup|coppa|trophy|shield|playoff|play-off|qualifying)\b/i;
 
 /**
+ * Le coppe UEFA hanno una chiave propria, ma il nome «Champions League» da
+ * solo non basta: esiste anche la CAF Champions League (Africa), la AFC
+ * Champions League (Asia) e così via. La fonte non le espone con la chiave
+ * UEFA, quindi una partita di una confederazione extra-europea che porta quel
+ * nome NON è leggibile e non deve spendere un credito. Si riconoscono le
+ * confederazioni non-UEFA dal nome del torneo.
+ */
+const NON_UEFA_CONFED =
+  /\b(caf|afc|concacaf|conmebol|ofc|africa|asia|south america|north america|central america|caribbean|world|global)\b/i;
+
+/**
  * Chiave sport della competizione, o `null` se non è coperta.
  * `null` significa: non spendere un credito per questa partita.
  */
@@ -61,6 +72,7 @@ export function sportKeyFor(league: string | null): string | null {
     /* le coppe UEFA hanno una voce dedicata e vanno bene così; per tutte le
        altre, se il nome dice «cup» non è il campionato che abbiamo mappato */
     const isUefa = row.sportKey.startsWith("soccer_uefa");
+    if (isUefa && NON_UEFA_CONFED.test(name)) return null;
     if (!isUefa && COPPA_TRAVESTITA.test(name)) return null;
     return row.sportKey;
   }
@@ -70,3 +82,9 @@ export function sportKeyFor(league: string | null): string | null {
 /** Competizioni coperte, per il pannello: si dichiara dove si spende. */
 export const COVERED_LABEL =
   "Serie A e B, Premier League e Championship, Liga, Bundesliga, Ligue 1, Eredivisie, Primeira Liga e coppe UEFA maschili";
+
+/** Chiavi sport coperte, nello stesso ordine della mappa (Serie A prima).
+ *  Serve al ripiego «dalla fonte» della lettura di controllo: interrogare
+ *  l'endpoint gratuito `/events` solo sui tornei dove una lettura costa un
+ *  credito sensato. */
+export const COVERED_SPORT_KEYS: readonly string[] = MAP.map((row) => row.sportKey);
