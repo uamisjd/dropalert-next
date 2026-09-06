@@ -9,11 +9,16 @@
 
 ## 0. Stato in una riga
 
-Il provider è **SPENTO** (`ADAPTER_IMPLEMENTED` default off). Infrastruttura e
-percorso di produzione verificati su dati reali: smoke 1 credito (run
-`34036327654`) e lettura di controllo coperta con ripiego dalla fonte verde
-(run `34039039441`, Bologna—Sassuolo, pinnacle 1.95). Resta: mergiare la PR
-degli strumenti con check verdi + ok, poi i flag su Vercel.
+Il provider è **ATTIVO in produzione** dal 06/09/2026: PR #21 (fondamenta
+odds) e #22 (attivazione controllata) mergiate su `main` con «Verifica» verde;
+`ODDS_API_ENABLED=true` + `ODDS_ADAPTER_IMPLEMENTED=true` impostati su Vercel
+Production e verificati via `/api/health` (the-odds-api enabled,
+perBookmakerOdds true). Budget all'attivazione: 7/490 mese, 3/14 giorno.
+L'adapter **non è cablato nel ciclo di raccolta**: i soli percorsi che
+spendono crediti sono `getSharpLine` dalla scheda partita (solo segnali
+attivi su leghe coperte, 1 lettura/partita/giorno, hard-stop in
+`odds-api-budget.ts`) e gli script manuali smoke/lettura di controllo.
+Rollback: togliere i due flag su Vercel + redeploy.
 
 ---
 
@@ -62,7 +67,7 @@ degli strumenti con check verdi + ok, poi i flag su Vercel.
 
 ---
 
-## 3. Mappa degli strumenti (tutti sul ramo di sessione)
+## 3. Mappa degli strumenti (tutti su `main` da PR #21/#22)
 
 | Strumento | Comando / workflow | Costo | A cosa serve |
 |---|---|---|---|
@@ -71,17 +76,18 @@ degli strumenti con check verdi + ok, poi i flag su Vercel.
 | Smoke test | `smoke:odds-api -- --match-id N [--sport-key K]` · `which=smoke-odds`+`match_id` | 1 | chiamata+matching+persistenza+freshness |
 | Lettura di controllo | `odds:control` · `which=control` (+`sport_key` facoltativo) | 0 o 1 | percorso di produzione su lega coperta; archivio vuoto → ripiego dalla fonte (§13 SMOKE) |
 
-Workflow usata: **Verifica dati reali (manuale)** (esiste su `main`, quindi
-lanciabile; la modalità gira dal ramo). Branch: `arena/01a07663-dropalert-next`.
+Tutto quanto sopra è **mergiato su `main`** con PR #21 e #22: la workflow
+*Verifica dati reali (manuale)* si lancia da `main`. Il ramo di sessione serve
+solo per il lavoro nuovo.
 
 ---
 
 ## 4. Procedure clic-per-clic (per l'umano)
 
-### 4.1 Lettura di controllo (eseguibile OGNI giorno, anche oggi)
+### 4.1 Lettura di controllo (eseguibile OGNI giorno)
 1. Actions → *Verifica dati reali (manuale)* → Run workflow.
-2. Branch `arena/01a07663-dropalert-next`; `which = control`; `ore = 168`;
-   facoltativo `sport_key = soccer_italy_serie_a` per mirare il ripiego.
+2. Branch `main`; `which = control`; `ore = 168`; facoltativo
+   `sport_key = soccer_italy_serie_a` per mirare il ripiego.
 3. Con il turno in archivio legge da lì; con archivio vuoto il **ripiego dalla
    fonte** sceglie la partita coperta in programma (endpoint gratuito, 0
    crediti) ed esegue la lettura di produzione (1 credito). Se stampa la linea
@@ -118,10 +124,14 @@ Poi aprire/mergiare la PR di attivazione solo con «Verifica» verde.
   ogni giorno su campionato coperto, anche con archivio vuoto.
 - [x] **Lettura di controllo coperta verde** (run `34039039441`:
   Bologna—Sassuolo, sharp `pinnacle 1.95`, 24 book, 1 credito).
-- [ ] PR strumenti/attivazione dal ramo di sessione: merge solo con «Verifica»
+- [x] PR strumenti/attivazione: #21 e #22 mergiate su `main` con «Verifica»
   verde + ok umano.
-- [ ] Flag Vercel `ODDS_ADAPTER_IMPLEMENTED=true` (con `ODDS_API_ENABLED` e
-  chiave già presente) solo dopo il merge e l'ok.
+- [x] Flag Vercel `ODDS_API_ENABLED=true` + `ODDS_ADAPTER_IMPLEMENTED=true` +
+  redeploy, verificati via `/api/health` (06/09/2026).
+- [ ] **Osservazione del primo turno acceso** (Serie A 06–07/09): lettura di
+  controllo `which=control` da `main`, contatori giorno/mese coerenti con le
+  letture dichiarate, sito in NO BET senza prezzo individuale fresco.
+- [ ] Valutare dopo qualche giorno `COLLECT_HORIZON_HOURS=168` (variabile
+  GitHub): serve perché l'archivio veda il turno corrente.
 
-Quando il punto 4 sarà verde, l'agente prepara da solo la PR di attivazione e
-la lascia aperta; il merge e i flag restano all'umano.
+Il rollback resta sempre: togliere i due flag su Vercel + redeploy.
