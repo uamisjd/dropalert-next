@@ -24,9 +24,9 @@ on:
         required: false
         default: ""
       ore:
-        description: "Solo per smoke-odds senza match_id: finestra di ricerca in ore"
+        description: "Solo per smoke-odds senza match_id: finestra di ricerca in ore (72 = tutto l'archivio)"
         required: false
-        default: "48"
+        default: "72"
 
 concurrency:
   group: dropalert-audit

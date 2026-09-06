@@ -37,7 +37,9 @@ function argument(name: string): string | null {
   return index >= 0 ? (process.argv[index + 1] ?? null) : null;
 }
 
-const HORIZON_HOURS = Math.max(1, Number(argument("--ore") ?? 48) || 48);
+/* 72 = l'orizzonte con cui il giro di raccolta riempie il database
+   (COLLECT_HORIZON_HOURS): oltre non ci sono righe da leggere. */
+const HORIZON_HOURS = Math.max(1, Number(argument("--ore") ?? 72) || 72);
 const LIMIT = Math.max(1, Math.min(60, Number(argument("--limite") ?? 15) || 15));
 const WITHOUT_SOURCE = process.argv.includes("--senza-fonte");
 
