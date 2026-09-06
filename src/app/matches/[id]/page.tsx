@@ -36,6 +36,7 @@ import { SignalTimeline } from "@/components/SignalTimeline";
 import { MatchSummary } from "@/components/MatchSummary";
 import { MatchQuantPanel } from "@/components/MatchQuantPanel";
 import { normalizedReachabilityScore } from "@/lib/repo/score-view";
+import { STALE_SNAPSHOT_MINUTES } from "@/lib/drop/constants";
 import {
   ND,
   fmtAgo,
@@ -195,11 +196,15 @@ function Metric({
 /** Blocco di una singola serie: grafico + numeri che ne derivano. */
 function SeriesBlock({
   series,
+  quoteAgeMinutes,
   featured = false,
 }: {
   series: MarketSeries;
+  quoteAgeMinutes: number | null;
   featured?: boolean;
 }) {
+  const quoteIsStale =
+    quoteAgeMinutes !== null && quoteAgeMinutes > STALE_SNAPSHOT_MINUTES;
   const hasDistinctPeak =
     series.peak !== null &&
     series.opening !== null &&
@@ -251,9 +256,15 @@ function SeriesBlock({
           }
         />
         <Metric
-          label="Corrente"
+          label={
+            quoteIsStale ? "Ultima rilevazione" : "Corrente"
+          }
           value={fmtPrice(series.current)}
-          hint="Ultima quota rilevata."
+          hint={
+            quoteIsStale
+              ? `Quota osservata ${quoteAgeMinutes} minuti fa: non è una quotazione live.`
+              : "Ultima quota rilevata."
+          }
           emphasis
         />
         <Metric
@@ -697,7 +708,11 @@ export default async function MatchDetailPage({
             ricostruita una serie al posto dei dati mancanti.
           </p>
         ) : (
-          <SeriesBlock series={primarySeries} featured />
+          <SeriesBlock
+            series={primarySeries}
+            quoteAgeMinutes={detail.ageMinutes}
+            featured
+          />
         )}
 
         {secondarySeries.length > 0 ? (
@@ -714,6 +729,7 @@ export default async function MatchDetailPage({
                 <SeriesBlock
                   key={`${series.market}-${series.selection}-${series.bookmakerKey}`}
                   series={series}
+                  quoteAgeMinutes={detail.ageMinutes}
                 />
               ))}
             </div>

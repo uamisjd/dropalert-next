@@ -500,7 +500,7 @@ export function computeConfidence(
     detail:
       coordination.booksTotal >= MIN_BOOKS_FOR_COORDINATION
         ? `${coordination.booksConfirming} bookmaker su ${coordination.booksTotal} si muovono nella stessa direzione (${coordination.booksOpposing} in direzione opposta, ${coordination.booksFlat} fermi).`
-        : `Dati da un solo bookmaker: un movimento isolato non è coordinato.`,
+        : `Dati da una sola linea osservata: la coordinazione fra bookmaker non è verificabile.`,
   });
 
   /* sharp */
@@ -663,7 +663,9 @@ export function buildSummary(
         : `Il movimento è confermato solo da ${coordination.booksConfirming} bookmaker su ${coordination.booksTotal}: coordinazione debole.`,
     );
   } else {
-    parts.push("Il movimento è osservato su un solo bookmaker.");
+    parts.push(
+      "Il movimento è osservato su una sola linea: la concordanza fra bookmaker non è verificabile.",
+    );
   }
 
   if (!sharp.available) {

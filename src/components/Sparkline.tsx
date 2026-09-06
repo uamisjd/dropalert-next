@@ -15,12 +15,16 @@ import {
   buildSparkline,
 } from "@/lib/view/sparkline";
 import { fmtPrice } from "./format";
+import { STALE_SNAPSHOT_MINUTES } from "@/lib/drop/constants";
 
 const TRATTI_NOTE =
   "Ogni pallino è una rilevazione realmente registrata. I tratti che li uniscono sono collegamenti visivi, non quote osservate: fra due rilevazioni il monitor non sa cosa è successo.";
 
 export function Sparkline({ signal }: { signal: DashboardSignal }) {
   const geo = buildSparkline(signal.sparkline);
+  const quoteIsStale =
+    signal.ageMinutes !== null && signal.ageMinutes > STALE_SNAPSHOT_MINUTES;
+  const lastLabel = quoteIsStale ? "ultima rilevazione" : "corrente";
 
   /* meno di due punti: niente grafico, i valori restano in testo */
   if (geo === null) {
@@ -28,7 +32,7 @@ export function Sparkline({ signal }: { signal: DashboardSignal }) {
       <p className="mb-3 rounded border border-dashed border-slate-200 px-3 py-2 text-[11px] leading-relaxed text-slate-500">
         Rilevazioni insufficienti per un andamento ({signal.sparkline.length}{" "}
         {signal.sparkline.length === 1 ? "punto registrato" : "punti registrati"}
-        ): apertura {fmtPrice(signal.openingPrice)}, corrente{" "}
+        ): apertura {fmtPrice(signal.openingPrice)}, {lastLabel}{" "}
         {fmtPrice(signal.currentPrice)}.
       </p>
     );
@@ -50,7 +54,7 @@ export function Sparkline({ signal }: { signal: DashboardSignal }) {
         height={SPARK_HEIGHT}
         preserveAspectRatio="none"
         role="img"
-        aria-label={`Andamento della quota su ${geo.dots.length} rilevazioni: da ${fmtPrice(geo.first.v)} a ${fmtPrice(geo.last.v)}.`}
+        aria-label={`Andamento della quota su ${geo.dots.length} rilevazioni: da ${fmtPrice(geo.first.v)} a ${lastLabel} ${fmtPrice(geo.last.v)}.`}
         className="block w-full"
       >
         <path
@@ -107,7 +111,7 @@ export function Sparkline({ signal }: { signal: DashboardSignal }) {
               </span>
             ) : null}
             <span className="font-medium tabular-nums text-slate-700">
-              corrente {fmtPrice(geo.last.v)}
+              {lastLabel} {fmtPrice(geo.last.v)}
             </span>
           </>
         )}

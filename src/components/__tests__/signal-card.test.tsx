@@ -216,6 +216,24 @@ async function main(): Promise<void> {
     assert(!testo.includes("Il mercato si sta muovendo"), "niente «si sta muovendo»");
   });
 
+  await test("la card non applica tick Betfair a quote di consenso", () => {
+    const testo = container.textContent!.toLowerCase();
+    assert(!/\bticks?\b/.test(testo), "i tick sono riservati agli strumenti exchange");
+  });
+
+  await render(
+    signal({
+      freshness: "partial",
+      ageMinutes: 489,
+      openGaps: 1,
+    }),
+    new Date("2026-08-25T21:00:00.000Z"),
+  );
+  await test("una quota oltre soglia non viene chiamata corrente", () => {
+    const testo = container.textContent!;
+    assert(testo.includes("Ultima rilevazione"), "etichetta storica esplicita");
+  });
+
   console.log(
     `\n${"─".repeat(60)}\nTest superati: ${passed} | falliti: ${failed}\n${"─".repeat(60)}\n`,
   );

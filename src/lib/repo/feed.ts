@@ -80,7 +80,7 @@ export function feedSummary(signal: {
   pezzi.push(
     signal.booksTotal > 1
       ? `Movimento su ${signal.booksConfirming} bookmaker su ${signal.booksTotal}.`
-      : "Movimento su un solo bookmaker.",
+      : "Movimento su una sola linea osservata: concordanza fra bookmaker non verificabile.",
   );
   pezzi.push(FEED_DISCLAIMER);
   return pezzi.join(" ");
