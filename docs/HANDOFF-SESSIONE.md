@@ -13,6 +13,39 @@
 > ora italiana (estate = UTC+2) — non confondere i due, il «giro delle 10:22»
 > è le 12:22 a Napoli.
 
+## Stato decisionale — aggiornamento 2026-09-06
+
+Il progetto è in trasformazione da monitor dei drop a supporto decisionale quantitativo,
+ma **non esiste ancora una giocata operativa verificata**. La specifica vincolante è
+`docs/CONTRATTO-DECISIONALE.md`; il gate puro è in `src/lib/decision/contract.ts` e
+ha test dedicati (`npm run test:decision`).
+
+Stato reale:
+
+- BetExplorer alimenta il monitor con **consenso**, non con quote per singolo
+  bookmaker. Una quota consensus non va chiamata «eseguibile».
+- `/value-bets` misura il divario osservato contro il no-vig della linea completa
+  della stessa fonte. Non è +EV indipendente: ogni riga è marcata `NON AZIONABILE`
+  dal contratto e la UI non mostra Kelly o stake.
+- Il parser The Odds API e il percorso sharp hanno parti pure e una verifica nella
+  scheda partita, ma `src/lib/providers/optional/the-odds-api.ts` resta con
+  `ADAPTER_IMPLEMENTED = false`: non c'è ancora ingest multi-bookmaker operativo
+  per lo scanner.
+- `CANDIDATA` richiederà prezzo reale, fair indipendente, linea completa, freshness,
+  edge e segnali coerenti; `VALORE VERIFICATO` richiederà inoltre campione minimo,
+  out-of-sample, CLV e calibrazione. In assenza di uno di questi requisiti il sito
+  deve dire `NO BET` o `OSSERVAZIONE`, con il motivo.
+- Non aggiungere dati, Kelly, stake, +EV o «giocata consigliata» per riempire una
+  lista. La calcolatrice manuale è separata dalla decisione e non va collegata al
+  flusso operativo.
+
+Prossimo ordine di lavoro: (1) propagare il contratto a tutte le viste che ordinano
+segnali; (2) audit completo della fonte sharp e del matching per partita; (3) persistenza
+di prezzo/book/freshness e fixture stale/parziali/consensus; (4) validazione temporale
+con CLV, calibrazione e intervalli; (5) solo dopo eventuale promozione a valore
+verificato. Prima di dichiarare un adapter disponibile devono esistere chiamata di
+rete, salvataggio e test end-to-end.
+
 ## 1. Cos'è questo progetto (in una frase)
 
 DropAlert è un **terminale quantitativo per scommesse sul calcio**: monitora i

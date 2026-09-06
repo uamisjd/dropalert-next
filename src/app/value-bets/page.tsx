@@ -1,5 +1,5 @@
 /**
- * Pagina /value-bets — divario fra prezzo eseguibile e linea senza margine.
+ * Pagina /value-bets — divario fra prezzo osservato e linea senza margine.
  *
  * Com'era nata: scanner «+EV» con quota fair No-Vig, edge medio, Kelly frazionaria e
  * puntata in euro. Quell'edge si calcolava sul prezzo di APERTURA (non più acquistabile)
@@ -52,10 +52,11 @@ export default async function ValueBetsPage() {
           </h1>
           <p className="mt-3 text-sm leading-relaxed text-slate-300 sm:text-base">
             Per ogni segnale non ancora al kickoff confrontiamo l&apos;ultima lettura del
-            consenso con la linea senza margine (no-vig) dello stesso bookmaker sullo
-            stesso mercato. È la stessa formula con cui nasce la quota fair di chiusura usata
-            per il CLV, quindi le due misure sono comparabili. Il divario può essere
-            negativo e viene mostrato tale: significa che il margine è tutto dentro la quota.
+            consenso con la linea senza margine (no-vig) della stessa fonte sullo stesso
+            mercato. Il divario può essere negativo e viene mostrato tale. Con BetExplorer,
+            però, il consenso non è una quota acquistabile: ogni riga passa dal gate
+            decisionale e resta <strong>NON AZIONABILE</strong> finché non esistono prezzo
+            reale, fair indipendente e validazione.
           </p>
 
           <div className="mt-6 flex flex-wrap gap-3 text-xs">
@@ -80,7 +81,11 @@ export default async function ValueBetsPage() {
               </span>
             </div>
             <div className="rounded-xl border border-white/15 bg-white/5 px-3.5 py-2">
-              <span className="text-slate-400">Metodo: </span>
+              <span className="text-slate-400">Stato: </span>
+              <span className="font-bold text-rose-300">solo osservazione / NO BET</span>
+            </div>
+            <div className="rounded-xl border border-white/15 bg-white/5 px-3.5 py-2">
+            <span className="text-slate-400">Metodo: </span>
               <span className="font-bold text-cyan-300">
                 no-vig proporzionale ({data.method})
               </span>
@@ -109,7 +114,7 @@ export default async function ValueBetsPage() {
         <div className="mb-4 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-xs leading-relaxed text-amber-900">
           <p className="font-semibold">
             Perché la lista è vuota: un divario si calcola solo su una partita non ancora al
-            kickoff, con tutte le selezioni del mercato lette dallo stesso bookmaker alla
+            kickoff, con tutte le selezioni del mercato lette dalla stessa fonte alla
             stessa ora.
           </p>
           <p className="mt-1">
@@ -131,20 +136,20 @@ export default async function ValueBetsPage() {
           <div>
             <h3 className="font-semibold text-slate-800">1. Il divario</h3>
             <p className="mt-1 leading-relaxed">
-              Togliamo il margine dalla linea letta (somma delle probabilità implicata,
-              divisa per se stessa) e confrontiamo il risultato con la quota che si
-              potrebbe eseguire. Se la quota è sotto la linea senza margine, il divario è
-              negativo: è la condizione normale, non un guasto.
+              Togliamo il margine dalla linea osservata (somma delle probabilità implicite,
+              normalizzata a 100%) e confrontiamo il risultato con l&apos;ultima quota letta.
+              Se la quota è sotto la linea senza margine, il divario è negativo: è la
+              condizione normale, non un guasto. Il confronto non è un ordine di esecuzione.
             </p>
           </div>
           <div>
             <h3 className="font-semibold text-slate-800">2. Che cosa non è misurabile qui</h3>
             <p className="mt-1 leading-relaxed">
-              La fonte espone un solo operatore, quindi non esiste una linea di mercato
-              indipendente da cui far discendere un valore atteso: no-vig dello stesso
-              bookmaker significa auto-confronto, e i valori restano piccoli e quasi
-              sempre negativi. L&apos;apertura non è un&apos;offerta: il calo è descritto in
-              &laquo;quota x% dall&apos;apertura&raquo;, non trasformato in edge.
+              La fonte espone un consenso, non un operatore eseguibile, quindi non esiste
+              una linea indipendente da cui far discendere un valore atteso: il no-vig della
+              stessa fonte è un auto-confronto. Fair indipendente, prezzo reale, sharp,
+              contesto e validazione restano requisiti separati. L&apos;apertura non è
+              un&apos;offerta: il calo è descritto in &laquo;quota x% dall&apos;apertura&raquo;.
             </p>
           </div>
           <div>

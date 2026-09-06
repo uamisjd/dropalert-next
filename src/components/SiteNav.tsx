@@ -11,7 +11,6 @@ import { usePathname } from "next/navigation";
 const LINKS: Array<{ href: string; label: string; badge?: string; highlight?: boolean }> = [
   { href: "/", label: "Movimenti" },
   { href: "/value-bets", label: "Divario di prezzo", highlight: false },
-  { href: "/smart-bets", label: "Smart Bets" },
   { href: "/trading", label: "Escursione prezzi" },
   { href: "/arbitrage", label: "Arbitrage" },
   { href: "/surebet", label: "Surebet (calcolo)" },
