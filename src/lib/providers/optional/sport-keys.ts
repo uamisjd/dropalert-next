@@ -7,73 +7,92 @@
  * mappata sulla fonte» e non parte alcuna richiesta — è la prima difesa del
  * budget, prima ancora dei contatori.
  *
- * Il confronto è sul nome della lega come arriva dall'archivio, in minuscolo.
+ * Il confronto è vincolato al PAESE, non alla sola grafia della lega: il nome
+ * in archivio arriva dalla fonte come «Paese: Lega» (es. «Italy: Serie A»,
+ * «Europe: UEFA Champions League»). Il 06/09/2026 la lettura di controllo
+ * (run 34046688765) ha speso 1 credito leggendo «Brazil: Serie A» con la
+ * chiave della Serie A ITALIANA: la regex cercava solo «serie a» e il
+ * campionato brasiliano collideva. Stessa classe di errore dei Premier
+ * League extra-inglesi (Bahrain, Giordania, Kuwait, Ucraina…), della
+ * «Ecuador: Serie B» e della «Northern Ireland: NIFL Championship». Da qui
+ * la regola: paese e lega devono combaciare ENTRAMBI, e un nome senza paese
+ * non decide nulla (fallire chiuso non costa crediti).
  */
 
-const MAP: Array<{ match: RegExp; sportKey: string }> = [
-  { match: /serie a(?!\s*cup)/i, sportKey: "soccer_italy_serie_a" },
-  { match: /serie b/i, sportKey: "soccer_italy_serie_b" },
-  { match: /premier league/i, sportKey: "soccer_epl" },
-  { match: /championship/i, sportKey: "soccer_efl_champ" },
-  { match: /la ?liga/i, sportKey: "soccer_spain_la_liga" },
-  { match: /bundesliga/i, sportKey: "soccer_germany_bundesliga" },
-  { match: /ligue 1/i, sportKey: "soccer_france_ligue_one" },
-  { match: /eredivisie/i, sportKey: "soccer_netherlands_eredivisie" },
-  { match: /primeira liga/i, sportKey: "soccer_portugal_primeira_liga" },
-  { match: /champions league/i, sportKey: "soccer_uefa_champs_league" },
-  { match: /europa league/i, sportKey: "soccer_uefa_europa_league" },
-  { match: /conference league/i, sportKey: "soccer_uefa_europa_conference_league" },
+const MAP: Array<{ country: RegExp; league: RegExp; sportKey: string }> = [
+  { country: /^italy$/i, league: /^serie a$/i, sportKey: "soccer_italy_serie_a" },
+  { country: /^italy$/i, league: /^serie b$/i, sportKey: "soccer_italy_serie_b" },
+  { country: /^england$/i, league: /^premier league$/i, sportKey: "soccer_epl" },
+  { country: /^england$/i, league: /^championship$/i, sportKey: "soccer_efl_champ" },
+  { country: /^spain$/i, league: /^la ?liga$/i, sportKey: "soccer_spain_la_liga" },
+  { country: /^germany$/i, league: /^bundesliga$/i, sportKey: "soccer_germany_bundesliga" },
+  { country: /^france$/i, league: /^ligue 1$/i, sportKey: "soccer_france_ligue_one" },
+  { country: /^netherlands$/i, league: /^eredivisie$/i, sportKey: "soccer_netherlands_eredivisie" },
+  { country: /^portugal$/i, league: /^(primeira liga|liga portugal)$/i, sportKey: "soccer_portugal_primeira_liga" },
+  { country: /^europe$/i, league: /^(uefa )?champions league$/i, sportKey: "soccer_uefa_champs_league" },
+  { country: /^europe$/i, league: /^(uefa )?europa league$/i, sportKey: "soccer_uefa_europa_league" },
+  { country: /^europe$/i, league: /^(uefa )?(europa )?conference league$/i, sportKey: "soccer_uefa_europa_conference_league" },
 ];
 
 /**
- * Escluso a priori: coppe minori, femminili, riserve, giovanili.
+ * Escluso a priori: coppe minori, femminili, riserve, giovanili. Si prova sul
+ * nome COMPLETO «Paese: Lega», com'è sempre stato.
  *
  * Niente tag «B»/«II» qui: sono etichette di squadre riserve (il nome della
  * squadra, non della lega) e includerle escludeva anche la Serie B, che è
- * un campionato coperto e dichiarato tale in `COVERED_LABEL`. Le coppe di
- * riserve che citano un campionato coperto restano escluse da
- * `COPPA_TRAVESTITA` qui sotto.
+ * un campionato coperto e dichiarato tale in `COVERED_LABEL`.
  */
 const EXCLUDE = /\b(women|femminile|u1[5-9]|u2[0-3]|riserve|reserves|youth|primavera)\b/i;
 
 /**
  * Competizioni che CONTENGONO il nome di un campionato coperto ma non sono
  * quel campionato: «England: Premier League Cup» è un torneo di squadre
- * riserve, non la Premier League, e la fonte non lo espone. Senza questo
- * controllo il confronto per sottostringa spendeva un credito su una
- * competizione che non avrebbe mai restituito una linea sharp.
+ * riserve, non la Premier League, e la fonte non lo espone.
  *
- * Le coppe UEFA restano coperte perché hanno una chiave propria: qui si
- * escludono solo i tornei che si travestono da campionato.
+ * Con i pattern ancorati (^…$) sulla lega questa guardia è quasi sempre
+ * ridondante — «premier league cup» non può combaciare con /^premier league$/
+ * — ma resta come difesa per chi un domani allargasse la mappa: un costo
+ * nullo che impedisce di pagare un credito per una coppa.
  */
 const COPPA_TRAVESTITA = /\b(cup|coppa|trophy|shield|playoff|play-off|qualifying)\b/i;
 
 /**
- * Le coppe UEFA hanno una chiave propria, ma il nome «Champions League» da
- * solo non basta: esiste anche la CAF Champions League (Africa), la AFC
- * Champions League (Asia) e così via. La fonte non le espone con la chiave
- * UEFA, quindi una partita di una confederazione extra-europea che porta quel
- * nome NON è leggibile e non deve spendere un credito. Si riconoscono le
- * confederazioni non-UEFA dal nome del torneo.
+ * Il pezzo lega del nome, in forma confrontabile: minuscolo, senza accenti,
+ * spazi interni collassati. «Primera División» e «primera division» devono
+ * essere la stessa cosa, altrimenti la mappa dipende dalla grafia del giorno.
  */
-const NON_UEFA_CONFED =
-  /\b(caf|afc|concacaf|conmebol|ofc|africa|asia|south america|north america|central america|caribbean|world|global)\b/i;
+function normalizeLeagueName(value: string): string {
+  return value
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
 
 /**
  * Chiave sport della competizione, o `null` se non è coperta.
  * `null` significa: non spendere un credito per questa partita.
+ *
+ * Il nome deve essere «Paese: Lega» (il formato dell'archivio). Un nome
+ * senza «:» non decide nulla e restituisce `null`: non si può sapere di
+ * quale «Serie A» o «Premier League» si tratti, e il dubbio non si paga.
  */
 export function sportKeyFor(league: string | null): string | null {
   if (league === null) return null;
   const name = league.trim();
   if (name === "" || EXCLUDE.test(name)) return null;
+
+  const separator = name.indexOf(":");
+  if (separator <= 0) return null;
+  const country = name.slice(0, separator).trim();
+  const leagueName = normalizeLeagueName(name.slice(separator + 1));
+  if (country === "" || leagueName === "") return null;
+
   for (const row of MAP) {
-    if (!row.match.test(name)) continue;
-    /* le coppe UEFA hanno una voce dedicata e vanno bene così; per tutte le
-       altre, se il nome dice «cup» non è il campionato che abbiamo mappato */
-    const isUefa = row.sportKey.startsWith("soccer_uefa");
-    if (isUefa && NON_UEFA_CONFED.test(name)) return null;
-    if (!isUefa && COPPA_TRAVESTITA.test(name)) return null;
+    if (!row.country.test(country)) continue;
+    if (!row.league.test(leagueName)) continue;
+    if (COPPA_TRAVESTITA.test(leagueName)) continue;
     return row.sportKey;
   }
   return null;

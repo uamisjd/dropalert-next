@@ -142,6 +142,24 @@ eq("CAF Champions League non è la UEFA CL", sportKeyFor("Africa: CAF Champions 
 eq("AFC Champions non è la UEFA CL", sportKeyFor("Asia: AFC Champions League"), null);
 eq("Champions League europea resta coperta", sportKeyFor("Europe: Champions League"), "soccer_uefa_champs_league");
 eq("Conference League europea resta coperta", sportKeyFor("Europe: Conference League"), "soccer_uefa_europa_conference_league");
+/* trovato in produzione (2026-09-06, run 34046688765): «Brazil: Serie A»
+   collideva con la regex della Serie A italiana e la lettura di controllo
+   ha speso 1 credito sulla chiave italiana per una partita brasiliana
+   (Remo — Flamengo RJ, fotografia vuota). Da qui il matching paese+lega. */
+eq("la Serie A brasiliana non è quella italiana", sportKeyFor("Brazil: Serie A"), null);
+eq("la Serie B ecuadoriana non è quella italiana", sportKeyFor("Ecuador: Serie B"), null);
+eq("i Premier League esteri non sono quello inglese", sportKeyFor("Bahrain: Premier League"), null);
+eq("Premier League di Singapore non è quello inglese", sportKeyFor("Singapore: Premier League 2"), null);
+eq("Premier League ucraino non è quello inglese", sportKeyFor("Ukraine: Premier League"), null);
+eq("NIFL Championship non è il Championship inglese", sportKeyFor("Northern Ireland: NIFL Championship"), null);
+eq("nome senza paese: non si decide, non si paga", sportKeyFor("Serie A"), null);
+eq("Championship inglese mappata", sportKeyFor("England: Championship"), "soccer_efl_champ");
+eq("LaLiga mappata", sportKeyFor("Spain: LaLiga"), "soccer_spain_la_liga");
+eq("Bundesliga mappata", sportKeyFor("Germany: Bundesliga"), "soccer_germany_bundesliga");
+eq("Ligue 1 mappata", sportKeyFor("France: Ligue 1"), "soccer_france_ligue_one");
+eq("Eredivisie mappata", sportKeyFor("Netherlands: Eredivisie"), "soccer_netherlands_eredivisie");
+eq("Primeira Liga mappata", sportKeyFor("Portugal: Primeira Liga"), "soccer_portugal_primeira_liga");
+eq("Liga Portugal è la stessa chiave", sportKeyFor("Portugal: Liga Portugal"), "soccer_portugal_primeira_liga");
 
 /* --- estrazione del prezzo sharp --- */
 const payload = [

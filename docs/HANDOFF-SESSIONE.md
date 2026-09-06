@@ -1,6 +1,6 @@
 # Handoff — DropAlert: stato lavori, infrastruttura live, cosa continuare
 
-> Documento di continuità fra sessioni di lavoro. Ultimo aggiornamento: 2026-09-05.
+> Documento di continuità fra sessioni di lavoro. Ultimo aggiornamento: 2026-09-06.
 > PR #11 (ramo `arena/01a0707a-dropalert-next` → `main`): MERGIATA.
 > PR #12 (ramo `arena/01a07101-dropalert-next` → `main`): MERGIATA su richiesta
 > dell'utente in questa sessione — è il primo fix descritto in §8.
@@ -81,6 +81,31 @@ Stato reale:
   budget 7/490 mese; verdetto «non osservabile» atteso (consensus null nel
   controllo). Dettagli in SMOKE §14. Con questo esito è autorizzata la PR di
   attivazione controllata (interruttore env già nel ramo, default spento).
+- **ATTIVAZIONE ESEGUITA in produzione (06/09/2026)**: PR #21 (fondamenta odds)
+  e #22 (attivazione controllata + lettura di controllo con ripiego dalla
+  fonte) mergiate su `main` con «Verifica» verde; flag `ODDS_API_ENABLED=true`
+  e `ODDS_ADAPTER_IMPLEMENTED=true` su Vercel Production + redeploy,
+  verificati via `/api/health`: the-odds-api enabled, `perBookmakerOdds: true`.
+  Budget alle 14:24 UTC: 7/490 mese, 3/14 giorno; alla verifica delle 16:26 UTC
+  invariato (nessuna spesa fuori controllo). L'adapter **non è cablato nel
+  ciclo di raccolta**: i soli percorsi che spendono crediti sono `getSharpLine`
+  dalla scheda partita (solo segnale attivo, lega coperta, 1 lettura/partita/
+  giorno, hard-stop in `odds-api-budget.ts`) e gli script manuali
+  smoke/controllo. Rollback = togliere i due flag su Vercel + redeploy.
+  `COLLECT_HORIZON_HOURS=168` (variabile GitHub) serve perché l'archivio veda
+  il turno corrente: da valutare dopo qualche giorno. Regia in
+  `docs/REGOLE-OPERATIVE-ODDS.md`.
+- **Prima lettura di controllo post-attivazione (06/09/2026, run
+  `34046688765` da `main`)**: contatori esatti (7/490 → 8/490, 3/14 → 4/14),
+  ma la lettura ha rivelato una **collisione della mappa competizioni**: il
+  turno brasiliano era in archivio come «Brazil: Serie A», la regex cercava
+  solo «serie a» e la lettura è partita con la chiave della Serie A italiana
+  su Remo—Flamengo: credito speso, nessun evento corrispondente, fotografia
+  vuota. Corretta nello stesso ramo (matching paese+lega ancorato in
+  `sport-keys.ts`, fallire-chiuso senza paese; il controllo ora esce in
+  errore su letture pagate ma vuote). Stessa classe della CAF Champions
+  League già fermata in passato. Dettagli in SMOKE §15; dopo il merge
+  rilanciare `which=control` per la convalida su partita coperta vera.
 - Non aggiungere dati, Kelly, stake, +EV o «giocata consigliata» per riempire una
   lista. La calcolatrice manuale è separata dalla decisione e non va collegata al
   flusso operativo.
@@ -113,7 +138,8 @@ niente link a bookmaker, niente stime spacciate per dati.
 - Fonte live: BetExplorer scraping (`src/lib/providers/betexplorer/`), solo
   consenso (`perBookmakerOdds=false`, dichiarato ovunque). Fonti secondarie:
   football-data (calendario, serve chiave), Tavily (news+contesto, budget
-  giornaliero condiviso), the-odds-api (SPENTA di proposito, guscio onesto).
+  giornaliero condiviso), the-odds-api (ATTIVA dal 06/09/2026 per la sola
+  linea sharp regolata; non partecipa alla raccolta, vedi «Stato decisionale»).
 - Vercel: solo hosting + deploy (il cron di Vercel NON si usa: piano Hobby =
   1 cron/giorno). **Deployment Protection DISATTIVATA** (05.09.2026): sito
   pubblico, indicizzabile. Non riattivarla senza motivo.

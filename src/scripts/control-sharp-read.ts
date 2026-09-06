@@ -210,6 +210,27 @@ async function main(): Promise<number> {
     return 1;
   }
 
+  /* Lettura pagata ma VUOTA: nessun evento corrisponde ai nomi di questa
+     partita sulla chiave sport mappata. È l'esito del 06/09/2026 (run
+     34046688765): «Brazil: Serie A» collideva con la regex della Serie A
+     italiana e il credito è stato speso sulla chiave sbagliata, con una
+     fotografia senza book e senza prezzo. Il credito è già contato: qui si
+     dichiara l'anomalia e si esce in errore, perché un controllo che dice
+     «linea letta» su una fotografia vuota nasconde il guasto che dovrebbe
+     trovare. */
+  if (view.snapshot.book === null && view.snapshot.books.length === 0) {
+    console.error(
+      "\nESITO: lettura pagata ma NESSUNA linea — l'evento non risulta" +
+        ` sulla chiave sport mappata (${target.sportKey}).` +
+        "\n  Credito speso e fotografia vuota: rivedere la mappa competizioni → chiave" +
+        " (src/lib/providers/optional/sport-keys.ts).",
+    );
+    console.log("budget dopo la lettura:");
+    console.log(`  mese  : ${view.budget.usedThisMonth}/${view.budget.monthlyCap}`);
+    console.log(`  oggi  : ${view.budget.usedToday} (quota odierna ${view.budget.allowanceToday}, tetto ${view.budget.dailyHardCap})`);
+    return 1;
+  }
+
   console.log("\nESITO: linea sharp letta sul percorso di produzione");
   console.log(`  book sharp : ${view.snapshot.book ?? "nessuno"}`);
   console.log(`  prezzo     : ${view.snapshot.price ?? "n.d."}`);
