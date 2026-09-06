@@ -190,6 +190,28 @@ const payload = [
 const ev = findEvent(payload, "Milan", "Inter");
 check("evento trovato per nomi vicini", ev !== null);
 eq("partita inesistente non si forza", findEvent(payload, "Roma", "Lazio"), null);
+/* --- matching per token: la particella «de» non deve più costare un credito.
+   Trovato in produzione (06/09/2026, controllo dopo il merge della PR #23):
+   Gil Vicente — «Academico Viseu» letto su soccer_portugal_primeira_liga
+   con chiave giusta ma senza evento, perché la fonte chiama la squadra
+   «Academico de Viseu»: la forma unita non contiene l'altra, i token sì. */
+const payloadPt = [
+  { home_team: "Gil Vicente", away_team: "Academico de Viseu", bookmakers: [] },
+  { home_team: "Benfica", away_team: "Porto", bookmakers: [] },
+];
+check("particella «de» tollerata sui token", findEvent(payloadPt, "Gil Vicente", "Academico Viseu") !== null);
+check("suffisso societario tollerato sui token", findEvent(payloadPt, "Benfica", "FC Porto") !== null);
+eq(
+  "token davvero diverso non si forza",
+  findEvent(payloadPt, "Gil Vicente", "Vitoria Guimaraes"),
+  null,
+);
+/* la regola storica della sottostringa resta: «Internazionale» contiene
+   «Inter» e la lettura legittima non va bloccata */
+check(
+  "sottostringa storica conservata",
+  findEvent([{ home_team: "Inter", away_team: "AC Milan", bookmakers: [] }], "Internazionale", "Milan") !== null,
+);
 eq("prezzo casa dal book preferito", extractSharpPrice(ev, "home", "Milan", "Inter").price, 2.31);
 eq("book preferito rispettato", extractSharpPrice(ev, "home", "Milan", "Inter").book, "pinnacle");
 eq("pareggio letto", extractSharpPrice(ev, "draw", "Milan", "Inter").price, 3.5);

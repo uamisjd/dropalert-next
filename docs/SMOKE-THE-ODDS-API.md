@@ -416,3 +416,54 @@ convalidare il percorso su una partita coperta vera (in archivio o, in
 assenza, via ripiego dalla fonte: la prima in programma stasera era
 Juventus—Milan). La fotografia vuota di #661 scade da sola a fine giornata
 italiana e non è mostrata da nessuna pagina (la partita non ha segnale).
+
+## 16. Secondo controllo post-merge (06/09/2026) — chiave giusta, matching dei nomi fallito
+
+Rilancio di `which=control` da `main` dopo il merge della PR #23 (finestra
+stampata: fino a dom 13/09 19:20 → run ~17:20 UTC). Il nuovo comportamento
+onesto ha funzionato: la lettura vuota è uscita in **errore** (exit 1, run
+rosso) invece di dichiarare «linea letta».
+
+- `origine: ARCHIVIO — partita #668 dom 06/09, 21:30 Gil Vicente — Academico Viseu`.
+- `lega: Portugal: Liga Portugal → chiave sport: soccer_portugal_primeira_liga` —
+  chiave **giusta**: l'alias «Liga Portugal» (nome BetExplorer del campionato
+  portoghese) era stato aggiunto con la PR #23; prima d'ora il Portogallo
+  semplicemente non era raggiungibile dalla mappa.
+- Budget: **9/490 mese, 5/14 oggi** (un credito in più).
+- `ESITO: lettura pagata ma NESSUNA linea — l'evento non risulta sulla chiave
+  sport usata`.
+
+Diagnosi: stavolta NON è la mappa. L'evento non è stato trovato perché
+l'archivio chiama la trasferta «Academico Viseu» e la fonte, con ogni
+evidenza, «Academico **de** Viseu» (è il nome con cui il club è conosciuto
+dai provider di quote): la regola di matching storica confrontava le forme
+unite senza spazi — «academicoviseu» non è contenuto in «academicodeviseu» —
+e il credito è stato speso per una risposta in cui nessun evento portava
+quei nomi esatti. Conferma definitiva attesa dalla diagnosi gratuita
+(qui sotto) al prossimo lancio.
+
+Correzione nello stesso ramo di sessione:
+
+1. `odds-api-sharp.ts` esporta `teamNameMatches`: due nomi combaciano se la
+   forma unita si contiene (regola storica conservata: «Internazionale»
+   contiene «Inter») **oppure** se i token dell'uno contengono quelli
+   dell'altro ({academico, viseu} ⊆ {academico, de, viseu}). Un token davvero
+   diverso («Vitoria Guimaraes» vs «Vitoria SC») non combacia di proposito:
+   quello è un caso per l'override esplicito, non per l'automatismo.
+   `findEvent` e la diagnosi del resolver usano ora LA STESSA funzione: la
+   promessa di equivalenza fra pre-check e client è letterale, non più un
+   commento.
+2. `control-sharp-read.ts`: dopo una lettura pagata ma vuota esegue la
+   **diagnosi gratuita** (`/events`, fuori quota): stampa perché la linea non
+   c'è — nomi non combacianti con i nomi reali della fonte, orario fuori
+   tolleranza, o nessun evento — senza spendere un altro credito. Tolto anche
+   il budget stampato due volte nel ramo d'errore.
+3. Test: casi di regressione su findEvent e sull'equivalenza diagnosi/client
+   (particella «de», suffissi societari, token diverso non forzato,
+   sottostringa storica conservata).
+
+Resta aperto e dichiarato: le abbreviazioni vere («Man Utd» ↔ «Manchester
+United») e i qualificatori diversi («Vitoria Guimaraes» ↔ «Vitoria SC»)
+restano volutamente non-matching — l'audit completo del matching è già al
+punto 2 del «prossimo ordine di lavoro» dell'handoff. Ogni nuovo caso costa
+ora 1 credito ma si spiega gratis.

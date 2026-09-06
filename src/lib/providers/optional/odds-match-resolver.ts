@@ -19,7 +19,7 @@
  * test fallirebbe dopo aver speso il credito. L'equivalenza è verificata dai
  * test, non promessa nei commenti.
  */
-import { EVENT_TIME_TOLERANCE_MINUTES } from "./odds-api-sharp";
+import { EVENT_TIME_TOLERANCE_MINUTES, teamNameMatches } from "./odds-api-sharp";
 import { sportKeyFor } from "./sport-keys";
 
 /** Evento così come lo espone l'endpoint `/events` della fonte. */
@@ -34,10 +34,13 @@ export interface OddsApiEventLite {
 /**
  * Normalizzazione dei nomi squadra.
  *
- * È la stessa regola usata da `findEvent` (minuscole, senza accenti, senza
- * separanti): duplicarla qui con una grafia diversa produrrebbe una diagnosi
- * più ottimista del matching reale, che è il difetto peggiore possibile in
- * uno strumento che deve prevenire un credito sprecato.
+ * Serve ancora per il filtro di vuoto e per i confronti di somiglianza: la
+ * regola di combaciamento con la fonte però è una sola, `teamNameMatches` di
+ * `odds-api-sharp` (sottostringa sui nomi uniti oppure token contenuti), qui
+ * sotto — la STESSA funzione che userà `findEvent`. Duplicarla con una grafia
+ * diversa produrrebbe una diagnosi più ottimista del matching reale, che è
+ * il difetto peggiore possibile in uno strumento che deve prevenire un
+ * credito sprecato.
  */
 export function normalizeTeamName(value: string): string {
   return value
@@ -72,15 +75,12 @@ export type EventMatchDiagnosis =
   | { status: "kickoff_fuori_tolleranza"; candidates: OddsApiEventLite[] }
   | { status: "nomi_non_trovati"; nearMisses: OddsApiEventLite[] };
 
-/** I nomi combaciano quando l'uno contiene l'altro, nei due sensi. */
+/** I nomi combaciano con la regola unica condivisa con `findEvent`. */
 function namesMatch(internalHome: string, internalAway: string, event: OddsApiEventLite): boolean {
-  const h = normalizeTeamName(internalHome);
-  const a = normalizeTeamName(internalAway);
-  if (h === "" || a === "") return false;
-  const eh = normalizeTeamName(event.homeTeam);
-  const ea = normalizeTeamName(event.awayTeam);
-  if (eh === "" || ea === "") return false;
-  return (eh.includes(h) || h.includes(eh)) && (ea.includes(a) || a.includes(ea));
+  return (
+    teamNameMatches(internalHome, event.homeTeam) &&
+    teamNameMatches(internalAway, event.awayTeam)
+  );
 }
 
 /** Token del nome originale, normalizzati uno per uno. */

@@ -106,6 +106,18 @@ Stato reale:
   errore su letture pagate ma vuote). Stessa classe della CAF Champions
   League già fermata in passato. Dettagli in SMOKE §15; dopo il merge
   rilanciare `which=control` per la convalida su partita coperta vera.
+- **Secondo controllo post-merge (06/09/2026)**: chiave giusta
+  (Portugal: Liga Portugal → soccer_portugal_primeira_liga, alias nuovo),
+  contatori esatti (9/490, 5/14), ma **matching dei nomi fallito**: l'archivio
+  dice «Academico Viseu», la fonte «Academico de Viseu», la regola storica
+  per sottostringa non li vedeva uguali — altro credito, fotografia vuota,
+  run rosso come da nuovo comportamento. Corretto nello stesso ramo:
+  `teamNameMatches` (sottostringa ∪ token, condivisa da `findEvent` e dalla
+  diagnosi del resolver) e diagnosi gratuita `/events` nel controllo dopo
+  ogni lettura vuota. Restano volutamente non-matching le abbreviazioni
+  («Man Utd» ↔ «Manchester United») e i qualificatori diversi («Vitoria
+  Guimaraes» ↔ «Vitoria SC»): l'audit del matching è il punto 2 del prossimo
+  ordine di lavoro. Dettagli in SMOKE §16.
 - Non aggiungere dati, Kelly, stake, +EV o «giocata consigliata» per riempire una
   lista. La calcolatrice manuale è separata dalla decisione e non va collegata al
   flusso operativo.
