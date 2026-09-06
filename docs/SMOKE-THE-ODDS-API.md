@@ -273,9 +273,11 @@ lettura h2h×eu).
 | Freshness | linee individuali eseguibili (es. home 1.470 da `betfair_ex_eu`), età 0 min < soglia 90 |
 
 Cosa **non** dimostra: non valida il percorso di produzione sui campionati
-coperti (Serie A, EPL, …), che oggi non avevano partite con quote vive; quella
-verifica va fatta quando il prossimo turno entra nei movimenti. Non accende il
-provider: `ADAPTER_IMPLEMENTED` resta `false` e l'attivazione è una PR separata.
+coperti (Serie A, EPL, …), che al momento dello smoke non avevano partite con
+quote vive in archivio. Quella verifica è eseguibile con la lettura di
+controllo (§12), anche prima che il turno entri nei movimenti grazie al
+ripiego dalla fonte (§13). Non accende il provider: `ADAPTER_IMPLEMENTED`
+resta `false` e l'attivazione è una PR separata.
 
 ## 12. Lettura di controllo sul percorso di produzione
 
@@ -285,13 +287,54 @@ decisione `decide` → lettura reale → contatori in `system_state` → snapsho
 su un campionato **coperto**. Strumento: `src/scripts/control-sharp-read.ts`,
 lanciato dalla workflow con `which = control` (o in locale `npm run odds:control`).
 
-- Se in archivio non c'è alcuna partita coperta (sosta / fra due turni), stampa
-  «NESSUNA PARTITA DI CAMPIONATO COPERTO» e **non spende nulla**: va rilanciata
-  quando entra il turno.
-- Se c'è, esegue **una** lettura (1 credito) e stampa budget prima/dopo, book
-  sharp, prezzo e verdetto: è la conferma che mapping, contatori e matching
-  funzionano nel percorso reale.
+- Se l'archivio ha partite coperte, legge da lì: **una** lettura (1 credito) e
+  stampa budget prima/dopo, book sharp, prezzo e verdetto — la conferma che
+  mapping, contatori e matching funzionano nel percorso reale.
+- Se l'archivio è vuoto, da adesso **non aspetta il turno**: parte il ripiego
+  «dalla fonte» (§13), che sceglie la partita con l'endpoint gratuito `/events`
+  sulle chiavi coperte e poi esegue la stessa lettura di produzione (1 credito).
+- `--solo-archivio` ripristina il vecchio comportamento garantito a 0 crediti
+  («NESSUNA PARTITA DI CAMPIONATO COPERTO» e stop).
 
 `signalActive` è passato `true` in modo dichiarato: è una lettura di controllo
 voluta, non un segnale del monitor. I tetti mensili/giornalieri restano quelli
 di `odds-api-budget.ts`.
+
+## 13. Ripiego «dalla fonte» (06/09/2026)
+
+Il 06/09/2026 la Serie A era in campo ma l'archivio BetExplorer (`matches`)
+non conteneva partite coperte nella finestra: la lettura di controllo si
+fermava a «NESSUNA PARTITA» pur essendoci partite reali leggibili. Il collo di
+bottiglia era la *scelta* della partita, non la lettura: `getSharpLine` non
+tocca mai `matches` (persiste in `system_state` con chiave di stringa, senza
+vincoli esterni).
+
+Il ripiego separa le due cose:
+
+1. **Scelta** — `GET /sports/{key}/events` sulle chiavi coperte
+   (`COVERED_SPORT_KEYS`, Serie A prima): endpoint gratuito, fuori quota, il
+   costo dichiarato dalla fonte viene letto dagli header e stampato; se un
+   giorno addebitasse qualcosa, il log lo dice.
+2. **Lettura** — identica al percorso di produzione: `getSharpLine` con
+   `signalActive: true`, 1 credito, contatori e snapshot in `system_state`.
+
+La partita nata dalla fonte riceve un **id sintetico negativo**
+(`syntheticMatchId`, derivato deterministicamente dall'id evento): non collide
+con i serial positivi di `matches` e, rilanciando nello stesso giorno, ritrova
+la propria fotografia in cache invece di rispendere il credito.
+
+Comandi:
+
+    npm run odds:control                      # archivio, poi ripiego automatico
+    npm run odds:control -- --sport-key soccer_italy_serie_a   # ripiego mirato
+    npm run odds:control -- --solo-archivio   # solo archivio, 0 crediti
+
+Nella workflow: `which = control`, con `sport_key` facoltativo per mirare il
+ripiego. Le funzioni pure (`syntheticMatchId`, `pickUpcomingEvent`) vivono in
+`src/lib/repo/control-fallback.ts`, testate da `npm run test:control-fallback`.
+
+Cosa dimostra il ripiego: mapping chiave→fonte, decisione budget, lettura
+reale, contatori e snapshot sul percorso di produzione, su un campionato
+coperto *vero* (nome e orario presi dalla fonte). Cosa non dimostra: che la
+partita fosse già in archivio, cioè che il collettore BetExplorer l'avesse
+vista — per quello resta valido il lancio con archivio popolato.

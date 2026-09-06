@@ -68,7 +68,7 @@ Nessuna PR di attivazione è aperta; nessun merge è stato fatto.
 | Ricerca partita | `odds:find` · `which=smoke-odds` (match_id vuoto) | 0 | elenca le partite leggibili (mappa di budget) |
 | Sonda lega fuori mappa | `odds:find --sonda <key>` · `which=smoke-odds`+`sport_key` | 0 | trova l'id per una lega reale non mappata |
 | Smoke test | `smoke:odds-api -- --match-id N [--sport-key K]` · `which=smoke-odds`+`match_id` | 1 | chiamata+matching+persistenza+freshness |
-| Lettura di controllo | `odds:control` · `which=control` | 0 o 1 | percorso di produzione (`getSharpLine`) su lega coperta |
+| Lettura di controllo | `odds:control` · `which=control` (+`sport_key` facoltativo) | 0 o 1 | percorso di produzione su lega coperta; archivio vuoto → ripiego dalla fonte (§13 SMOKE) |
 
 Workflow usata: **Verifica dati reali (manuale)** (esiste su `main`, quindi
 lanciabile; la modalità gira dal ramo). Branch: `arena/01a07663-dropalert-next`.
@@ -77,11 +77,15 @@ lanciabile; la modalità gira dal ramo). Branch: `arena/01a07663-dropalert-next`
 
 ## 4. Procedure clic-per-clic (per l'umano)
 
-### 4.1 Lettura di controllo (quando entra il turno coperto)
+### 4.1 Lettura di controllo (eseguibile OGNI giorno, anche oggi)
 1. Actions → *Verifica dati reali (manuale)* → Run workflow.
-2. Branch `arena/01a07663-dropalert-next`; `which = control`; `ore = 168`.
-3. Se stampa «NESSUNA PARTITA DI CAMPIONATO COPERTO» (0 crediti) → rilanciare
-   quando entra il turno. Se stampa la linea sharp → verde, procedere a §6.
+2. Branch `arena/01a07663-dropalert-next`; `which = control`; `ore = 168`;
+   facoltativo `sport_key = soccer_italy_serie_a` per mirare il ripiego.
+3. Con il turno in archivio legge da lì; con archivio vuoto il **ripiego dalla
+   fonte** sceglie la partita coperta in programma (endpoint gratuito, 0
+   crediti) ed esegue la lettura di produzione (1 credito). Se stampa la linea
+   sharp → verde, procedere a §6. Se stampa che né archivio né fonte hanno
+   partite (0 crediti) → il turno è davvero assente.
 
 ### 4.2 Attivazione (solo dopo 4.1 verde + ok)
 Impostare nell'ambiente di produzione (Vercel) **tutti e tre**:
@@ -109,8 +113,9 @@ Poi aprire/mergiare la PR di attivazione solo con «Verifica» verde.
 
 - [x] Smoke test live su lega reale (run `34036327654`) — 1 credito.
 - [x] Interruttore di attivazione env-ready (default off).
-- [x] Lettura di controllo cablata (`which=control`); oggi 0 partite coperte.
-- [ ] **Lettura di controllo coperta verde** (rilanciare quando entra il turno).
+- [x] Lettura di controllo con ripiego dalla fonte (`which=control`): eseguibile
+  ogni giorno su campionato coperto, anche con archivio vuoto.
+- [ ] **Lettura di controllo coperta verde** (lanciare ora; 1 credito).
 - [ ] PR separata di attivazione (da ramo nuovo, dopo merge strumenti).
 - [ ] Merge attivazione solo con check verdi + ok umano; flag su Vercel.
 

@@ -29,7 +29,7 @@ on:
         required: false
         default: "72"
       sport_key:
-        description: "Solo per smoke-odds: chiave sport per una lega FUORI mappa (es. soccer_spl). Vuoto = mappa di budget"
+        description: "smoke-odds: chiave per lega FUORI mappa (es. soccer_spl). control: limita il ripiego dalla fonte a una chiave coperta (es. soccer_italy_serie_a). Vuoto = automatico"
         required: false
         default: ""
 
@@ -118,16 +118,21 @@ jobs:
 
       # Lettura di controllo sul PERCORSO DI PRODUZIONE (getSharpLine) per un
       # campionato coperto: budget → mappa → decisione → lettura reale →
-      # contatori in system_state. Va lanciata quando il turno entra in
-      # archivio; senza partite coperte non spende nulla. Vedi docs/SMOKE-THE-ODDS-API.md.
+      # contatori in system_state. Se l'archivio ha il turno, legge da lì;
+      # altrimenti il ripiego sceglie la partita dall'endpoint GRATUITO
+      # /events sulle chiavi coperte (1 credito la lettura). Con
+      # --solo-archivio non spende nulla. Vedi docs/SMOKE-THE-ODDS-API.md.
       - name: Lettura di controllo (produzione)
         if: inputs.which == 'control'
         run: |
-          echo "MARKER-CONTROL-READ-v1"
+          echo "MARKER-CONTROL-READ-v2"
           MASK='s#(postgres(ql)?://)[^[:space:]"'"'"']*#\1<redacted>#g'
           if [ -z "$THE_ODDS_API_KEY" ]; then
             echo "::error::Chiave The Odds API assente fra i secrets."
             exit 1
           fi
-          npm run odds:control -- --ore ${{ inputs.ore }} 2>&1 | sed -E "$MASK"
+          EXTRA=""
+          if [ -n "${{ inputs.sport_key }}" ]; then EXTRA="--sport-key ${{ inputs.sport_key }}"; fi
+          # shellcheck disable=SC2086
+          npm run odds:control -- --ore ${{ inputs.ore }} $EXTRA 2>&1 | sed -E "$MASK"
 

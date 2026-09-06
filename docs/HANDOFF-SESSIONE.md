@@ -71,6 +71,11 @@ Stato reale:
   limiti dei permessi, costi per azione, checklist «cosa facciamo adesso»):
   `docs/REGOLE-OPERATIVE-ODDS.md`. È il documento di regia da leggere prima di
   qualunque intervento su The Odds API.
+- **Ripiego «dalla fonte» della lettura di controllo** (06/09/2026): se
+  l'archivio BetExplorer è vuoto sul turno corrente, `which=control` sceglie la
+  partita coperta dall'endpoint gratuito `/events` (id sintetico negativo) e
+  legge comunque via `getSharpLine` (1 credito). Codice in
+  `src/lib/repo/control-fallback.ts` + script; docs §13 di SMOKE-THE-ODDS-API.
 - Non aggiungere dati, Kelly, stake, +EV o «giocata consigliata» per riempire una
   lista. La calcolatrice manuale è separata dalla decisione e non va collegata al
   flusso operativo.

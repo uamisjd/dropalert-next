@@ -82,3 +82,9 @@ export function sportKeyFor(league: string | null): string | null {
 /** Competizioni coperte, per il pannello: si dichiara dove si spende. */
 export const COVERED_LABEL =
   "Serie A e B, Premier League e Championship, Liga, Bundesliga, Ligue 1, Eredivisie, Primeira Liga e coppe UEFA maschili";
+
+/** Chiavi sport coperte, nello stesso ordine della mappa (Serie A prima).
+ *  Serve al ripiego «dalla fonte» della lettura di controllo: interrogare
+ *  l'endpoint gratuito `/events` solo sui tornei dove una lettura costa un
+ *  credito sensato. */
+export const COVERED_SPORT_KEYS: readonly string[] = MAP.map((row) => row.sportKey);

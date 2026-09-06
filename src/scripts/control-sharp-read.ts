@@ -1,8 +1,10 @@
 /**
  * Lettura di CONTROLLO sul percorso di produzione, per un campionato coperto.
  *
- *   npm run odds:control                    # prima partita coperta in archivio
- *   npm run odds:control -- --match-id 123  # partita specifica
+ *   npm run odds:control                     # archivio; se vuoto, ripiego dalla fonte
+ *   npm run odds:control -- --match-id 123   # partita specifica (deve essere in archivio)
+ *   npm run odds:control -- --sport-key K    # ripiego limitato a una chiave (es. soccer_italy_serie_a)
+ *   npm run odds:control -- --solo-archivio  # mai uscire dall'archivio (0 crediti garantiti)
  *
  * A differenza dello smoke test (che usa il client direttamente), qui si passa
  * da `getSharpLine` — lo STESSO percorso della pagina partita: vista budget,
@@ -10,9 +12,17 @@
  * lettura reale, conteggio crediti in `system_state`, scrittura snapshot.
  *
  * Serve a validare, su un campionato coperto, mapping + contatori + matching
- * PRIMA di impostare ODDS_ADAPTER_IMPLEMENTED=true. Se in archivio non c'è
- * alcuna partita coperta (domenica fra due turni / sosta nazionali), lo dice e
- * non spende nulla.
+ * PRIMA di impostare ODDS_ADAPTER_IMPLEMENTED=true.
+ *
+ * RIPIEGO «DALLA FONTE» (06/09/2026): l'archivio BetExplorer può non avere il
+ * turno corrente pur essendoci partite coperte in programma (Serie A in campo
+ * con archivio vuoto). In quel caso la partita viene scelta dall'endpoint
+ * GRATUITO `/sports/{key}/events` — fuori quota, dichiarato dalla fonte —
+ * limitato alle chiavi coperte, e la lettura vera passa comunque da
+ * `getSharpLine` con un id sintetico negativo (nessun vincolo esterno: le
+ * fotografie vivono in `system_state`). Costo del ripiego: 0 crediti per la
+ * scelta + 1 credito per la lettura, dichiarati nel log. Con `--solo-archivio`
+ * il ripiego è disattivato e senza partite coperte non si spende nulla.
  *
  * `signalActive` è passato true in modo dichiarato: è una lettura di controllo
  * voluta, non un segnale prodotto dal monitor. Il budget resta l'autorità su
@@ -21,7 +31,9 @@
 import { and, eq, gte, inArray, lte } from "drizzle-orm";
 import { db, sql } from "@/db/client";
 import { leagues, matches, teams } from "@/db/schema";
-import { sportKeyFor } from "@/lib/providers/optional/sport-keys";
+import { sportKeyFor, COVERED_SPORT_KEYS } from "@/lib/providers/optional/sport-keys";
+import { fetchOddsApiEvents } from "@/lib/providers/optional/the-odds-api-events";
+import { pickUpcomingEvent, syntheticMatchId } from "@/lib/repo/control-fallback";
 import { getSharpLine } from "@/lib/repo/sharp";
 
 function argument(name: string): string | null {
@@ -29,7 +41,13 @@ function argument(name: string): string | null {
   return index >= 0 ? (process.argv[index + 1] ?? null) : null;
 }
 
+function flag(name: string): boolean {
+  return process.argv.includes(name);
+}
+
 const HORIZON_HOURS = Math.max(1, Number(argument("--ore") ?? 168) || 168);
+const SPORT_KEY_ARG = argument("--sport-key");
+const SOLO_ARCHIVIO = flag("--solo-archivio");
 
 const romeTime = new Intl.DateTimeFormat("it-IT", {
   timeZone: "Europe/Rome",
@@ -39,6 +57,17 @@ const romeTime = new Intl.DateTimeFormat("it-IT", {
   hour: "2-digit",
   minute: "2-digit",
 });
+
+interface Target {
+  id: number;
+  kickoffAt: Date;
+  leagueLabel: string;
+  home: string;
+  away: string;
+  sportKey: string;
+  /** id evento della fonte quando la partita nasce dal ripiego, altrimenti null */
+  eventId: string | null;
+}
 
 async function main(): Promise<number> {
   const now = new Date();
@@ -73,38 +102,87 @@ async function main(): Promise<number> {
     for (const t of teamRows) names.set(t.id, t.name);
   }
 
-  const covered = rows
+  const covered: Target[] = rows
     .map((r) => ({
       id: r.id,
       kickoffAt: r.kickoffAt,
-      leagueName: r.leagueName,
+      leagueLabel: r.leagueName,
       home: names.get(r.homeTeamId) ?? "",
       away: names.get(r.awayTeamId) ?? "",
       sportKey: sportKeyFor(r.leagueName),
+      eventId: null as string | null,
     }))
-    .filter((r) => r.sportKey !== null && r.home !== "" && r.away !== "");
+    .filter((r): r is Target => r.sportKey !== null && r.home !== "" && r.away !== "");
 
-  if (covered.length === 0) {
+  const matchArg = argument("--match-id");
+
+  let target: Target | undefined;
+
+  if (covered.length > 0) {
+    target = matchArg !== null ? covered.find((r) => r.id === Number(matchArg)) : covered[0];
+    if (target === undefined) {
+      console.error(`Partita ${matchArg} non trovata fra quelle coperte in archivio.`);
+      return 2;
+    }
+    console.log(`\norigine: ARCHIVIO — partita #${target.id} ${romeTime.format(target.kickoffAt)} ${target.home} — ${target.away}`);
+    console.log(`lega: ${target.leagueLabel} → chiave sport: ${target.sportKey}`);
+  } else if (SOLO_ARCHIVIO) {
     console.log(
       "\nNESSUNA PARTITA DI CAMPIONATO COPERTO IN ARCHIVIO nella finestra.\n" +
-        "La lettura di controllo va fatta quando entra il prossimo turno (Serie A/EPL/…).\n" +
+        "(--solo-archivio: ripiego dalla fonte disattivato.)\n" +
         "Crediti spesi: 0.",
     );
     return 0;
-  }
-
-  const matchArg = argument("--match-id");
-  const target =
-    matchArg !== null ? covered.find((r) => r.id === Number(matchArg)) : covered[0];
-  if (target === undefined) {
-    console.error(`Partita ${matchArg} non trovata fra quelle coperte in archivio.`);
+  } else if (matchArg !== null) {
+    console.error(
+      `Archivio vuoto nella finestra: --match-id ${matchArg} non può esistere. ` +
+        "Senza --match-id il ripiego sceglie la partita dalla fonte.",
+    );
     return 2;
+  } else {
+    console.log(
+      "\nArchivio senza partite coperte nella finestra → RIPIEGO DALLA FONTE.\n" +
+        "Scelta con /sports/{key}/events (endpoint GRATUITO, fuori quota),\n" +
+        "limitata alle chiavi coperte; la lettura vera costa 1 credito.",
+    );
+    const keys = SPORT_KEY_ARG !== null ? [SPORT_KEY_ARG] : [...COVERED_SPORT_KEYS];
+    let eventsCredits = 0;
+    for (const key of keys) {
+      const outcome = await fetchOddsApiEvents({ sportKey: key });
+      if (outcome.creditsUsed !== null && outcome.creditsUsed > 0) {
+        eventsCredits += outcome.creditsUsed;
+        console.log(`  ATTENZIONE: /events ha addebitato ${outcome.creditsUsed} crediti su [${key}] (dovrebbe essere 0).`);
+      }
+      if (!outcome.result.ok) {
+        console.log(`  [${key}] fonte non disponibile — ${outcome.result.error.message}`);
+        continue;
+      }
+      const pick = pickUpcomingEvent(outcome.result.data, now, until);
+      console.log(`  [${key}] ${outcome.result.data.length} eventi in programma, ${pick === null ? "nessuno" : "almeno uno"} nella finestra`);
+      if (pick !== null) {
+        target = {
+          id: syntheticMatchId(pick.id),
+          kickoffAt: pick.commenceTime,
+          leagueLabel: key,
+          home: pick.homeTeam,
+          away: pick.awayTeam,
+          sportKey: key,
+          eventId: pick.id,
+        };
+        break;
+      }
+    }
+    if (target === undefined) {
+      console.log(
+        "\nNé l'archivio né la fonte espongono partite coperte in programma nella finestra.\n" +
+          `Crediti spesi: ${eventsCredits}.`,
+      );
+      return 0;
+    }
+    console.log(`\norigine: FONTE (ripiego) — ${romeTime.format(target.kickoffAt)} ${target.home} — ${target.away}`);
+    console.log(`chiave sport: ${target.sportKey} — id evento: ${target.eventId} — id sintetico: ${target.id}`);
   }
 
-  console.log(
-    `\npartita scelta: #${target.id} ${romeTime.format(target.kickoffAt)} ${target.home} — ${target.away}`,
-  );
-  console.log(`lega: ${target.leagueName} → chiave sport: ${target.sportKey}`);
   console.log("percorso: getSharpLine (budget → mappa → decisione → lettura → contatori)\n");
 
   const view = await getSharpLine(
