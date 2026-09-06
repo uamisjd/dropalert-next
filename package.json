@@ -21,6 +21,7 @@
     "test:coverage": "tsx src/lib/cov/__tests__/coverage.test.ts",
     "report:coverage": "tsx --env-file=.env src/scripts/run-coverage.ts",
     "job:analyze": "tsx --env-file-if-exists=.env src/scripts/run-analyze.ts",
+    "smoke:odds-api": "tsx --env-file-if-exists=.env src/scripts/smoke-odds-api.ts",
     "test:providers": "tsx src/lib/providers/__tests__/providers.test.ts",
     "job:collect": "bash scripts/cycle.sh",
     "job:verify-results": "tsx --env-file-if-exists=.env src/scripts/verify-results.ts",
