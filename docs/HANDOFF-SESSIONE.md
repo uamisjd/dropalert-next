@@ -44,6 +44,11 @@ Stato reale:
   `src/lib/decision/price-evidence.ts` rifiuta le chiavi aggregate e accetta solo
   una linea individuale fresca; il dettaglio lo usa per non confondere una quota
   eseguibile con il consenso.
+- Il client The Odds API ora gestisce rete, timeout, HTTP, JSON, matching di
+  squadre/kickoff e DTO per-bookmaker con fixture testabili. Esiste anche il
+  percorso esplicito `collectAndPersistTheOddsApiOdds` verso `odds_snapshots`.
+  `ADAPTER_IMPLEMENTED` resta però `false`: manca ancora lo smoke test con chiave
+  reale e database raggiungibile; nessuna attivazione è stata simulata.
 - Non aggiungere dati, Kelly, stake, +EV o «giocata consigliata» per riempire una
   lista. La calcolatrice manuale è separata dalla decisione e non va collegata al
   flusso operativo.

@@ -44,6 +44,10 @@ export interface FixtureRef {
   /** URL della pagina di origine, per tracciabilità e debug */
   sourceUrl: string | null;
   kickoffAt: Date;
+  /** contesto opzionale necessario alle fonti che interrogano per sport */
+  sportKey?: string;
+  homeTeam?: string;
+  awayTeam?: string;
 }
 
 /* ------------------------------------------------------------------ */
@@ -87,6 +91,8 @@ export interface OddsQuoteDTO {
   fixtureKey: string;
   bookmakerKey: string;
   isConsensus: boolean;
+  /** metadata dichiarata dalla fonte, quando disponibile */
+  isSharp?: boolean;
   market: MarketType;
   selection: SelectionCode;
   /** quota decimale osservata adesso */
