@@ -128,9 +128,13 @@ Poi aprire/mergiare la PR di attivazione solo con «Verifica» verde.
   verde + ok umano.
 - [x] Flag Vercel `ODDS_API_ENABLED=true` + `ODDS_ADAPTER_IMPLEMENTED=true` +
   redeploy, verificati via `/api/health` (06/09/2026).
-- [ ] **Osservazione del primo turno acceso** (Serie A 06–07/09): lettura di
-  controllo `which=control` da `main`, contatori giorno/mese coerenti con le
-  letture dichiarate, sito in NO BET senza prezzo individuale fresco.
+- [x] **Osservazione del primo turno acceso — controllo eseguito** (run
+  `34046688765` da `main`): contatori esatti (7/490 → 8/490, 3/14 → 4/14),
+  nessuna spesa fuori controllo, sito in NO BET senza prezzo individuale
+  fresco. **Trovata e corretta una collisione della mappa competizioni**
+  («Brazil: Serie A» letto con la chiave italiana: 1 credito, fotografia
+  vuota) — vedi SMOKE §15. Dopo il merge della correzione: rilanciare
+  `which=control` da `main` per la lettura su partita coperta vera.
 - [ ] Valutare dopo qualche giorno `COLLECT_HORIZON_HOURS=168` (variabile
   GitHub): serve perché l'archivio veda il turno corrente.
 

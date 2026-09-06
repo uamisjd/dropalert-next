@@ -365,3 +365,54 @@ contatori in `system_state` e la scrittura della fotografia — tutto sul
 percorso di produzione, su un campionato coperto vero. Con questo esito il
 piano autorizza la PR di attivazione controllata (interruttore env, default
 spento), da mergiare solo con check verdi e ok esplicito.
+
+## 15. Prima lettura di controllo post-attivazione (06/09/2026) — e la collisione «Brazil: Serie A»
+
+Run `34046688765` (workflow *Verifica dati reali (manuale)*, `which=control`,
+`ore=168`), il primo lanciato **da `main`** dopo l'attivazione in produzione.
+Inizio 16:49 UTC, 33 s, esito `success`.
+
+Fatti verificati (annotazioni del run via API + pannello budget del sito):
+
+- `origine: ARCHIVIO — partita #661 dom 06/09, 21:00 Remo — Flamengo RJ`:
+  con l'orizzonte di raccolta a 168 h l'archivio conteneva già partite del
+  turno brasiliano, e la prima ritenuta «coperta» era questa (nessuna Serie A
+  italiana era ancora in archivio: Juventus—Milan restava in «quote in
+  arrivo»).
+- `ESITO: linea sharp letta sul percorso di produzione` — ma la lettura era
+  **vuota**, ed è qui che il controllo ha fatto il suo lavoro.
+- Budget: **7/490 → 8/490 mese, 3/14 → 4/14 oggi** (verificato sul pannello
+  home prima e dopo): 1 credito speso, contatori esatti.
+
+Diagnosi (dal codice, riscontrabile nel Summary del run: `book sharp:
+nessuno`, `prezzo: n.d.`, `verdetto: non osservabile`, `book osservati: 0`):
+la partita è del campionato brasiliano, che la fonte BetExplorer etichetta
+«Brazil: Serie A»; la regex della mappa cercava solo «serie a» e quindi la
+classificava coperta con la chiave **della Serie A italiana**
+(`soccer_italy_serie_a`). La lettura è partita sulla chiave sbagliata, la
+fonte ha risposto con le partite italiane, il matching per nomi (Remo /
+Flamengo RJ) non ha trovato nessun evento corrispondente e la fotografia
+scritta è vuota: credito pagato, nessun dato. È la stessa classe di errore
+della CAF Champions League scambiata per la UEFA CL (§ test «coppa
+travestita»), prima non prevista per i campionati omonimi di altri paesi
+(Brazil: Serie A, Ecuador: Serie B, i Premier League di Bahrain/Giordania/
+Kuwait/Singapore/Ucraina, NIFL Championship…).
+
+Correzione nello stesso ramo di sessione (verificata da test dedicati):
+
+1. `sport-keys.ts`: la mappa ora confronta **paese e lega** («Paese: Lega» è
+   il formato reale dell'archivio) con pattern ancorati; un nome senza paese
+   non decide nulla (null = nessun credito). «Brazil: Serie A» e soci non
+   collidono più; la coperta «England: Championship» non cambia.
+2. `control-sharp-read.ts`: una lettura pagata ma vuota (nessun book, nessun
+   prezzo) ora stampa `ESITO: lettura pagata ma NESSUNA linea` ed esce in
+   errore: un controllo che dicesse «linea letta» su una fotografia vuota
+   nasconderebbe il guasto che deve trovare. Il credito resta contato (il
+   provider lo addebita comunque) e la fotografia vuota resta in cache per
+   la giornata: è la protezione del budget, non un dato.
+
+Cosa resta da fare dopo il merge: rilanciare `which=control` da `main` per
+convalidare il percorso su una partita coperta vera (in archivio o, in
+assenza, via ripiego dalla fonte: la prima in programma stasera era
+Juventus—Milan). La fotografia vuota di #661 scade da sola a fine giornata
+italiana e non è mostrata da nessuna pagina (la partita non ha segnale).

@@ -95,6 +95,17 @@ Stato reale:
   `COLLECT_HORIZON_HOURS=168` (variabile GitHub) serve perché l'archivio veda
   il turno corrente: da valutare dopo qualche giorno. Regia in
   `docs/REGOLE-OPERATIVE-ODDS.md`.
+- **Prima lettura di controllo post-attivazione (06/09/2026, run
+  `34046688765` da `main`)**: contatori esatti (7/490 → 8/490, 3/14 → 4/14),
+  ma la lettura ha rivelato una **collisione della mappa competizioni**: il
+  turno brasiliano era in archivio come «Brazil: Serie A», la regex cercava
+  solo «serie a» e la lettura è partita con la chiave della Serie A italiana
+  su Remo—Flamengo: credito speso, nessun evento corrispondente, fotografia
+  vuota. Corretta nello stesso ramo (matching paese+lega ancorato in
+  `sport-keys.ts`, fallire-chiuso senza paese; il controllo ora esce in
+  errore su letture pagate ma vuote). Stessa classe della CAF Champions
+  League già fermata in passato. Dettagli in SMOKE §15; dopo il merge
+  rilanciare `which=control` per la convalida su partita coperta vera.
 - Non aggiungere dati, Kelly, stake, +EV o «giocata consigliata» per riempire una
   lista. La calcolatrice manuale è separata dalla decisione e non va collegata al
   flusso operativo.
