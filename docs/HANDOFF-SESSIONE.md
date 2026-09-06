@@ -67,6 +67,10 @@ Stato reale:
   campionati coperti** (nessuna partita coperta aveva quote vive oggi) e **non
   accende il provider**: `ADAPTER_IMPLEMENTED` resta `false`; l'attivazione è una
   PR separata e controllata.
+- **Regole operative e divisione del lavoro** (chi fa cosa fra agente e umano,
+  limiti dei permessi, costi per azione, checklist «cosa facciamo adesso»):
+  `docs/REGOLE-OPERATIVE-ODDS.md`. È il documento di regia da leggere prima di
+  qualunque intervento su The Odds API.
 - Non aggiungere dati, Kelly, stake, +EV o «giocata consigliata» per riempire una
   lista. La calcolatrice manuale è separata dalla decisione e non va collegata al
   flusso operativo.
