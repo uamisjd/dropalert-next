@@ -39,6 +39,11 @@ Stato reale:
   edge e segnali coerenti; `VALORE VERIFICATO` richiederà inoltre campione minimo,
   out-of-sample, CLV e calibrazione. In assenza di uno di questi requisiti il sito
   deve dire `NO BET` o `OSSERVAZIONE`, con il motivo.
+- `odds_snapshots` ha già i campi necessari per persistere una linea individuale
+  (`bookmaker_id`, `source`, `collected_at`, `is_stale`). Il nuovo confine puro
+  `src/lib/decision/price-evidence.ts` rifiuta le chiavi aggregate e accetta solo
+  una linea individuale fresca; il dettaglio lo usa per non confondere una quota
+  eseguibile con il consenso.
 - Non aggiungere dati, Kelly, stake, +EV o «giocata consigliata» per riempire una
   lista. La calcolatrice manuale è separata dalla decisione e non va collegata al
   flusso operativo.

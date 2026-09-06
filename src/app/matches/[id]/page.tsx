@@ -34,6 +34,7 @@ import { isLowInformationCompetition } from "@/lib/context/pure";
 import { SharpLineBlock } from "@/components/SharpLineBlock";
 import { DecisionStatusBlock } from "@/components/DecisionStatusBlock";
 import { assessDecision } from "@/lib/decision/contract";
+import { executablePriceFromSeries } from "@/lib/decision/price-evidence";
 import { SignalTimeline } from "@/components/SignalTimeline";
 import { MatchSummary } from "@/components/MatchSummary";
 import { MatchQuantPanel } from "@/components/MatchQuantPanel";
@@ -587,12 +588,24 @@ export default async function MatchDetailPage({
     sharp?.snapshot?.independentFair !== null && sharp?.snapshot?.independentFair !== undefined && lead !== null
       ? sharp.snapshot.independentFair.fairProbabilities[lead.selection] ?? null
       : null;
-  const observedPrice = leadSeries?.current ?? lead?.currentPrice ?? null;
-  const observedAt = leadSeries?.lastAt ? new Date(leadSeries.lastAt) : null;
+  const executablePrice =
+    lead !== null
+      ? executablePriceFromSeries(
+          detail.series,
+          lead.market,
+          lead.selection,
+          now,
+          STALE_SNAPSHOT_MINUTES,
+        )
+      : null;
+  const observedPrice = executablePrice?.price ?? leadSeries?.current ?? lead?.currentPrice ?? null;
+  const observedAt = executablePrice?.observedAt ?? (leadSeries?.lastAt ? new Date(leadSeries.lastAt) : null);
   const priceAgeMinutes =
-    observedAt !== null && Number.isFinite(observedAt.getTime())
+    executablePrice?.ageMinutes ??
+    (observedAt !== null && Number.isFinite(observedAt.getTime())
       ? Math.max(0, Math.round((now.getTime() - observedAt.getTime()) / 60_000))
-      : detail.ageMinutes;
+      : detail.ageMinutes);
+  const priceSource = executablePrice?.source ?? "consensus";
   const sharpConfirms =
     sharp?.snapshot?.verdict === "conferma"
       ? true
@@ -606,7 +619,7 @@ export default async function MatchDetailPage({
     priceAgeMinutes,
     maxPriceAgeMinutes: STALE_SNAPSHOT_MINUTES,
     currentPrice: observedPrice,
-    priceSource: "consensus",
+    priceSource,
     marketComplete:
       sharp?.snapshot?.independentFair !== null &&
       sharp?.snapshot?.independentFair !== undefined,
