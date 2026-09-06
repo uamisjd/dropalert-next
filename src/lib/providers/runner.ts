@@ -218,6 +218,15 @@ export async function runProviderCall<T>(
     result.ok &&
     result.partial &&
     options.expectedPartial?.(result.missing) === true;
+  /* Una fonte può restituire dati utili e, nello stesso giro, limitare una
+     richiesta interna (per esempio una pagina di dettaglio). Il parziale
+     resta un parziale, ma l'episodio 429 deve arrivare a source_health e al
+     cooldown del collector: altrimenti il limite sparisce dietro un generico
+     "dati parziali" e il giro successivo riparte troppo presto. */
+  const rateLimited =
+    (!result.ok &&
+      (result.error.kind === "rate_limited" || result.error.kind === "blocked")) ||
+    (result.ok && result.partial && result.rateLimited === true);
   const outcome = expectedPartial ? "ok" : outcomeOf(result);
   const detail = expectedPartial
     ? `${describeResult(result)} — omissioni dovute soltanto al budget dichiarato del chiamante.`
@@ -243,10 +252,7 @@ export async function runProviderCall<T>(
       errorMessage: result.ok ? undefined : result.error.message,
       /* 429 e blocchi sono limiti della fonte: datati a parte, non
          confusi con i dati che non siamo riusciti a leggere noi */
-      rateLimited:
-        !result.ok &&
-        (result.error.kind === "rate_limited" ||
-          result.error.kind === "blocked"),
+      rateLimited,
     });
 
     /* Un buco dichiarato vale più di un numero inventato. */
@@ -259,7 +265,7 @@ export async function runProviderCall<T>(
     } else if (result.partial && !expectedPartial) {
       await recordGap({
         matchId,
-        reason: "provider_unavailable",
+        reason: result.rateLimited ? "rate_limited" : "provider_unavailable",
         detail: `${provider.label} — ${operation}: dati parziali. Mancano: ${result.missing.join("; ")}`,
       });
     }

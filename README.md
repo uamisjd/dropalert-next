@@ -351,9 +351,13 @@ invece di salvare un orario indovinato.
 
 **Scraping educato**: User-Agent identificabile, 12 richieste/minuto,
 intervallo minimo di 4 secondi, backoff sugli errori, circuit breaker,
-nessuna query string, mai i percorsi vietati dal `robots.txt`. L'elenco
+nessuna query string, mai i percorsi vietati dal `robots.txt`. Il gate vale
+per ogni GET interna dell'adapter — elenco, pagine partita, risultati e
+health-check — non soltanto per l'operazione esterna del runner. L'elenco
 drop è messo in cache 30 secondi: un giro di raccolta fa una sola
-richiesta invece di una per partita.
+richiesta invece di una per partita. Un 429 ricevuto da una pagina interna
+resta un parziale rate-limited, entra nel cooldown e in `/coverage` è distinto
+da una partita senza quote pubblicate (`no_odds`).
 
 ### the-odds-api (opzionale, spenta di default)
 

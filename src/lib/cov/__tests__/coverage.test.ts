@@ -742,6 +742,26 @@ function main(): void {
     assertEqual(c.lost, 1);
   });
 
+  test("429 durante le quote: not_reached, non no_odds", () => {
+    const c = buildRunCoverage(
+      inputWith({
+        withOddsIds: new Set(["aaa11111", "ccc33333"]),
+        problemsByRef: new Map([
+          [
+            "bbb22222",
+            {
+              code: EXCLUSION_CODES.RATE_LIMITED,
+              explanation: "pagina partita limitata con HTTP 429.",
+            },
+          ],
+        ]),
+      }),
+    );
+    assertEqual(c.byReason.not_reached, 1);
+    assertEqual(c.byReason.no_odds, 0);
+    assertEqual(c.exclusions.find((x) => x.ref === "bbb22222")?.reason, "not_reached");
+  });
+
   test("il limite del per-book è dichiarato, non contato come perdita", () => {
     const c = buildRunCoverage(inputWith());
     assertEqual(c.byReason.robots, 3, "una per partita importata");

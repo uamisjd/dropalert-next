@@ -34,6 +34,7 @@ import {
   type ParsedFixtureRow,
 } from "./parse";
 import { envFlag, envInt } from "../registry";
+import { getRateLimiter } from "../rate-limiter";
 import { EXCLUSION_CODES, taggedExclusion } from "../exclusion-codes";
 import {
   fail,
@@ -164,6 +165,12 @@ export interface BetexplorerOptions {
    */
   detailRowCap?: number;
   detailBudgetMs?: number;
+  /**
+   * Gate per ogni richiesta HTTP interna dell'adapter. In produzione usa lo
+   * stesso limite dichiarato dalla fonte; nei test si può iniettare un gate
+   * no-op senza dormire davvero.
+   */
+  requestGate?: () => Promise<number | void>;
 }
 
 /**
@@ -199,6 +206,27 @@ export function createBetexplorerProvider(
    * Non è un modo per spacciare dati vecchi per nuovi: `observedAt` è
    * l'istante dello SCARICAMENTO, non quello della lettura dalla cache.
    */
+  /* cortesia verso la fonte: un intervallo ampio fra richieste.
+     Configurabile, ma con default prudenti. */
+  const rateLimit = {
+    requestsPerMinute: envInt("BETEXPLORER_RPM", 12),
+    minIntervalMs: envInt("BETEXPLORER_MIN_INTERVAL_MS", 4_000),
+  };
+
+  /* `runProviderCall` protegge l'operazione pubblica, ma questo adapter
+     compie anche molte richieste interne (pagine partita e risultati). Il
+     gate a questo livello è indispensabile: senza di lui il limite valeva
+     solo per la prima pagina dell'operazione e il dettaglio martellava la
+     fonte fuori dal controllo del runner. */
+  const requestLimiter = getRateLimiter(`${BETEXPLORER_KEY}:http`, rateLimit);
+  const requestGate =
+    options.requestGate ??
+    (fetchImpl
+      ? async (): Promise<number> => 0
+      : async (): Promise<number> => requestLimiter.acquire());
+  const requestPage = (path: string): Promise<FetchOutcome> =>
+    requestGate().then(() => fetchPage(path, { fetchImpl }));
+
   const listingTtlMs = envInt("BETEXPLORER_LISTING_TTL_MS", 30_000);
   let cached: { outcome: FetchOutcome; fetchedAt: Date } | null = null;
 
@@ -211,20 +239,16 @@ export function createBetexplorerProvider(
     if (cached && now - cached.fetchedAt.getTime() < listingTtlMs && cached.outcome.ok) {
       /* payload già contabilizzato al primo scaricamento: non lo si
          conta due volte nelle statistiche del run */
-      return { outcome: { ...cached.outcome, bytes: 0, latencyMs: 0 }, fetchedAt: cached.fetchedAt };
+      return {
+        outcome: { ...cached.outcome, bytes: 0, latencyMs: 0 },
+        fetchedAt: cached.fetchedAt,
+      };
     }
-    const outcome = await fetchPage(DROPPING_ODDS_PATH, { fetchImpl });
+    const outcome = await requestPage(DROPPING_ODDS_PATH);
     const fetchedAt = new Date();
     if (outcome.ok) cached = { outcome, fetchedAt };
     return { outcome, fetchedAt };
   }
-
-  /* cortesia verso la fonte: un intervallo ampio fra richieste.
-     Configurabile, ma con default prudenti. */
-  const rateLimit = {
-    requestsPerMinute: envInt("BETEXPLORER_RPM", 12),
-    minIntervalMs: envInt("BETEXPLORER_MIN_INTERVAL_MS", 4_000),
-  };
 
   return {
     key: BETEXPLORER_KEY,
@@ -251,13 +275,17 @@ export function createBetexplorerProvider(
       window: DateRange,
       limits: FixtureFetchLimits = {},
     ): Promise<ProviderResult<FixtureDTO[]>> {
-      const outcome = await fetchPage(DROPPING_ODDS_PATH, { fetchImpl });
+      /* L'elenco è anche la base della successiva lettura delle quote. Usare
+         `getListing` qui evita una seconda richiesta identica a inizio giro e
+         fa sì che `observedAt` delle quote corrisponda alla fotografia reale
+         usata dal parser. */
+      const { outcome, fetchedAt } = await getListing();
 
       /* si conserva l'elenco grezzo appena scaricato: la misura di
          copertura deve poter contare anche le righe che scartiamo qui
          sotto, senza rifare la richiesta */
       lastListing = outcome.ok
-        ? { body: outcome.body, fetchedAt: new Date(), url: outcome.url }
+        ? { body: outcome.body, fetchedAt, url: outcome.url }
         : null;
 
       if (!outcome.ok) {
@@ -309,21 +337,26 @@ export function createBetexplorerProvider(
       }
       const detailStartedAt = Date.now();
       const fixtures: FixtureDTO[] = [];
+      let rateLimited = false;
       /* righe di `detailRows` effettivamente visitate: serve per dichiarare
          quelle mai raggiunte quando il budget scade a metà. */
       let visitedCount = 0;
       for (const row of detailRows) {
         if (Date.now() - detailStartedAt >= effectiveBudgetMs) break;
         visitedCount += 1;
-        const detail = await fetchPage(row.sourceUrl, { fetchImpl });
+        const detail = await requestPage(row.sourceUrl);
         if (!detail.ok) {
+          const limited = detail.status === 429;
+          rateLimited ||= limited;
           missing.push(
             taggedExclusion(
               row.providerMatchId,
-              EXCLUSION_CODES.PAGE_UNREACHABLE,
-              `pagina partita non raggiungibile (${
-                detail.status || detail.errorMessage
-              }), orario di inizio non verificabile: partita esclusa.`,
+              limited
+                ? EXCLUSION_CODES.RATE_LIMITED
+                : EXCLUSION_CODES.PAGE_UNREACHABLE,
+              limited
+                ? "pagina partita limitata con HTTP 429: riga non raggiunta e partita esclusa."
+                : `pagina partita non raggiungibile (${detail.status || detail.errorMessage}), orario di inizio non verificabile: partita esclusa.`,
             ),
           );
           continue;
@@ -370,7 +403,13 @@ export function createBetexplorerProvider(
       }
 
       if (missing.length > 0) {
-        return partial<FixtureDTO[]>(fixtures, outcome.latencyMs, missing, outcome.bytes);
+        return partial<FixtureDTO[]>(
+          fixtures,
+          outcome.latencyMs,
+          missing,
+          outcome.bytes,
+          rateLimited,
+        );
       }
       return ok<FixtureDTO[]>(fixtures, outcome.latencyMs, outcome.bytes);
     },
@@ -397,8 +436,9 @@ export function createBetexplorerProvider(
       );
 
       if (!row) {
+        const ref = fixture.providerMatchId ?? fixture.key;
         return partial<OddsQuoteDTO[]>([], outcome.latencyMs, [
-          `${fixture.key}: non più presente nell'elenco dei drop. Nessuna quota corrente osservabile adesso.`,
+          `${ref}: non più presente nell'elenco dei drop. Nessuna quota corrente osservabile adesso.`,
         ], outcome.bytes);
       }
 
@@ -430,6 +470,8 @@ export function createBetexplorerProvider(
       let totalBytes = 0;
       let totalLatency = 0;
       let hardFailures = 0;
+      let rateLimited = false;
+      let firstFailure: ProviderError | null = null;
 
       for (const league of list) {
         const [countrySlug, leagueSlug] = league.split("/");
@@ -438,16 +480,20 @@ export function createBetexplorerProvider(
           continue;
         }
 
-        const outcome = await fetchPage(resultsPath(countrySlug, leagueSlug), {
-          fetchImpl,
-        });
+        const outcome = await requestPage(resultsPath(countrySlug, leagueSlug));
         totalBytes += outcome.bytes;
         totalLatency += outcome.latencyMs;
 
         if (!outcome.ok) {
           hardFailures += 1;
           const error = classifyFailure(outcome);
-          missing.push(`${league}: ${error.message}`);
+          firstFailure ??= error;
+          rateLimited ||= error.kind === "rate_limited";
+          missing.push(
+            error.kind === "rate_limited"
+              ? taggedExclusion(league, EXCLUSION_CODES.RATE_LIMITED, error.message)
+              : `${league}: ${error.message}`,
+          );
           continue;
         }
 
@@ -467,10 +513,12 @@ export function createBetexplorerProvider(
         }
       }
 
-      /* tutte le pagine fallite: è un errore della fonte, non un parziale */
+      /* tutte le pagine fallite: è un errore della fonte, non un parziale.
+         Se il motivo osservato è 429 lo si conserva: il collector deve poter
+         aprire il cooldown anche quando il blocco arriva dal canale risultati. */
       if (hardFailures === list.length && list.length > 0) {
         return fail<ResultDTO[]>(
-          {
+          firstFailure ?? {
             kind: "http",
             message: `Nessuna pagina risultati raggiungibile (${hardFailures}/${list.length}).`,
           },
@@ -482,14 +530,20 @@ export function createBetexplorerProvider(
 
       void window;
       if (missing.length > 0) {
-        return partial<ResultDTO[]>(results, totalLatency, missing, totalBytes);
+        return partial<ResultDTO[]>(
+          results,
+          totalLatency,
+          missing,
+          totalBytes,
+          rateLimited,
+        );
       }
       return ok<ResultDTO[]>(results, totalLatency, totalBytes);
     },
 
     /** Raggiungibilità: una sola richiesta leggera all'elenco. */
     async healthCheck(): Promise<ProviderHealth> {
-      const outcome = await fetchPage(DROPPING_ODDS_PATH, { fetchImpl });
+      const outcome = await requestPage(DROPPING_ODDS_PATH);
       const checkedAt = new Date();
 
       if (!outcome.ok) {

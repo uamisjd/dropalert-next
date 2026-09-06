@@ -6,8 +6,9 @@
  * - timeout esplicito: una fonte che non risponde non blocca il job;
  * - percorsi vietati dal robots.txt rifiutati PRIMA di aprire la
  *   connessione, non dopo;
- * - il rate limiter vive nel runner: qui non si chiama mai due volte di
- *   fila senza passare da lì.
+ * - il rate limiter è applicato dal runner per le operazioni e dall'adapter
+ *   per le richieste interne (pagine di dettaglio e risultati): nessuna GET
+ *   bypassa il gate.
  *
  * Il robots.txt è replicato qui come lista di regole verificate il
  * 18.08.2026. È una copia, quindi può invecchiare: per questo la lista è

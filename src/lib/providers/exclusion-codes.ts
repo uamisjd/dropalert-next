@@ -24,6 +24,8 @@ export const EXCLUSION_CODES = {
   OUT_OF_WINDOW: "fuori-finestra",
   /** riga non interpretabile dal parser */
   UNREADABLE_ROW: "riga-illeggibile",
+  /** la fonte ha risposto 429 alla lettura della riga */
+  RATE_LIMITED: "richiesta-limitata",
   /** esclusa dal tetto di partite per giro: nostra scelta, non della fonte */
   RUN_CAP: "tetto-per-giro",
   /**

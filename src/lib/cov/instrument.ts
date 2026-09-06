@@ -181,6 +181,8 @@ export function reasonForCode(code: ExclusionCode | null): ExclusionReason {
       return "no_odds";
     case EXCLUSION_CODES.UNREADABLE_ROW:
       return "no_odds";
+    case EXCLUSION_CODES.RATE_LIMITED:
+      return "not_reached";
     /* Fuori finestra e tetto per giro non sono difetti né limiti della
        fonte: sono due nostre impostazioni (COLLECT_HORIZON_HOURS e
        COLLECT_MAX_FIXTURES) che funzionano come previsto. Contarle fra le
@@ -286,21 +288,37 @@ export function buildRunCoverage(input: RunCoverageInput): RunCoverage {
 
     tally.lost += 1;
 
+    /* Anche una fixture già scritta può perdere la fase quote per un 429.
+       Prima la classificavamo sempre come `no_odds`, confondendo un limite
+       della fonte con una quota non pubblicata. Si usa il motivo esplicito
+       della fase quote quando esiste; il fallback `no_odds` resta solo per
+       l'assenza non attribuita. */
+    const note = input.problemsByRef.get(row.providerMatchId) ?? null;
+
     if (wasImported) {
-      add({
-        ref: row.providerMatchId,
-        reason: "no_odds",
-        competition: row.leaguePath,
-        detail:
-          "Partita scritta in anagrafica ma senza alcuna quota registrata in questo giro.",
-        evidence: row.rawFragment,
-      });
+      if (note !== null && note.code === EXCLUSION_CODES.RATE_LIMITED) {
+        add({
+          ref: row.providerMatchId,
+          reason: reasonForCode(note.code),
+          competition: row.leaguePath,
+          detail: note.explanation,
+          evidence: row.rawFragment,
+        });
+      } else {
+        add({
+          ref: row.providerMatchId,
+          reason: "no_odds",
+          competition: row.leaguePath,
+          detail:
+            "Partita scritta in anagrafica ma senza alcuna quota registrata in questo giro.",
+          evidence: row.rawFragment,
+        });
+      }
       continue;
     }
 
     /* la riga è uscita: il motivo lo dichiara chi l'ha scartata, non lo
        indoviniamo qui */
-    const note = input.problemsByRef.get(row.providerMatchId) ?? null;
 
     if (note !== null) {
       add({

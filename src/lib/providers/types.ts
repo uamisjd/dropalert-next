@@ -158,6 +158,8 @@ export type ProviderResult<T> =
       partial: true;
       /** descrizione puntuale di cosa non è stato letto */
       missing: string[];
+      /** true quando almeno una richiesta interna è stata limitata con HTTP 429 */
+      rateLimited?: boolean;
       payloadBytes: number;
     }
   | {
@@ -298,6 +300,7 @@ export function partial<T>(
   latencyMs: number,
   missing: string[],
   payloadBytes = 0,
+  rateLimited = false,
 ): ProviderResult<T> {
   return {
     ok: true,
@@ -305,6 +308,7 @@ export function partial<T>(
     latencyMs,
     partial: true,
     missing: missing.length > 0 ? missing : ["dettaglio non specificato"],
+    ...(rateLimited ? { rateLimited: true } : {}),
     payloadBytes,
   };
 }

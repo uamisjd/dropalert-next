@@ -430,6 +430,40 @@ async function main(): Promise<void> {
     }
   });
 
+  await test("un 429 nelle pagine di dettaglio è un parziale rate-limited", async () => {
+    const p = createBetexplorerProvider({
+      enabled: true,
+      fetchImpl: (async (input: string | URL | Request) => {
+        const url = String(input);
+        return url.includes("/dropping-odds/")
+          ? new Response(droppingHtml, { status: 200 })
+          : new Response("", { status: 429, headers: { "retry-after": "60" } });
+      }) as typeof fetch,
+    });
+    const res = await p.fetchFixtures(WIDE_WINDOW);
+    assert(res.ok && res.partial, "il dato parziale va conservato");
+    if (res.ok && res.partial) {
+      assertEqual(res.rateLimited, true, "il 429 interno non va perso");
+      assertEqual(res.data.length, 0, "nessuna partita senza orario");
+      assert(res.missing.every((m) => m.includes("[richiesta-limitata]")), "motivo esplicito");
+    }
+  });
+
+  await test("il gate copre elenco e ogni pagina interna", async () => {
+    let gated = 0;
+    const p = createBetexplorerProvider({
+      enabled: true,
+      fetchImpl: routedFetch("2026-08-18T22:00:00+02:00"),
+      detailRowCap: 2,
+      requestGate: async () => {
+        gated += 1;
+      },
+    });
+    const res = await p.fetchFixtures(WIDE_WINDOW);
+    assert(res.ok, "la chiamata riesce");
+    assertEqual(gated, 3, "elenco più due pagine di dettaglio");
+  });
+
   await test("il chiamante può solo stringere il tetto di dettaglio", async () => {
     const p = createBetexplorerProvider({
       enabled: true,

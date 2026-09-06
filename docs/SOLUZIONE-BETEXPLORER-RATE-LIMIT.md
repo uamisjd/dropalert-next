@@ -1,8 +1,15 @@
 # Soluzione Rate Limit BetExplorer (429) + Integrazione Multi-Bookmaker
 
-**Data:** 05/09/2026  
-**Problema:** BetExplorer blocca le richieste con HTTP 429 (Too Many Requests)  
-**Impatto:** Fonte principale ferma, sistema non riceve nuovi dati
+**Data:** 06/09/2026
+**Problema:** BetExplorer blocca alcune richieste con HTTP 429 (Too Many Requests)
+**Impatto:** la fonte può consegnare un giro parziale; il sistema deve conservarne i dati utili senza scambiare le righe non raggiunte per quote assenti.
+
+> **Stato dell'implementazione:** il codice ora applica il gate anche alle GET
+> interne (elenco, dettaglio, risultati e health-check), conserva il flag
+> `rateLimited` nei parziali, apre il cooldown tramite il runner e classifica
+> una riga colpita da 429 come `not_reached` in `/coverage`. Le opzioni sotto
+> sono misure ulteriori da valutare solo se i 429 persistono; non sono
+> prerequisiti per dichiarare il fix completato.
 
 ---
 
@@ -181,10 +188,13 @@ export async function fetchOddsPortal(league: string) {
 
 ## 4. Roadmap Implementazione
 
-### Fase 1: Stabilizzare BetExplorer (Oggi)
-- [ ] Aumentare `BETEXPLORER_MIN_INTERVAL_MS` a 10000ms
-- [ ] Ridurre frequenza GitHub Actions a 60 min
-- [ ] Testare per 24h e monitorare 429
+### Fase 1: Stabilizzare BetExplorer
+- [x] Applicare il gate a ogni richiesta HTTP interna e non solo al runner
+- [x] Propagare 429 parziali, distinguerli da `no_odds` e alimentare il cooldown
+- [x] Evitare il bypass del runner nel controllo di stabilità delle quote
+- [ ] Se i 429 persistono, valutare `BETEXPLORER_MIN_INTERVAL_MS` a 10000ms
+- [ ] Misurare per 24h il rapporto tra giri completi, parziali e 429
+- [ ] Non ridurre la frequenza Actions senza una decisione separata: cambia la freschezza del monitor
 
 ### Fase 2: Integrare OddsHarvester (Questa Settimana)
 - [ ] Installare OddsHarvester in ambiente di sviluppo

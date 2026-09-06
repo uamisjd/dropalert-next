@@ -147,10 +147,12 @@ export async function recordSourcePing(ping: SourcePing): Promise<SourceStatus> 
     label: ping.label,
     status,
     lastAttemptAt: now,
+    /* «ultimo successo» deve significare risposta completa. Un parziale può
+       aver salvato qualche dato, ma non autorizza a raccontare che la fonte
+       abbia consegnato il giro intero: il pannello mostra la differenza fra
+       disponibilità parziale e successo reale. */
     lastSuccessAt:
-      ping.outcome === "ok" || ping.outcome === "partial"
-        ? now
-        : (existing?.lastSuccessAt ?? null),
+      ping.outcome === "ok" ? now : (existing?.lastSuccessAt ?? null),
     lastErrorAt: isError ? now : (existing?.lastErrorAt ?? null),
     lastErrorMessage: isError
       ? (ping.errorMessage ?? "errore non specificato")
