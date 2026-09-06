@@ -173,7 +173,9 @@ export function plainSentence(
       `Movimento su ${signal.booksConfirming} bookmaker su ${signal.booksTotal}.`,
     );
   } else {
-    parts.push("Movimento su un solo bookmaker.");
+    parts.push(
+      "Movimento su una sola linea osservata: la concordanza fra bookmaker non è verificabile.",
+    );
   }
 
   return parts.join(" ");

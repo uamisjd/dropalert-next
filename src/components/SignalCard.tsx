@@ -1,11 +1,11 @@
 /**
  * Card di una partita con movimento di quota rilevato — Modalità Quant / Pro.
  *
- * Mostra il percorso del prezzo (apertura → picco → corrente), la variazione in
- * punti percentuali e i tick del movimento. Le metriche di «+EV» e lo stake Kelly che
- * stavano qui sono stati tolti: si fondavano su una fair ipotizzata (margine 4,5%
- * fisso) e su un prezzo di apertura non più acquistabile. L'audit è in
- * `docs/STUDIO-VALUE-BETS.md`.
+ * Mostra il percorso del prezzo (apertura → picco → corrente) e la variazione
+ * percentuale/reale del movimento. Le metriche di «+EV» e stake Kelly sono state
+ * tolte perché si fondavano su una fair ipotizzata (margine 4,5%) e su un prezzo
+ * di apertura non più acquistabile; i tick Betfair non sono applicabili a questa
+ * fonte di consenso. L'audit è in `docs/STUDIO-VALUE-BETS.md`.
  */
 import Link from "next/link";
 import type { DashboardSignal } from "@/lib/repo/dashboard";
@@ -33,7 +33,7 @@ import {
 } from "@/lib/view/plain";
 import { Info } from "./Info";
 import { Sparkline } from "./Sparkline";
-import { calculateTickDistance } from "@/lib/quant/exchange-trading";
+import { STALE_SNAPSHOT_MINUTES } from "@/lib/drop/constants";
 
 function PriceStep({
   label,
@@ -96,6 +96,8 @@ export function SignalCard({
     signal.peakPrice !== null &&
     signal.openingPrice !== null &&
     Math.abs(signal.peakPrice - signal.openingPrice) > 0.0005;
+  const quoteIsStale =
+    signal.ageMinutes !== null && signal.ageMinutes > STALE_SNAPSHOT_MINUTES;
 
   /* I chip «Fair / Edge / Kelly» sono usciti da questa card (audit
    * `docs/STUDIO-VALUE-BETS.md` §2). La «fair» era la quota corrente divisa per un
@@ -104,12 +106,9 @@ export function SignalCard({
    * prima cosa che chi arriva legge, un numero costruito è peggio di nessun numero.
    * Il divario legittimo — contro la linea no-vig completa dello stesso bookmaker —
    * sta in `/value-bets` e nel pannello quantitativo della partita. Qui resta la
-   * misura del movimento, che è reale: i tick fra apertura e ultima lettura.
+   * misura del movimento realmente osservato: quota, probabilità implicita e
+   * durata. I tick Betfair non si applicano a una quota di consenso BetExplorer.
    */
-  const tickDist =
-    signal.openingPrice && signal.currentPrice
-      ? calculateTickDistance(signal.openingPrice, signal.currentPrice)
-      : 0;
 
   return (
     <article className="group relative rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition-all hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-md focus-within:border-cyan-600 sm:p-5">
@@ -230,9 +229,13 @@ export function SignalCard({
           hint="Quota più lontana dall'apertura nella direzione del movimento."
         />
         <PriceStep
-          label="Corrente"
+          label={quoteIsStale ? "Ultima rilevazione" : "Corrente"}
           value={fmtPrice(signal.currentPrice)}
-          hint="Ultima quota di consenso rilevata."
+          hint={
+            quoteIsStale
+              ? `Quota osservata ${signal.ageMinutes} minuti fa: non è una quotazione live.`
+              : "Ultima quota di consenso rilevata."
+          }
           emphasis
         />
       </div>
@@ -248,11 +251,6 @@ export function SignalCard({
           </div>
           <div className="text-lg font-semibold tabular-nums text-slate-900">
             {fmtPct(signal.dropPct)}
-            {Math.abs(tickDist) >= 3 ? (
-              <span className="ml-1.5 text-xs font-bold text-cyan-700">
-                ({Math.abs(tickDist)} ticks)
-              </span>
-            ) : null}
           </div>
         </div>
         <div>
@@ -278,16 +276,16 @@ export function SignalCard({
       {/* conferme e persistenza */}
       <div className="mb-3 space-y-1 text-xs text-slate-700">
         <div>
-          Bookmaker concordi:{" "}
+          {signal.booksTotal <= 1 ? "Linea osservata" : "Bookmaker concordi"}:{" "}
           <span className="font-medium tabular-nums text-slate-900">
             {signal.booksConfirming}/{signal.booksTotal}
           </span>
           {signal.booksTotal <= 1 && (
             <span
               className="ml-1 text-slate-500"
-              title="La fonte espone una sola linea di consenso."
+              title="La fonte espone una sola linea di consenso: la concordanza fra bookmaker non è osservabile."
             >
-              (consenso unico)
+              (consenso unico; concordanza non osservabile)
             </span>
           )}
         </div>

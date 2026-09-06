@@ -378,6 +378,12 @@ async function main(): Promise<void> {
     assert(t.includes("implicita"), "riconciliazione fair/implicita a schermo");
   });
 
+  await test("quant partita: non offre Kelly né stake operativo", () => {
+    const t = testo();
+    assert(t.includes("Quota osservata"), "la quota è dichiarata come osservata");
+    assert(!/Kelly|Bankroll|stake/i.test(t), "la partita non espone sizing operativo");
+  });
+
   await act(async () => rootQuant.unmount());
 
   console.log(

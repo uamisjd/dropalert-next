@@ -32,10 +32,14 @@ import { getSharpLine } from "@/lib/repo/sharp";
 import { sportKeyFor } from "@/lib/providers/optional/sport-keys";
 import { isLowInformationCompetition } from "@/lib/context/pure";
 import { SharpLineBlock } from "@/components/SharpLineBlock";
+import { DecisionStatusBlock } from "@/components/DecisionStatusBlock";
+import { assessDecision } from "@/lib/decision/contract";
+import { executablePriceFromSeries } from "@/lib/decision/price-evidence";
 import { SignalTimeline } from "@/components/SignalTimeline";
 import { MatchSummary } from "@/components/MatchSummary";
 import { MatchQuantPanel } from "@/components/MatchQuantPanel";
 import { normalizedReachabilityScore } from "@/lib/repo/score-view";
+import { STALE_SNAPSHOT_MINUTES } from "@/lib/drop/constants";
 import {
   ND,
   fmtAgo,
@@ -195,11 +199,15 @@ function Metric({
 /** Blocco di una singola serie: grafico + numeri che ne derivano. */
 function SeriesBlock({
   series,
+  quoteAgeMinutes,
   featured = false,
 }: {
   series: MarketSeries;
+  quoteAgeMinutes: number | null;
   featured?: boolean;
 }) {
+  const quoteIsStale =
+    quoteAgeMinutes !== null && quoteAgeMinutes > STALE_SNAPSHOT_MINUTES;
   const hasDistinctPeak =
     series.peak !== null &&
     series.opening !== null &&
@@ -251,9 +259,15 @@ function SeriesBlock({
           }
         />
         <Metric
-          label="Corrente"
+          label={
+            quoteIsStale ? "Ultima rilevazione" : "Corrente"
+          }
           value={fmtPrice(series.current)}
-          hint="Ultima quota rilevata."
+          hint={
+            quoteIsStale
+              ? `Quota osservata ${quoteAgeMinutes} minuti fa: non è una quotazione live.`
+              : "Ultima quota rilevata."
+          }
           emphasis
         />
         <Metric
@@ -559,6 +573,8 @@ export default async function MatchDetailPage({
             sportKey: sportKeyFor(detail.match.league),
             homeTeam: detail.match.homeTeam,
             awayTeam: detail.match.awayTeam,
+            kickoffAt: new Date(detail.match.kickoffAt),
+            market: lead.market,
             selection: lead.selection,
             consensusOpening: leadSeries?.opening ?? null,
             consensusCurrent: leadSeries?.current ?? null,
@@ -567,6 +583,89 @@ export default async function MatchDetailPage({
           now,
         ).catch(() => null)
       : null;
+
+  const sharpFairProbability =
+    sharp?.snapshot?.independentFair !== null && sharp?.snapshot?.independentFair !== undefined && lead !== null
+      ? sharp.snapshot.independentFair.fairProbabilities[lead.selection] ?? null
+      : null;
+  const executablePrice =
+    lead !== null
+      ? executablePriceFromSeries(
+          detail.series,
+          lead.market,
+          lead.selection,
+          now,
+          STALE_SNAPSHOT_MINUTES,
+        )
+      : null;
+  const observedPrice = executablePrice?.price ?? leadSeries?.current ?? lead?.currentPrice ?? null;
+  const observedAt = executablePrice?.observedAt ?? (leadSeries?.lastAt ? new Date(leadSeries.lastAt) : null);
+  const priceAgeMinutes =
+    executablePrice?.ageMinutes ??
+    (observedAt !== null && Number.isFinite(observedAt.getTime())
+      ? Math.max(0, Math.round((now.getTime() - observedAt.getTime()) / 60_000))
+      : detail.ageMinutes);
+  const priceSource = executablePrice?.source ?? "consensus";
+  const sharpConfirms =
+    sharp?.snapshot?.verdict === "conferma"
+      ? true
+      : sharp?.snapshot?.verdict === "smentisce"
+        ? false
+        : null;
+  const decision = assessDecision({
+    now,
+    kickoffAt: new Date(detail.match.kickoffAt),
+    dataError: null,
+    priceAgeMinutes,
+    maxPriceAgeMinutes: STALE_SNAPSHOT_MINUTES,
+    currentPrice: observedPrice,
+    priceSource,
+    marketComplete:
+      sharp?.snapshot?.independentFair !== null &&
+      sharp?.snapshot?.independentFair !== undefined,
+    fairProbability: sharpFairProbability,
+    fairSource: sharpFairProbability !== null ? "independent_sharp" : "none",
+    edgePct:
+      sharpFairProbability !== null && observedPrice !== null
+        ? (sharpFairProbability * observedPrice - 1) * 100
+        : null,
+    minimumEdgePct: 2,
+    movement: {
+      observed: leadSeries?.dropPct !== null && leadSeries?.dropPct !== undefined,
+      dropPct: leadSeries?.dropPct ?? null,
+      durationMinutes: lead?.sustainedMinutes ?? null,
+      isFlash: lead?.isFlash ?? null,
+      rebounded: lead?.rebounded ?? null,
+      directionCoherent:
+        leadSeries?.dropPct !== null &&
+        leadSeries?.dropPct !== undefined &&
+        leadSeries.dropPct < 0,
+      hoursToKickoff:
+        lead !== null
+          ? (new Date(detail.match.kickoffAt).getTime() -
+              new Date(lead.firstMoveAt).getTime()) /
+            3_600_000
+          : null,
+    },
+    context: {
+      status:
+        context?.grounded || context?.fields !== null && context?.fields !== undefined
+          ? "available"
+          : matchNews.state === "vuoto"
+            ? "empty"
+            : "unavailable",
+      newsCount: matchNews.itemsCount,
+    },
+    sharpAvailable: sharp?.snapshot !== null && sharp?.snapshot !== undefined,
+    sharpConfirmed: sharpConfirms,
+    validation: {
+      sampleSize: 0,
+      minimumSampleSize: 30,
+      outOfSamplePassed: false,
+      clvPositive: false,
+      calibrationPassed: false,
+    },
+  });
 
   const { match } = detail;
   const hasResult = match.homeGoals !== null && match.awayGoals !== null;
@@ -639,6 +738,9 @@ export default async function MatchDetailPage({
       <div className="mt-5">
         <MatchSummary signal={lead} series={leadSeries} />
       </div>
+      <div className="mt-4">
+        <DecisionStatusBlock assessment={decision} />
+      </div>
 
       <nav
         aria-label="Sezioni della partita"
@@ -646,7 +748,7 @@ export default async function MatchDetailPage({
       >
         {[
           ["#movimento", "Movimento"],
-          ["#quant-alpha", "Quant & Value (+EV)"],
+          ["#quant-alpha", "Misure quantitative"],
           ["#contesto", "Contesto"],
           ["#affidabilita", "Affidabilità"],
           ["#dati", "Qualità dati"],
@@ -697,7 +799,11 @@ export default async function MatchDetailPage({
             ricostruita una serie al posto dei dati mancanti.
           </p>
         ) : (
-          <SeriesBlock series={primarySeries} featured />
+          <SeriesBlock
+            series={primarySeries}
+            quoteAgeMinutes={detail.ageMinutes}
+            featured
+          />
         )}
 
         {secondarySeries.length > 0 ? (
@@ -714,6 +820,7 @@ export default async function MatchDetailPage({
                 <SeriesBlock
                   key={`${series.market}-${series.selection}-${series.bookmakerKey}`}
                   series={series}
+                  quoteAgeMinutes={detail.ageMinutes}
                 />
               ))}
             </div>

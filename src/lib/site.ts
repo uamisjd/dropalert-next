@@ -47,7 +47,6 @@ export const PUBLIC_PAGES = [
   "/performance",
   "/strumenti",
   "/value-bets",
-  "/smart-bets",
   "/trading",
   "/arbitrage",
   "/surebet",

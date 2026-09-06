@@ -1,14 +1,12 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useMemo } from "react";
 import Link from "next/link";
 import type { DetailSignal, MarketSeries } from "@/lib/repo/match-detail";
 import type { MarketType, SelectionCode } from "@/db/schema";
-import { calculateKellyStake } from "@/lib/quant/kelly";
-import { calculateGreenUp, calculateTickDistance } from "@/lib/quant/exchange-trading";
+import { calculateTickDistance } from "@/lib/quant/exchange-trading";
 import { computeValueGap } from "@/lib/quant/value-gap";
 import { buildSyntheticMarkets } from "@/lib/quant/synthetic-odds";
-import { round } from "@/lib/drop/math";
 
 interface Props {
   signal: DetailSignal | null;
@@ -29,23 +27,19 @@ const signedPp = (v: number): string =>
  * Pannello quantitativo della partita.
  *
  * Cosa fa qui dentro, in ordine di affidabilità:
- *  1. il **divario** fra l'ultima lettura della selezione e la linea senza margine
- *     (no-vig) dello stesso bookmaker sullo stesso mercato — stessa formula dello
+ *  1. il **divario** fra l'ultima quota osservata e la linea senza margine
+ *     (no-vig) della stessa fonte sullo stesso mercato — stessa formula dello
  *     scanner `/value-bets` e della chiusura fair del CLV (`value-gap.ts`);
- *  2. l'**escursione** del prezzo (apertura → ora) in tick, con accanto quanto valeva
- *     chiuderla a ritroso: è storia del movimento, non un'operazione eseguibile;
+ *  2. l'**escursione** del prezzo (apertura → ora) in tick: è storia del movimento,
+ *     non una simulazione e non un'operazione eseguibile;
  *  3. le **quote sintetiche** derivate dalla terna: aritmetica della linea, non
  *     un'offerta confrontabile con qualcuno (nessun bookmaker alternativo è letto).
  *
  * Cosa NON fa: nessuna «fair» ipotizzata dividendo per un margine di comodo, nessun
  * edge calcolato sul prezzo di apertura (non è più acquistabile), nessuna probabilità
- * inventata quando la terna è incompleta, nessuna puntata suggerita — la Kelly resta
- * una calcolatrice e i numeri li inserisce chi legge, come in `/strumenti`.
+ * inventata quando la terna è incompleta e nessuna puntata o sizing suggeriti.
  */
 export function MatchQuantPanel({ signal, series, allSeries }: Props) {
-  const [bankroll, setBankroll] = useState<number>(1000);
-  const [probPct, setProbPct] = useState<string>("");
-  const [kellyTier, setKellyTier] = useState<"eighth" | "quarter" | "half">("quarter");
 
   const currentPrice = series?.current ?? signal?.currentPrice ?? null;
   const openingPrice = series?.opening ?? signal?.openingPrice ?? null;
@@ -98,30 +92,8 @@ export function MatchQuantPanel({ signal, series, allSeries }: Props) {
   const movement = useMemo(() => {
     if (!openingPrice || !currentPrice || openingPrice <= currentPrice) return null;
     const ticks = calculateTickDistance(openingPrice, currentPrice);
-    const greenUp = calculateGreenUp({
-      backOdds: openingPrice,
-      backStake: 100,
-      layOdds: currentPrice,
-      commissionPct: 4.5,
-    });
-    return { ticks, greenUp };
+    return { ticks };
   }, [openingPrice, currentPrice]);
-
-  /* ------------------------------------------------------------------ */
-  /* 3 — Kelly come calcolatrice, con la probabilità scritta qui         */
-  /* ------------------------------------------------------------------ */
-
-  const p = Number(probPct.replace(",", "."));
-  const probValid = probPct.trim() !== "" && Number.isFinite(p) && p > 0 && p <= 100;
-  const kelly =
-    probValid && currentPrice && currentPrice > 1.01
-      ? calculateKellyStake({
-          offeredOdds: currentPrice,
-          trueProbability: p / 100,
-          bankroll,
-          tier: kellyTier,
-        })
-      : null;
 
   /* ------------------------------------------------------------------ */
   /* 4 — sintetiche: solo se la terna c'è davvero                        */
@@ -154,9 +126,8 @@ export function MatchQuantPanel({ signal, series, allSeries }: Props) {
           Divario, escursione e linea no-vig di questa partita
         </h2>
         <p className="mt-1 text-sm text-slate-600">
-          Tre letture della stessa serie di prezzi: che cosa resta del margine se lo
-          togli, quanto si è mossa la quota e quanto varrebbe chiuderla oggi a ritroso.
-          Nessuna di queste &egrave; un&apos;istruzione su cosa fare.
+          Due letture della stessa serie di prezzi: che cosa resta del margine se lo
+          togli e quanto si è mossa la quota. Nessuna delle due &egrave; un&apos;istruzione su cosa fare.
         </p>
       </div>
 
@@ -171,7 +142,7 @@ export function MatchQuantPanel({ signal, series, allSeries }: Props) {
             <>
               <div className="mt-4 grid grid-cols-3 gap-2 rounded-2xl bg-slate-50 p-3 text-center">
                 <div>
-                  <div className="text-[10px] text-slate-500 uppercase">Quota corrente</div>
+                  <div className="text-[10px] text-slate-500 uppercase">Quota osservata</div>
                   <div className="text-base font-bold text-slate-950 tabular-nums">
                     {currentPrice?.toFixed(2)}
                   </div>
@@ -212,7 +183,7 @@ export function MatchQuantPanel({ signal, series, allSeries }: Props) {
                   ? ` Le letture della terna distano fra loro fino a ${gap.maxSkewMinutes} minuti: finché la fonte non espone una fotografia simultanea, il divario è indicativo.`
                   : ""}
                 {currentPrice !== null && openingPrice !== null && openingPrice > currentPrice
-                  ? " Nota: qui il prezzo valutato è quello eseguibile oggi, non l'apertura."
+                  ? " Nota: qui si legge l'ultima quota osservata, non l'apertura."
                   : ""}
               </p>
             </>
@@ -228,87 +199,18 @@ export function MatchQuantPanel({ signal, series, allSeries }: Props) {
               </Link>).
             </p>
           )}
-
-          {/* Calcolatrice Kelly: i numeri li inserisce chi legge */}
-          <div className="mt-4 rounded-2xl border border-slate-200 p-3.5">
-            <p className="text-xs font-semibold text-slate-700">
-              Kelly, se hai una tua probabilità
-            </p>
-            <div className="mt-2 grid grid-cols-2 gap-2">
-              <label className="text-[11px] text-slate-500">
-                Probabilità che le dai (%)
-                <input
-                  type="number"
-                  min="1"
-                  max="99"
-                  step="0.5"
-                  value={probPct}
-                  onChange={(e) => setProbPct(e.target.value)}
-                  placeholder="es. 52"
-                  className="mt-1 w-full rounded-lg border border-slate-300 px-2 py-1 text-xs font-bold text-slate-900"
-                />
-              </label>
-              <label className="text-[11px] text-slate-500">
-                Bankroll (€)
-                <input
-                  type="number"
-                  min="10"
-                  step="50"
-                  value={bankroll}
-                  onChange={(e) => setBankroll(Math.max(10, Number(e.target.value) || 0))}
-                  className="mt-1 w-full rounded-lg border border-slate-300 px-2 py-1 text-xs font-bold text-slate-900"
-                />
-              </label>
-            </div>
-            <div className="mt-2 flex items-center justify-between">
-              <div className="flex gap-1">
-                {(["eighth", "quarter", "half"] as const).map((t) => (
-                  <button
-                    key={t}
-                    onClick={() => setKellyTier(t)}
-                    className={`rounded px-2 py-0.5 text-[11px] font-semibold transition-colors ${
-                      kellyTier === t
-                        ? "bg-slate-950 text-white"
-                        : "bg-slate-100 text-slate-600 hover:bg-slate-200"
-                    }`}
-                  >
-                    {t === "eighth" ? "⅛" : t === "quarter" ? "¼" : "½"}
-                  </button>
-                ))}
-              </div>
-              <span className="text-xs font-bold text-slate-700 tabular-nums">
-                {kelly && kelly.hasEdge
-                  ? `€ ${kelly.recommendedStakeAmount.toFixed(2)} (${round(
-                      kelly.recommendedStakePct,
-                      2,
-                    )}%)`
-                  : kelly
-                    ? "la tua probabilità non supera l'implicita: niente stake"
-                    : "in attesa di una tua probabilità"}
-              </span>
-            </div>
-            <p className="mt-2 text-[11px] leading-relaxed text-slate-500">
-              La probabilità del divario qui sopra non è usabile come input: è la linea dello
-              stesso bookmaker, non un&#39;opinione indipendente. Inseriscine una tua, o usa
-              gli&nbsp;
-              <Link href="/strumenti" className="underline">
-                strumenti
-              </Link>
-              .
-            </p>
-          </div>
         </div>
 
         {/* Box 2: escursione del prezzo, a ritroso */}
         <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
           <h3 className="text-sm font-bold uppercase tracking-wider text-slate-900">
-            Escursione del prezzo e chiusura a ritroso
+            Escursione storica del prezzo
           </h3>
 
           {movement ? (
             <div className="mt-4 space-y-3">
               <div className="grid grid-cols-2 gap-3 rounded-2xl bg-slate-950 p-4 text-white">
-                <div>
+                <div className="col-span-2">
                   <div className="text-[10px] font-bold uppercase text-cyan-300">
                     Movimento rilevato
                   </div>
@@ -319,25 +221,11 @@ export function MatchQuantPanel({ signal, series, allSeries }: Props) {
                     {movement.ticks} tick di distanza
                   </div>
                 </div>
-                <div className="border-l border-white/15 pl-3">
-                  <div className="text-[10px] font-bold uppercase text-emerald-400">
-                    Valeva chiuderla (100 €)
-                  </div>
-                  <div className="text-xl font-black text-emerald-400 tabular-nums">
-                    {movement.greenUp
-                      ? `${movement.greenUp.hedgedProfitNet >= 0 ? "+" : ""}€ ${movement.greenUp.hedgedProfitNet.toFixed(2)}`
-                      : "n/d"}
-                  </div>
-                  <div className="text-[11px] text-emerald-200/80">
-                    con commissione ipotizzata 4,5%
-                  </div>
-                </div>
               </div>
               <p className="text-[11px] leading-relaxed text-slate-500">
-                Questo numero è <strong>a ritroso</strong>: descrive quanto valeva il movimento
-                dal punto di osservazione all&#39;ultimo. Non è un&#39;operazione eseguibile — la
-                quota di bancata di un exchange non è fra i dati che questo sito legge, e la
-                commissione è un&#39;ipotesi, non una tariffa rilevata.
+                È una misura storica della distanza fra apertura e ultima osservazione.
+                Non è una simulazione di risultato né un&#39;operazione eseguibile: il sito
+                non legge una quota di bancata exchange né un prezzo presso un operatore.
               </p>
             </div>
           ) : (

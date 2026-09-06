@@ -11,7 +11,6 @@ import {
   type OddsBand,
 } from "@/lib/view/scanner-filters";
 import { fmtDay, fmtTime } from "@/components/format";
-import { KellyInline } from "@/components/KellyInline";
 
 interface Props {
   scanner: ValueScannerResult;
@@ -23,10 +22,10 @@ const signed = (v: number, d = 2): string =>
 /**
  * Elenco dei divari di prezzo, dal più favorevole al meno favorevole.
  *
- * Nessun campo «puntata»: le righe sono una misura (quota eseguibile contro linea
- * senza margine), non un ordine di esecuzione. Le soglie di filtro sono letture, non
- * soglie operative: il divario si mostra anche quando è negativo, perché è il caso in
- * cui il monitor serve di più.
+ * Le righe sono una misura: con BetExplorer la quota corrente è consenso osservato,
+ * non prezzo eseguibile. Il gate decisionale lo rende esplicito e impedisce che un
+ * numero positivo diventi una giocata. Le soglie di filtro sono letture, non soglie
+ * operative: il divario si mostra anche quando è negativo.
  */
 export function ValueScannerTable({ scanner }: Props) {
   const [minEdge, setMinEdge] = useState<number>(DEFAULT_SCANNER_FILTERS.minEdge);
@@ -146,9 +145,22 @@ export function ValueScannerTable({ scanner }: Props) {
                         lettura di {opp.lineAgeMinutes} min fa
                       </span>
                     )}
+                    <span
+                      className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${
+                        opp.decision.state === "NON_AZIONABILE"
+                          ? "bg-rose-100 text-rose-800"
+                          : opp.decision.state === "VALORE_VERIFICATO"
+                            ? "bg-emerald-100 text-emerald-800"
+                            : opp.decision.state === "CANDIDATA"
+                              ? "bg-amber-100 text-amber-800"
+                              : "bg-slate-100 text-slate-700"
+                      }`}
+                    >
+                      {opp.decision.label}
+                    </span>
                     {opp.sharpConfirmed && (
                       <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-bold text-emerald-800">
-                        CONFERMA DALLA FONTE
+                        CONFERMA SHARP
                       </span>
                     )}
                   </div>
@@ -182,7 +194,7 @@ export function ValueScannerTable({ scanner }: Props) {
                 <div className="flex flex-wrap items-center gap-3 border-t border-slate-100 pt-3 sm:border-t-0 sm:pt-0">
                   <div className="rounded-xl bg-slate-50 p-2.5 text-center">
                     <div className="text-[10px] font-semibold text-slate-500 uppercase">
-                      Quota eseguibile
+                      Quota osservata · consenso
                     </div>
                     <div className="text-lg font-bold text-slate-950 tabular-nums">
                       {opp.currentOdds.toFixed(2)}
@@ -237,14 +249,11 @@ export function ValueScannerTable({ scanner }: Props) {
                     </div>
                   </div>
 
-                  {opp.edgePct > 0 && (
-                    <KellyInline
-                      offeredOdds={opp.currentOdds}
-                      trueProbPct={opp.trueProbPct}
-                      edgePct={opp.edgePct}
-                      compact
-                    />
-                  )}
+                  <div className="max-w-[15rem] rounded-xl border border-rose-100 bg-rose-50 p-2.5 text-[11px] leading-relaxed text-rose-800">
+                    {opp.decision.state === "NON_AZIONABILE"
+                      ? opp.decision.reasons[0]?.message ?? "Requisiti esecutivi non soddisfatti."
+                      : opp.decision.warnings[0] ?? "Nessun ordine: la riga è una misura del mercato."}
+                  </div>
 
                   <Link
                     href={`/matches/${opp.matchId}`}

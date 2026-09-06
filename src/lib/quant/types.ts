@@ -3,12 +3,13 @@
  * Copre: Value Betting (+EV), Dixon-Coles/Poisson, Shin Devig, Kelly Staking,
  * Surebet/Arbitraggio, Dutching e Trading Exchange (Green-Up/Scalping).
  */
+import type { DecisionAssessment, PriceSource } from "@/lib/decision/contract";
 
 export type FractionalKellyTier = "eighth" | "quarter" | "half" | "full";
 
 /**
- * Divario fra l'ultima lettura del consenso e la linea senza margine (no-vig) dello
- * STESSO bookmaker sullo STESSO mercato, su una partita non ancora al kickoff.
+ * Divario fra l'ultima quota osservata e la linea senza margine (no-vig) della
+ * STESSA fonte sullo STESSO mercato, su una partita non ancora al kickoff.
  *
  * Non è un consiglio e non contiene sizing: i campi «puntata consigliata» / euro sono
  * stati tolti perché calcolati su un prezzo non più eseguibile (audit
@@ -25,15 +26,19 @@ export interface ValueOpportunity {
   market: "1x2" | "ou_2_5" | "btts" | string;
   selection: string;
   selectionLabel: string;
-  /** ultima lettura del consenso: il solo prezzo davvero eseguibile */
+  /** ultima quota osservata; è eseguibile solo quando `priceSource` lo consente */
   currentOdds: number;
+  /** provenienza semantica del prezzo, non un'etichetta cosmetica */
+  priceSource: PriceSource;
+  /** false per il consenso BetExplorer e per ogni fonte non identificata */
+  priceExecutable: boolean;
   /** apertura, per leggere il movimento: NON è un'offerta acquistabile */
   openingOdds?: number;
   /** quota senza margine della linea completa (non una stima) */
   fairOdds: number;
   /** margine rimosso da quella linea: 6.1 = 6,1% di overround osservato */
   lineMarginPct: number;
-  /** bookmaker con terna completa su questo mercato alla stessa ora di lettura */
+  /** fonti/linee complete sul mercato alla stessa ora di lettura */
   booksWithLine: number;
   /** probabilità della linea no-vig, in % */
   trueProbPct: number;
@@ -56,6 +61,8 @@ export interface ValueOpportunity {
   sharpConfirmed: boolean;
   /** per costruzione solo partite non ancora al kickoff */
   status: "upcoming";
+  /** gate decisionale: non implica un ordine né uno sizing */
+  decision: DecisionAssessment;
 }
 
 export interface AdvancedDevigResult {

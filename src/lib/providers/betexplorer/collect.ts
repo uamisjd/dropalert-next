@@ -48,6 +48,7 @@ import { matchKeyFor } from "./parse";
 import { num } from "@/lib/drop/math";
 import {
   parseExclusion,
+  taggedExclusion,
   EXCLUSION_CODES,
   onlyOwnChoiceExclusions,
 } from "../exclusion-codes";
@@ -353,12 +354,9 @@ export async function collectBetexplorer(
       return upserted.id;
     };
 
-    /** quote di una fixture già in anagrafica. true se ne ha scritta almeno una. */
-    const collectOdds = async (
-      fixture: FixtureDTO,
-      matchId: number,
-    ): Promise<boolean> => {
-      const perMatch = await runProviderCall<OddsQuoteDTO[]>(
+    /** Un solo passaggio sorvegliato per leggere le quote di una fixture. */
+    const runOdds = (fixture: FixtureDTO, matchId: number) =>
+      runProviderCall<OddsQuoteDTO[]>(
         provider,
         "fetchOdds",
         () =>
@@ -371,11 +369,27 @@ export async function collectBetexplorer(
         { matchId },
       );
 
+    /** quote di una fixture già in anagrafica. true se ne ha scritta almeno una. */
+    const collectOdds = async (
+      fixture: FixtureDTO,
+      matchId: number,
+      existingCall?: Awaited<ReturnType<typeof runOdds>>,
+    ): Promise<boolean> => {
+      /* Il chiamante può passare la lettura già fatta per il controllo di
+         stabilità: così quel controllo non bypassa il runner e non esegue
+         una seconda GET sulla stessa partita. */
+      const perMatch = existingCall ?? (await runOdds(fixture, matchId));
+
       payloadBytes += perMatch.stats.payloadBytes;
       latencyMs += perMatch.stats.latencyMs;
 
+      const ref = fixture.providerMatchId ?? fixture.key;
       if (!perMatch.result.ok) {
-        problems.push(`${fixture.key}: ${perMatch.result.error.message}`);
+        problems.push(
+          perMatch.result.error.kind === "rate_limited"
+            ? taggedExclusion(ref, EXCLUSION_CODES.RATE_LIMITED, perMatch.result.error.message)
+            : `${ref}: ${perMatch.result.error.message}`,
+        );
         return false;
       }
 
@@ -403,22 +417,13 @@ export async function collectBetexplorer(
     /**
      * Una partita è STABILE quando ogni sua serie ha le ultime tre
      * rilevazioni identiche alla quota che l'elenco pubblica adesso.
-     * Si legge la cache dell'elenco (nessuna richiesta nuova): se il
-     * prezzo si è mosso, la partita non è stabile e si scrive.
+     * Riceve le quote già lette da `runOdds`: il controllo è quindi
+     * osservabile, rate-limited e non può nascondere un 429.
      */
-    const matchQuoteIsStable = async (
-      fixture: FixtureDTO,
+    const oddsAreStable = async (
+      odds: OddsQuoteDTO[],
       matchId: number,
     ): Promise<boolean> => {
-      const odds = await provider
-        .fetchOdds({
-          key: fixture.key,
-          providerMatchId: fixture.providerMatchId,
-          sourceUrl: fixture.sourceUrl,
-          kickoffAt: fixture.kickoffAt,
-        })
-        .then((r) => (r.ok ? r.data : []))
-        .catch(() => []);
       if (odds.length === 0) return false;
 
       const rows = await db
@@ -460,7 +465,16 @@ export async function collectBetexplorer(
     for (const fixture of fixtures) {
       const matchId = matchIds.get(fixture.key);
       if (matchId === undefined) continue;
-      if (await matchQuoteIsStable(fixture, matchId)) {
+      const perMatch = await runOdds(fixture, matchId);
+      if (
+        perMatch.result.ok &&
+        !perMatch.result.partial &&
+        (await oddsAreStable(perMatch.result.data, matchId))
+      ) {
+        /* La lettura è già passata dal runner; anche una risposta limitata
+           non può essere scambiata per una serie stabile. */
+        payloadBytes += perMatch.stats.payloadBytes;
+        latencyMs += perMatch.stats.latencyMs;
         stableSkipped += 1;
         if (fixture.providerMatchId !== null) {
           stableIds.add(fixture.providerMatchId);
@@ -470,7 +484,7 @@ export async function collectBetexplorer(
         }
         continue;
       }
-      await collectOdds(fixture, matchId);
+      await collectOdds(fixture, matchId, perMatch);
     }
 
     /* --- 3-bis. secondo e ultimo tentativo --------------------------- */

@@ -73,7 +73,7 @@ check("il riepilogo cita il percorso", riepilogo.includes("da 2.50 a 2.17"));
 check("il riepilogo cita le conferme", riepilogo.includes("4 bookmaker su 6"));
 check("ogni elemento porta il disclaimer", riepilogo.endsWith(FEED_DISCLAIMER));
 check(
-  "un solo bookmaker si dichiara",
+  "una sola linea e coordinazione non verificabile si dichiarano",
   feedSummary({
     selectionLabel: "X",
     marketLabel: "Esito finale",
@@ -82,7 +82,7 @@ check(
     levelLabel: "Segnale debole",
     booksConfirming: 1,
     booksTotal: 1,
-  }).includes("un solo bookmaker"),
+  }).includes("una sola linea osservata"),
 );
 eq("tetto elementi dichiarato", FEED_MAX_ITEMS, 30);
 

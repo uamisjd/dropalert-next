@@ -130,6 +130,8 @@ export async function getSharpLine(
     sportKey: string | null;
     homeTeam: string;
     awayTeam: string;
+    kickoffAt: Date;
+    market: "1x2" | "ou_2_5" | "btts" | string;
     selection: string;
     consensusOpening: number | null;
     consensusCurrent: number | null;
@@ -149,6 +151,14 @@ export async function getSharpLine(
       snapshot: null,
       unavailableReason:
         "linea sharp non disponibile: competizione non mappata sulla fonte",
+      budget,
+    };
+  }
+  if (params.market !== "1x2" && params.market !== "ou_2_5") {
+    return {
+      snapshot: null,
+      unavailableReason:
+        `linea sharp non disponibile: mercato ${params.market} non gestito dalla fonte`,
       budget,
     };
   }
@@ -173,6 +183,8 @@ export async function getSharpLine(
       sportKey: params.sportKey,
       homeTeam: params.homeTeam,
       awayTeam: params.awayTeam,
+      kickoffAt: params.kickoffAt,
+      market: params.market,
       selection: params.selection,
       consensusOpening: params.consensusOpening,
       consensusCurrent: params.consensusCurrent,

@@ -13,8 +13,9 @@
  *    operatore non esiste, quindi non esiste un "fair di mercato" — esiste il margine
  *    rimosso dalla linea che abbiamo (audit: `docs/STUDIO-VALUE-BETS.md` §2.4).
  *  - Non valuta il prezzo di APERTURA come fosse un'offerta: l'apertura non è più
- *    acquistabile, quindi l'edge si calcola SOLO sul prezzo eseguibile, quello
- *    corrente. Il calo dall'apertura resta in `dropPct`, con il suo nome.
+ *    acquistabile. Il confronto usa solo l'ultima quota osservata; diventa un prezzo
+ *    eseguibile soltanto quando la provenienza è un bookmaker/exchange reale. Il calo
+ *    dall'apertura resta in `dropPct`, con il suo nome.
  *  - Nessun pavimento a +0,5% e nessun valore di ripiego: un divario negativo è un
  *    divario negativo, e un mercato senza terna completa non viene elencato — viene
  *    contato in `skipped`, che la pagina mostra.
@@ -24,7 +25,18 @@
  */
 import { and, desc, eq, gte, inArray, isNull, sql } from "drizzle-orm";
 import { db } from "@/db/client";
-import { matches, oddsSnapshots, type MarketType, type SelectionCode } from "@/db/schema";
+import {
+  bookmakers,
+  matches,
+  oddsSnapshots,
+  type MarketType,
+  type SelectionCode,
+} from "@/db/schema";
+import { CONSENSUS_BOOKMAKER_KEY } from "@/lib/providers/betexplorer";
+import {
+  assessDecision,
+  type PriceSource,
+} from "@/lib/decision/contract";
 import { NOVIG_METHOD } from "../drop/novig";
 import { isValidPrice, round } from "../drop/math";
 import { computeValueGap } from "../quant/value-gap";
@@ -42,6 +54,8 @@ export interface ValueBetFilters extends DashboardFilters {
 /** Una lettura di linea: tutte le selezioni rilevate insieme da un bookmaker. */
 interface LineReading {
   bookmakerId: number;
+  bookmakerKey: string | null;
+  isConsensus: boolean;
   collectedAt: Date;
   source: string;
   prices: Partial<Record<SelectionCode, number>>;
@@ -99,6 +113,9 @@ const EMPTY: ValueScannerResult["skipped"] = {
 export interface LineRow {
   matchId: number;
   bookmakerId: number;
+  /** presenti quando la query ha arricchito la riga con `bookmakers` */
+  bookmakerKey?: string | null;
+  isConsensus?: boolean;
   market: MarketType;
   selection: SelectionCode;
   price: string | number;
@@ -133,6 +150,8 @@ export function groupLatestLines(rows: LineRow[]): Map<string, LineReading[]> {
     if (!cur) {
       newest.set(key, {
         bookmakerId: r.bookmakerId,
+        bookmakerKey: r.bookmakerKey ?? null,
+        isConsensus: r.isConsensus ?? r.bookmakerKey === CONSENSUS_BOOKMAKER_KEY,
         collectedAt: at,
         source: r.source,
         prices: { [r.selection]: price },
@@ -141,6 +160,8 @@ export function groupLatestLines(rows: LineRow[]): Map<string, LineReading[]> {
     }
     if (at.getTime() > cur.collectedAt.getTime()) {
       cur.collectedAt = at;
+      cur.bookmakerKey = r.bookmakerKey ?? null;
+      cur.isConsensus = r.isConsensus ?? r.bookmakerKey === CONSENSUS_BOOKMAKER_KEY;
       cur.source = r.source;
       cur.prices = { [r.selection]: price };
     } else if (at.getTime() === cur.collectedAt.getTime()) {
@@ -230,6 +251,8 @@ async function loadLines(
     .select({
       matchId: oddsSnapshots.matchId,
       bookmakerId: oddsSnapshots.bookmakerId,
+      bookmakerKey: bookmakers.key,
+      isConsensus: sql<boolean>`(${bookmakers.key} = ${CONSENSUS_BOOKMAKER_KEY})`,
       market: oddsSnapshots.market,
       selection: oddsSnapshots.selection,
       price: oddsSnapshots.price,
@@ -237,6 +260,7 @@ async function loadLines(
       source: oddsSnapshots.source,
     })
     .from(oddsSnapshots)
+    .innerJoin(bookmakers, eq(bookmakers.id, oddsSnapshots.bookmakerId))
     .where(
       and(
         inArray(oddsSnapshots.matchId, matchIds),
@@ -382,6 +406,54 @@ async function scanValueGaps(
     const ageMinutes =
       s.ageMinutes ?? Math.round((now.getTime() - reading.collectedAt.getTime()) / 60_000);
 
+    /* `s.currentPrice` nasce dalla dashboard BetExplorer: è il consenso della
+       fonte, non il prezzo di un operatore che il lettore possa eseguire. La
+       linea completa serve qui solo al no-vig osservativo; non correggiamo la
+       provenienza inventando un bookmaker. */
+    const priceSource: PriceSource = "consensus";
+    const decision = assessDecision({
+      now,
+      kickoffAt: new Date(s.kickoffAt),
+      dataError: null,
+      priceAgeMinutes: Number.isFinite(ageMinutes) ? ageMinutes : null,
+      maxPriceAgeMinutes: 90,
+      currentPrice: s.currentPrice!,
+      priceSource,
+      marketComplete: gap.selectionsUsed >= 2,
+      fairProbability: gap.fairProb,
+      fairSource: "same_line",
+      edgePct: gap.edgePct,
+      minimumEdgePct: 2,
+      movement: {
+        observed: s.dropPct !== null,
+        dropPct: s.dropPct,
+        durationMinutes: s.sustainedMinutes,
+        isFlash: s.isFlash,
+        rebounded: s.rebounded,
+        directionCoherent: s.dropPct !== null && s.dropPct < 0,
+        hoursToKickoff:
+          (new Date(s.kickoffAt).getTime() - now.getTime()) / 3_600_000,
+      },
+      context: {
+        status:
+          s.contextCompact !== null
+            ? "available"
+            : s.newsCount === 0 || s.newsEmpty
+              ? "empty"
+              : "unavailable",
+        newsCount: s.newsCount,
+      },
+      sharpAvailable: s.sharpAvailable,
+      sharpConfirmed: s.sharpConfirms,
+      validation: {
+        sampleSize: 0,
+        minimumSampleSize: 30,
+        outOfSamplePassed: false,
+        clvPositive: false,
+        calibrationPassed: false,
+      },
+    });
+
     opportunities.push({
       id: s.id,
       matchId: s.matchId,
@@ -393,6 +465,8 @@ async function scanValueGaps(
       selection: s.selection,
       selectionLabel: s.selectionLabel,
       currentOdds: round(s.currentPrice!, 3),
+      priceSource,
+      priceExecutable: false,
       openingOdds: s.openingPrice ? round(s.openingPrice, 3) : undefined,
       fairOdds: gap.fairOdds,
       lineMarginPct: gap.marginPct,
@@ -407,6 +481,7 @@ async function scanValueGaps(
       lineSource: reading.source,
       sharpConfirmed: s.sharpConfirms === true,
       status: "upcoming",
+      decision,
     });
   }
 
@@ -453,9 +528,9 @@ async function scanValueGaps(
     averageEdgePct: avgEdge,
     error: null,
     dataNote:
-      `divario calcolato sul prezzo eseguibile con no-vig proporzionale; ` +
+      `divario calcolato sull'ultima quota osservata con no-vig proporzionale; ` +
       `linea completa da ${booksWithCompleteLine} ` +
-      `bookmaker${booksWithCompleteLine === 1 ? "" : "i"}` +
+      `fonte${booksWithCompleteLine === 1 ? "" : "i"}` +
       (reasons.length > 0 ? ` · scartati: ${reasons.join(", ")}` : ""),
     generatedAt: now,
   };

@@ -13,6 +13,55 @@
 > ora italiana (estate = UTC+2) — non confondere i due, il «giro delle 10:22»
 > è le 12:22 a Napoli.
 
+## Stato decisionale — aggiornamento 2026-09-06
+
+Il progetto è in trasformazione da monitor dei drop a supporto decisionale quantitativo,
+ma **non esiste ancora una giocata operativa verificata**. La specifica vincolante è
+`docs/CONTRATTO-DECISIONALE.md`; il gate puro è in `src/lib/decision/contract.ts` e
+ha test dedicati (`npm run test:decision`).
+
+Stato reale:
+
+- BetExplorer alimenta il monitor con **consenso**, non con quote per singolo
+  bookmaker. Una quota consensus non va chiamata «eseguibile».
+- `/value-bets` misura il divario osservato contro il no-vig della linea completa
+  della stessa fonte. Non è +EV indipendente: ogni riga è marcata `NON AZIONABILE`
+  dal contratto e la UI non mostra Kelly o stake. Anche la scheda partita mostra ora
+  lo stato decisionale e non contiene più la calcolatrice Kelly operativa.
+- Il parser The Odds API e il percorso sharp hanno parti pure e una verifica nella
+  scheda partita. Ora il percorso sharp può conservare le linee complete dei
+  bookmaker e calcolare il no-vig della prima linea sharp completa, ma il risultato
+  resta riferimento indipendente: non è ancora un prezzo eseguibile per l'utente e
+  non alimenta `/value-bets`. `src/lib/providers/optional/the-odds-api.ts` resta con
+  `ADAPTER_IMPLEMENTED = false`: non c'è ancora ingest multi-bookmaker operativo
+  per lo scanner.
+- `CANDIDATA` richiederà prezzo reale, fair indipendente, linea completa, freshness,
+  edge e segnali coerenti; `VALORE VERIFICATO` richiederà inoltre campione minimo,
+  out-of-sample, CLV e calibrazione. In assenza di uno di questi requisiti il sito
+  deve dire `NO BET` o `OSSERVAZIONE`, con il motivo.
+- `odds_snapshots` ha già i campi necessari per persistere una linea individuale
+  (`bookmaker_id`, `source`, `collected_at`, `is_stale`). Il nuovo confine puro
+  `src/lib/decision/price-evidence.ts` rifiuta le chiavi aggregate e accetta solo
+  una linea individuale fresca; il dettaglio lo usa per non confondere una quota
+  eseguibile con il consenso.
+- Il client The Odds API ora gestisce rete, timeout, HTTP, JSON, matching di
+  squadre/kickoff e DTO per-bookmaker con fixture testabili. Esiste anche il
+  percorso esplicito `collectAndPersistTheOddsApiOdds` verso `odds_snapshots`.
+  `ADAPTER_IMPLEMENTED` resta però `false`: manca ancora lo smoke test con chiave
+  reale e database raggiungibile; nessuna attivazione è stata simulata. Lo smoke
+  test manuale è `npm run smoke:odds-api`: richiede variabili temporanee per una
+  partita reale, consuma un credito e scrive solo snapshot nella partita indicata.
+- Non aggiungere dati, Kelly, stake, +EV o «giocata consigliata» per riempire una
+  lista. La calcolatrice manuale è separata dalla decisione e non va collegata al
+  flusso operativo.
+
+Prossimo ordine di lavoro: (1) propagare il contratto a tutte le viste che ordinano
+segnali; (2) audit completo della fonte sharp e del matching per partita; (3) persistenza
+di prezzo/book/freshness e fixture stale/parziali/consensus; (4) validazione temporale
+con CLV, calibrazione e intervalli; (5) solo dopo eventuale promozione a valore
+verificato. Prima di dichiarare un adapter disponibile devono esistere chiamata di
+rete, salvataggio e test end-to-end.
+
 ## 1. Cos'è questo progetto (in una frase)
 
 DropAlert è un **terminale quantitativo per scommesse sul calcio**: monitora i

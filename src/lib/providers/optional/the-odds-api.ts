@@ -1,24 +1,14 @@
 /**
- * Adapter opzionale — the-odds-api.com (Sprint 3A: solo dichiarazione).
+ * Adapter opzionale — the-odds-api.com.
  *
- * DISATTIVATO DI DEFAULT, per decisione del committente.
- *
- * Motivo: il piano gratuito (~500 richieste/mese) non regge un polling
- * frequente su più campionati. Non è la fonte principale e il sistema
- * deve funzionare senza di essa e senza alcuna chiave API.
- *
- * Per attivarlo servono ENTRAMBE le cose:
- *   ODDS_API_ENABLED=true
- *   ODDS_API_KEY=<chiave>
- * Se manca la chiave la fonte resta spenta anche con il flag acceso:
- * meglio dichiararsi spenti che fallire a ogni chiamata.
- *
- * In questo sprint l'adapter è un guscio conforme al contratto: dichiara
- * le proprie capacità e risponde `unsupported` invece di fingere dati.
- * L'implementazione di rete arriverà solo se la fonte verrà accesa.
+ * Il client di rete e il parser sono implementati e testabili con fixture,
+ * ma l'adapter resta intenzionalmente disattivato finché non esistono anche
+ * ingest/persistenza cablati nel ciclo reale e uno smoke test live riuscito.
+ * Una capacità prevista non deve comparire come disponibile.
  */
 import { envFlag } from "../registry";
 import { readOddsApiKey } from "./odds-api-budget";
+import { fetchTheOddsApiOdds } from "./the-odds-api-client";
 import {
   disabledResult,
   unsupported,
@@ -35,33 +25,12 @@ import {
 const KEY = "the-odds-api";
 
 /**
- * L'adapter di rete NON è implementato: i tre metodi rispondono `unsupported`.
- *
- * Questa costante esiste perché la dichiarazione di capacità deve dire la
- * verità. Finché vale `false`, `perBookmakerOdds` resta `false` anche quando
- * la fonte viene accesa con flag e chiave: altrimenti `/api/health`
- * stamperebbe «Quote per singolo bookmaker disponibili» e
- * `perBookmakerOddsUnavailable()` smetterebbe di dichiarare che coordinazione
- * e conferma sharp non sono misurabili — mentre la fonte non restituisce una
- * sola quota. Una capacità dichiarata e non mantenuta è peggio di una
- * capacità assente.
- *
- * Quando l'implementazione di rete arriverà, questa diventa `true` e il test
- * `test:providers` lo verifica insieme al resto.
+ * Resta false fino allo smoke test reale: i test fixture non dimostrano
+ * raggiungibilità, quota residua né scrittura nel database di produzione.
  */
 export const ADAPTER_IMPLEMENTED = false;
 
-/**
- * Accesa solo con flag esplicito E chiave presente.
- *
- * La chiave si legge con `readOddsApiKey()`, che accetta i quattro nomi in uso
- * (`THE_ODDS_API_KEY`, `ODDS_API_KEY`, `theoddsapiKey`, `THEODDSAPIKEY`).
- * Prima questa funzione guardava solo `ODDS_API_KEY`: con una chiave
- * impostata con un altro nome accettato il check sharp funzionava (usa
- * `readOddsApiKey`) ma la fonte restava spenta anche con il flag acceso. Due
- * interruttori che leggono la stessa chiave in modo diverso sono un modo
- * sicuro per passare un pomeriggio a capire perché non si accende nulla.
- */
+/** Il flag e la chiave accendono la fonte; la capacità resta però falsa finché l'adapter non è dichiarato implementato. */
 export function theOddsApiEnabled(): boolean {
   return envFlag("ODDS_API_ENABLED", false) && readOddsApiKey() !== null;
 }
@@ -74,41 +43,55 @@ export function createTheOddsApiProvider(): OddsProvider {
     label: "The Odds API (opzionale)",
     enabled,
     capabilities: {
-      fixtures: ADAPTER_IMPLEMENTED,
+      fixtures: false,
       odds: ADAPTER_IMPLEMENTED,
-      results: ADAPTER_IMPLEMENTED,
-      /* l'API espone i singoli bookmaker, ma questo adapter non la chiama
-         ancora: la capacità si dichiara quando esiste, non quando è prevista */
+      results: false,
       perBookmakerOdds: ADAPTER_IMPLEMENTED,
     },
-    /* limiti prudenti: il piano gratuito è a quota mensile, non al minuto */
     rateLimit: { requestsPerMinute: 10, minIntervalMs: 6_000 },
 
     async fetchFixtures(_window: DateRange): Promise<ProviderResult<FixtureDTO[]>> {
       void _window;
       if (!enabled) return disabledResult<FixtureDTO[]>(KEY);
-      return unsupported<FixtureDTO[]>(KEY, "il calendario (adapter non implementato)");
+      return unsupported<FixtureDTO[]>(KEY, "il calendario: serve una mappa sportKey configurata");
     },
 
-    async fetchOdds(_fixture: FixtureRef): Promise<ProviderResult<OddsQuoteDTO[]>> {
-      void _fixture;
-      if (!enabled) return disabledResult<OddsQuoteDTO[]>(KEY);
-      return unsupported<OddsQuoteDTO[]>(KEY, "le quote (adapter non implementato)");
+    async fetchOdds(fixture: FixtureRef): Promise<ProviderResult<OddsQuoteDTO[]>> {
+      if (!enabled) return disabledResult(KEY);
+      if (!ADAPTER_IMPLEMENTED) {
+        return unsupported<OddsQuoteDTO[]>(KEY, "le quote (adapter non ancora dichiarato disponibile)");
+      }
+      if (
+        fixture.sportKey === undefined ||
+        fixture.homeTeam === undefined ||
+        fixture.awayTeam === undefined
+      ) {
+        return unsupported(KEY, "le quote senza sportKey e nomi squadra verificati");
+      }
+      return fetchTheOddsApiOdds({
+        sportKey: fixture.sportKey,
+        fixtureKey: fixture.key,
+        homeTeam: fixture.homeTeam,
+        awayTeam: fixture.awayTeam,
+        kickoffAt: fixture.kickoffAt,
+      });
     },
 
     async fetchResults(_window: DateRange): Promise<ProviderResult<ResultDTO[]>> {
       void _window;
       if (!enabled) return disabledResult<ResultDTO[]>(KEY);
-      return unsupported<ResultDTO[]>(KEY, "i risultati (adapter non implementato)");
+      return unsupported<ResultDTO[]>(KEY, "i risultati");
     },
 
     async healthCheck(): Promise<ProviderHealth> {
       return {
         reachable: false,
         latencyMs: 0,
-        detail: enabled
-          ? "Fonte abilitata ma adapter non ancora implementato."
-          : "Disattivata: servono ODDS_API_ENABLED=true e ODDS_API_KEY.",
+        detail: !enabled
+          ? "Disattivata: servono ODDS_API_ENABLED=true e una chiave valida."
+          : !ADAPTER_IMPLEMENTED
+            ? "Flag e chiave presenti, ma adapter in attesa di smoke test live e ingest persistente."
+            : "Fonte abilitata: smoke test live e persistenza ancora da verificare.",
         checkedAt: new Date(),
       };
     },

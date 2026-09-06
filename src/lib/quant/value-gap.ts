@@ -1,5 +1,5 @@
 /**
- * Divario fra prezzo eseguibile e linea senza margine (no-vig).
+ * Divario fra ultima quota osservata e linea senza margine (no-vig).
  *
  * Perché esiste un modulo separato: la stessa formula è stata scritta tre volte
  * (scanner `/value-bets`, card del dashboard, pannello quantitativo) e tutte e tre
@@ -11,7 +11,9 @@
  *     dello stesso bookmaker, alla stessa ora di lettura) con lo STESSO metodo usato
  *     per la chiusura fair del CLV (`fairMarket`, no-vig proporzionale). Se la terna
  *     non c'è, non c'è un fair: `{ ok: false }` con il motivo, mai una stima;
- *  2. il prezzo valutato è quello ESEGUIBILE, cioè quello corrente. Il movimento
+ *  2. il prezzo valutato è l'ultimo prezzo osservato, non l'apertura. Diventa
+ *     eseguibile solo se la fonte lo identifica come quota di un bookmaker o
+ *     exchange reale; il consenso BetExplorer resta osservazione. Il movimento
  *     dall'apertura è un'altra cosa e si chiama `dropPct`.
  *
  * Il risultato è un numero che può essere negativo e viene mostrato tale: un monitor
@@ -26,7 +28,7 @@ import type { MarketType, SelectionCode } from "@/db/schema";
 export interface ValueGapInput {
   market: MarketType;
   selection: SelectionCode;
-  /** prezzo corrente eseguibile (consenso) */
+  /** ultimo prezzo osservato; la sua eseguibilità dipende dalla fonte */
   currentPrice: number;
   /** prezzi di tutte le selezioni dello stesso mercato, stesso bookmaker, stessa lettura */
   line: Partial<Record<SelectionCode, number | null | undefined>>;
@@ -43,8 +45,10 @@ export type ValueGapResult =
       marginPct: number;
       /**
        * Divario fra fair ed eseguibile in PERCENTO relativo (`ev × 100`, non punti
-       * percentuali): +5,0 significa che il rendimento atteso sul prezzo eseguibile
-       * supera di un ventesimo la posta, non che le probabilità distano 5 pp.
+       * percentuali): +5,0 significa che il rendimento implicito sul prezzo osservato
+       * supera di un ventesimo la posta, non che le probabilità distano 5 pp. Il numero
+       * non è edge operativo finché la quota osservata non è eseguibile e la fair non è
+       * indipendente.
        * Può essere negativo.
        */
       edgePct: number;
@@ -87,7 +91,7 @@ export function computeValueGap(input: ValueGapInput): ValueGapResult {
     };
   }
 
-  /* EV sul prezzo eseguibile: è l'unico che un lettore potrebbe ottenere. */
+  /* Divario aritmetico sull'ultima quota osservata; il gate decide se è azionabile. */
   const ev = fairProb * input.currentPrice - 1;
 
   return {

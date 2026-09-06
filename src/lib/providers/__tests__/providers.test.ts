@@ -770,6 +770,19 @@ async function main(): Promise<void> {
     assert(stats.detail.includes("omissioni"), "la neutralizzazione è dichiarata");
   });
 
+  await test("un 429 interno resta tracciato anche dentro un parziale", async () => {
+    resetRateLimitState();
+    const p = makeProvider({ key: "parziale-limitato" });
+    const { result, stats } = await runProviderCall(
+      p,
+      "fetchFixtures",
+      async () => partial([1], 30, ["riga limitata"], 0, true),
+      { persist: false },
+    );
+    assert(result.ok && result.partial && result.rateLimited === true, "il flag 429 viaggia col dato");
+    assertEqual(stats.outcome, "partial", "il risultato resta parziale");
+  });
+
   await test("il rate limiter è condiviso per chiave di fonte", () => {
     resetRateLimitState();
     const a = getRateLimiter("stessa", { requestsPerMinute: 10, minIntervalMs: 100 });

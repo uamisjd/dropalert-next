@@ -124,7 +124,10 @@ check("frase: bookmaker", f1.includes("Movimento su 4 bookmaker su 6."));
 check("frase: nessun pronostico", !/vincer|probabil/i.test(f1));
 
 const f2 = plainSentence(sig({ booksTotal: 1, booksConfirming: 1, newsCount: 3, newsEmpty: false }), now);
-check("frase: un solo bookmaker", f2.includes("Movimento su un solo bookmaker."));
+check(
+  "frase: una sola linea senza coordinazione verificabile",
+  f2.includes("Movimento su una sola linea osservata: la concordanza fra bookmaker non è verificabile."),
+);
 check("frase: notizie contate", f2.includes("Notizie: 3"));
 
 const f3 = plainSentence(sig({ openingPrice: null, currentPrice: null }), now);

@@ -181,6 +181,7 @@ export function parseOddsResponse(
     fixtureKey: options.fixtureKey,
     bookmakerKey: l.bookmakerKey,
     isConsensus: false,
+    isSharp: l.isSharp,
     market: l.market,
     selection: l.selection,
     price: l.price,

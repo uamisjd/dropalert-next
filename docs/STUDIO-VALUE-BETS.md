@@ -269,6 +269,22 @@ osserva — lo scarto è il doppio.
   commissione dichiarata come assunta): un vero terminale exchange resta fuori portata finché non
   esiste una fonte di prezzi di bancata.
 
+### 4bis.1 — Aggiornamento del contratto (06/09/2026)
+
+La pagina non interpreta più `currentPrice` come quota acquistabile. Il prezzo della
+ dashboard arriva dal consenso BetExplorer: in `ValueOpportunity` è ora dichiarato
+`priceSource: "consensus"`, `priceExecutable: false` e il gate in
+`src/lib/decision/contract.ts` produce `NON AZIONABILE` con il motivo. Il no-vig della
+linea completa resta una misura descrittiva; non è fair indipendente e non crea +EV.
+
+La vecchia pagina `/smart-bets` è stata dismessa e reindirizza a `/value-bets`: non
+esistono più Smart Score, Kelly inline o priorità operative basate su quella misura.
+Il percorso sharp della scheda partita ora conserva le linee complete della risposta e
+calcola una fair no-vig dalla prima linea sharp completa, ma questa fair resta un
+riferimento: non è ancora collegata allo scanner e non rende eseguibile il consenso.
+La specifica persistente completa, con hard gate, soglie provvisorie e prerequisiti di
+validazione, è `docs/CONTRATTO-DECISIONALE.md`.
+
 ### 4ter — Che cosa ha dato il primo sguardo sui dati reali (05/09/2026)
 
 La pagina è andata in produzione con la PR #7 e la prima lettura reale ha dato una
@@ -306,7 +322,7 @@ devono somigliarsi.
 quelli previsti.** Quattro righe su cinque segnali attivi, tutte con terna completa dello
 stesso bookmaker, tutte negative, nessuna con euro o «fiducia»:
 
-| partita (non ancora al kickoff) | selezione | quota eseguibile | fair no-vig | margine rimosso | divario |
+| partita (non ancora al kickoff) | selezione | quota osservata (consenso) | fair no-vig | margine rimosso | divario |
 | --- | --- | --- | --- | --- | --- |
 | Deutschlandsberger – LASK | X | 11,92 (apertura 24,00) | 12,87 | 7,98% | **−7,4%** |
 | A. Klagenfurt – SK Rapid | X | 9,50 (23,00) | 10,34 | 8,83% | **−8,1%** |
@@ -322,8 +338,8 @@ esattamente ciò che §3 (S9) prevedeva per una lista onesta, invece dei +196,7%
 vecchie non spacciano freschezza.
 
 Sulla scheda partita (`/matches/558`) la stessa misura appare come «Divario −8,12 pp,
-margine rimosso 8,83% su 3 selezioni» con Kelly in «in attesa di una tua probabilità» —
-al posto dei 21,20 € suggeriti che l'audit documentava.
+margine rimosso 8,83% su 3 selezioni». Il dato resta descrittivo: nessun Kelly o stake
+viene prodotto da questa linea di consenso.
 
 **Lezione per chi toccherà queste pagine:** qualunque valore esca da una funzione SQL
 (aggregati, `case`, cast) va trattato come testo anche se il tipo dichiarato è un altro,

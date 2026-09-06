@@ -30,7 +30,6 @@ const PRIORITY: Record<string, number> = {
   "/performance": 0.5,
   "/strumenti": 0.6,
   "/value-bets": 0.7,
-  "/smart-bets": 0.6,
   "/trading": 0.6,
   "/arbitrage": 0.6,
   "/surebet": 0.5,
