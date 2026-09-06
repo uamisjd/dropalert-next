@@ -60,7 +60,9 @@ probabilità fair. I test sono in `src/lib/decision/__tests__/contract.test.ts`.
 
 - `src/lib/providers/optional/the-odds-api.ts` ha ancora
   `ADAPTER_IMPLEMENTED = false`: non dichiarare la capacità di ingest multi-book
-  come disponibile.
+  come disponibile. Il client HTTP, il parser, il percorso di persistenza e le
+  fixture sono ora implementati e testabili, ma manca ancora uno smoke test live
+  con chiave reale e database raggiungibile.
 - Esistono parser puri e un percorso sharp con budget in
   `src/lib/providers/optional/odds-api-odds.ts`,
   `odds-api-sharp.ts` e `src/lib/repo/sharp.ts`. Il percorso ora conserva, quando

@@ -298,7 +298,7 @@ sonda sul registry:
 | Che cosa | File | Stato | Che cosa sblocca |
 |---|---|---|---|
 | **Check sharp mirato** (una chiamata per partita segnalata) | `src/lib/providers/optional/odds-api-sharp.ts` (220 righe) | **implementato davvero**: endpoint `api.the-odds-api.com/v4/sports`, `fetchSharpLine`, `extractSharpPrice`, budget 490 crediti, 11 campionati mappati, cache giornaliera. Chiamato da `/matches/[id]` via `getSharpLine` | la **riga sharp** nella pagina della partita |
-| **Provider completo** (quote per ogni bookmaker) | `src/lib/providers/optional/the-odds-api.ts` (89 righe) | **guscio vuoto**: `fetchOdds` restituisce `unsupported("le quote (adapter non implementato)")` | la **coordinazione** (25 punti) |
+| **Provider completo** (quote per ogni bookmaker) | `src/lib/providers/optional/the-odds-api.ts` + `the-odds-api-client.ts` | **implementazione guardata**: client rete/parser/persistenza e fixture esistono, ma `ADAPTER_IMPLEMENTED=false` finché non passa smoke test live | la **coordinazione** (25 punti) |
 
 Sonde eseguite: senza variabili → `the-odds-api: enabled=false`; con
 `ODDS_API_ENABLED=true` e senza chiave → resta `false`; con flag e chiave →
