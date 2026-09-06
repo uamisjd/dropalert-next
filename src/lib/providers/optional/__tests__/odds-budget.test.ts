@@ -135,6 +135,13 @@ eq("coppa italiana non è la Serie A", sportKeyFor("Italy: Serie A Cup Women"), 
 eq("il campionato vero resta coperto", sportKeyFor("England: Premier League"), "soccer_epl");
 eq("le coppe UEFA restano coperte", sportKeyFor("Europe: UEFA Champions League"), "soccer_uefa_champs_league");
 eq("Europa League coperta", sportKeyFor("Europe: UEFA Europa League"), "soccer_uefa_europa_league");
+/* trovato in produzione (2026-09-06): la CAF Champions League veniva scambiata
+   per la UEFA CL e bruciava una chiamata a vuoto. Le Champions extra-europee
+   non sono leggibili con la chiave UEFA. */
+eq("CAF Champions League non è la UEFA CL", sportKeyFor("Africa: CAF Champions League"), null);
+eq("AFC Champions non è la UEFA CL", sportKeyFor("Asia: AFC Champions League"), null);
+eq("Champions League europea resta coperta", sportKeyFor("Europe: Champions League"), "soccer_uefa_champs_league");
+eq("Conference League europea resta coperta", sportKeyFor("Europe: Conference League"), "soccer_uefa_europa_conference_league");
 
 /* --- estrazione del prezzo sharp --- */
 const payload = [
