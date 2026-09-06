@@ -134,5 +134,21 @@ jobs:
           EXTRA=""
           if [ -n "${{ inputs.sport_key }}" ]; then EXTRA="--sport-key ${{ inputs.sport_key }}"; fi
           # shellcheck disable=SC2086
-          npm run odds:control -- --ore ${{ inputs.ore }} $EXTRA 2>&1 | sed -E "$MASK"
+          set +e
+          npm run odds:control -- --ore ${{ inputs.ore }} $EXTRA 2>&1 | tee /tmp/control.log | sed -E "$MASK"
+          code=${PIPESTATUS[0]}
+          set -e
+          # I log grezzi non sono scaricabili da fuori: l'esito viene fissato
+          # nel Summary del run e nelle annotazioni, così è leggibile dalla UI
+          # senza aprire il log del passo.
+          {
+            echo "## Lettura di controllo — esito"
+            echo '```'
+            grep -E "MARKER|origine|lega:|chiave sport|id evento|percorso:|ESITO|book sharp|prezzo|verdetto|book osservati|letti alle|  mese|  oggi|Crediti spesi|NESSUNA|RIPIEGO|ATTENZIONE" /tmp/control.log | sed -E "$MASK" || true
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          while IFS= read -r line; do
+            echo "::notice::$(echo "$line" | sed -E "$MASK")"
+          done < <(grep -E "ESITO|Crediti spesi|origine" /tmp/control.log | head -4)
+          exit "$code"
 
