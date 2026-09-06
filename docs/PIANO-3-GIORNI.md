@@ -53,7 +53,7 @@
 - [x] Filtra solo value bets con edge ≥ 2%
 - [x] Ordina per punteggio decrescente
 - [x] Mostra Kelly inline
-- [ ] Aggiungi link nella navigazione (opzionale, uso personale)
+- [x] Aggiungi link nella navigazione: voci «Smart Bets», «Arbitrage» e «Il mio bankroll» in `SiteNav.tsx` (+ `PUBLIC_PAGES`/sitemap per le prime due, layout `noindex` per `/mio-bankroll` come `/preferite`)
 
 ### Commit
 - `b150bbd` feat(giorno-2): aggiungi pagina /smart-bets con punteggio combinato

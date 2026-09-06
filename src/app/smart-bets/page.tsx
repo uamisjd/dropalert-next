@@ -1,16 +1,17 @@
 /**
- * Pagina /smart-bets — segnali ad alto valore per uso personale.
+ * Pagina /smart-bets — segnali ad alto valore.
  *
- * Questa pagina è per il proprietario del sito. Combina i value bets con
- * edge positivo significativo (> 2%) e li ordina per punteggio combinato.
+ * Combina i value bets con edge positivo significativo (> 2%) e li ordina
+ * per punteggio combinato. Nata per il proprietario del sito; dal momento
+ * in cui è raggiungibile dalla navigazione principale (voce «Smart Bets»
+ * in SiteNav, accanto a «Divario di prezzo», di cui è il filtro) resta
+ * comunque una lettura dei dati, non un consiglio di gioco.
  *
  * Punteggio Smart (max 100):
  * - Edge (40 punti): edge% normalizzato (max 10% = 40 punti)
  * - Kelly (20 punti): kelly% normalizzato (max 5% = 20 punti)
  * - Quota (20 punti): quote tra 1.80 e 3.00 ottengono max punteggio
  * - Freshness (20 punti): lettura recente (< 30 min = 20 punti)
- *
- * Uso personale: questa pagina non è nella navigazione pubblica.
  */
 import type { Metadata } from "next";
 import Link from "next/link";
