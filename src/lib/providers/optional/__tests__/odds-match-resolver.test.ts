@@ -270,11 +270,11 @@ test("lega fuori mappa: rifiutata senza override, leggibile con chiave esplicita
   const con = resolveSmokeMatch(
     scotland,
     new Date("2026-09-10T12:00:00.000Z"),
-    "soccer_scotland_premiership",
+    "soccer_spl",
   );
   assert(con.ok, "con override esplicito è leggibile");
   if (con.ok) {
-    assert(con.params.sportKey === "soccer_scotland_premiership", "chiave esplicita usata");
+    assert(con.params.sportKey === "soccer_spl", "chiave esplicita usata");
     assert(con.notes.some((n) => n.includes("fuori dalla mappa")), "l'override è dichiarato");
   }
 });

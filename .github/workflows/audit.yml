@@ -28,7 +28,7 @@ on:
         required: false
         default: "72"
       sport_key:
-        description: "Solo per smoke-odds: chiave sport per una lega FUORI mappa (es. soccer_scotland_premiership). Vuoto = mappa di budget"
+        description: "Solo per smoke-odds: chiave sport per una lega FUORI mappa (es. soccer_spl). Vuoto = mappa di budget"
         required: false
         default: ""
 
