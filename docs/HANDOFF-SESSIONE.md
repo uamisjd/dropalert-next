@@ -28,7 +28,10 @@ Stato reale:
   della stessa fonte. Non è +EV indipendente: ogni riga è marcata `NON AZIONABILE`
   dal contratto e la UI non mostra Kelly o stake.
 - Il parser The Odds API e il percorso sharp hanno parti pure e una verifica nella
-  scheda partita, ma `src/lib/providers/optional/the-odds-api.ts` resta con
+  scheda partita. Ora il percorso sharp può conservare le linee complete dei
+  bookmaker e calcolare il no-vig della prima linea sharp completa, ma il risultato
+  resta riferimento indipendente: non è ancora un prezzo eseguibile per l'utente e
+  non alimenta `/value-bets`. `src/lib/providers/optional/the-odds-api.ts` resta con
   `ADAPTER_IMPLEMENTED = false`: non c'è ancora ingest multi-bookmaker operativo
   per lo scanner.
 - `CANDIDATA` richiederà prezzo reale, fair indipendente, linea completa, freshness,

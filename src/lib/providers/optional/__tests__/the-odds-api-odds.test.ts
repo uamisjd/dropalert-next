@@ -15,7 +15,13 @@ import {
   parseOddsResponse,
   type TheOddsApiEvent,
 } from "../the-odds-api-odds";
-import { fetchSharpLine, normalizeSharpSnapshot } from "../odds-api-sharp";
+import {
+  completeSharpLines,
+  fetchSharpLine,
+  findEvent,
+  independentFairFromSharpLines,
+  normalizeSharpSnapshot,
+} from "../odds-api-sharp";
 
 let passed = 0;
 const failures: string[] = [];
@@ -84,6 +90,20 @@ const event: TheOddsApiEvent = {
 };
 
 const r = parseOddsResponse(event, { fixtureKey: "be-x1", observedAt: now });
+const duplicateEvent = { ...event, id: "later", commence_time: "2026-09-06T18:00:00Z" };
+check(
+  "matching usa anche il kickoff",
+  findEvent(
+    [duplicateEvent, event],
+    "Arsenal",
+    "Chelsea",
+    new Date("2026-09-06T14:00:00Z"),
+  )?.id === "abc123",
+);
+check(
+  "matching ambiguo senza kickoff non sceglie il primo",
+  findEvent([event, duplicateEvent], "Arsenal", "Chelsea") === null,
+);
 
 eq("due book visti", r.bookmakersSeen, 2);
 eq("due book usati", r.bookmakersUsed, 2);
@@ -196,6 +216,35 @@ eq("bet365 non sharp", lines.find((l) => l.bookmakerKey === "bet365")?.isSharp, 
 
 const spreadHome = bookSpread(lines, "home");
 check("dispersione su 'home' esiste (2 prezzi)", spreadHome !== null);
+const completeOnly = completeSharpLines(lines.filter((line) => line.market === "1x2"), "1x2");
+eq("due linee 1x2 complete", completeOnly.length, 2);
+eq(
+  "fair pura dalla prima linea sharp",
+  independentFairFromSharpLines(completeOnly, "1x2")?.sourceBook,
+  "pinnacle",
+);
+eq(
+  "linea incompleta non eredita la selezione precedente",
+  completeSharpLines(
+    lines.filter((line) => !(line.bookmakerKey === "pinnacle" && line.selection === "away")),
+    "1x2",
+  ).length,
+  1,
+);
+eq(
+  "timestamp diversi non vengono mischiati",
+  completeSharpLines(
+    lines
+      .filter((line) => line.market === "1x2")
+      .map((line) =>
+        line.bookmakerKey === "pinnacle" && line.selection === "away"
+          ? { ...line, observedAt: new Date(now.getTime() + 60_000) }
+          : line,
+      ),
+    "1x2",
+  ).length,
+  1,
+);
 eq("due prezzi su home", spreadHome?.count, 2);
 eq("minimo casa", spreadHome?.min, 2.05);
 eq("massimo casa", spreadHome?.max, 2.1);
@@ -220,6 +269,7 @@ async function sharpTests() {
 
 const threeSharp: TheOddsApiEvent = {
   id: "ev1",
+  commence_time: "2026-09-06T14:00:00Z",
   home_team: "Arsenal",
   away_team: "Chelsea",
   bookmakers: [
@@ -248,6 +298,8 @@ const out = await fetchSharpLine(
     sportKey: "soccer_epl",
     homeTeam: "Arsenal",
     awayTeam: "Chelsea",
+    kickoffAt: new Date("2026-09-06T14:00:00Z"),
+    market: "1x2",
     selection: "home",
     consensusOpening: 2.30,
     consensusCurrent: 2.10,
@@ -274,6 +326,14 @@ if (out.ok) {
     new Set(out.snapshot.books.map((b) => b.key)).size,
     out.snapshot.books.length,
   );
+  eq("tre linee complete", out.snapshot.completeLines.length, 3);
+  eq("fair indipendente da pinnacle", out.snapshot.independentFair?.sourceBook, "pinnacle");
+  check(
+    "fair sharp completa le tre probabilità",
+    out.snapshot.independentFair?.fairProbabilities.home !== undefined &&
+      out.snapshot.independentFair?.fairProbabilities.draw !== undefined &&
+      out.snapshot.independentFair?.fairProbabilities.away !== undefined,
+  );
 }
 
 /* evento non trovato: la fotografia resta vuota, non inventata */
@@ -284,6 +344,8 @@ const out2 = await fetchSharpLine(
     sportKey: "soccer_epl",
     homeTeam: "Arsenal",
     awayTeam: "Chelsea",
+    kickoffAt: new Date("2026-09-06T14:00:00Z"),
+    market: "1x2",
     selection: "home",
     consensusOpening: 2.30,
     consensusCurrent: 2.10,
@@ -305,6 +367,7 @@ if (out2.ok) {
 
 const mixed: TheOddsApiEvent = {
   id: "ev2",
+  commence_time: "2026-09-06T14:00:00Z",
   home_team: "Inter",
   away_team: "Milan",
   bookmakers: [
@@ -339,6 +402,8 @@ const out3 = await fetchSharpLine(
     sportKey: "soccer_italy_serie_a",
     homeTeam: "Inter",
     awayTeam: "Milan",
+    kickoffAt: new Date("2026-09-06T14:00:00Z"),
+    market: "1x2",
     selection: "home",
     consensusOpening: 2.30,
     consensusCurrent: 2.10,
@@ -396,6 +461,9 @@ check("fotografia vecchia normalizzata", norm !== null);
 eq("prezzo conservato", norm?.price, 2.1);
 eq("verdetto conservato", norm?.verdict, "conferma");
 eq("books assenti → lista vuota", norm?.books.length, 0);
+eq("mercato vecchio → non misurabile", norm?.market, null);
+eq("linee complete vecchie → lista vuota", norm?.completeLines.length, 0);
+eq("fair vecchia → non misurabile", norm?.independentFair, null);
 eq("spread assente → non misurabile", norm?.spread, null);
 eq("marketSpread assente → non misurabile", norm?.marketSpread, null);
 

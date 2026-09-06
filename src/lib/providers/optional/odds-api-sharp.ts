@@ -8,11 +8,13 @@
  * decimale. Non chiediamo mercati che non usiamo e non chiediamo interi
  * campionati: ogni credito speso deve corrispondere a un segnale attivo.
  *
- * Cosa NON facciamo: sostituire il collector. Le quote di consenso restano
- * quelle di BetExplorer; questa fonte serve solo a dire se una linea sharp
- * conferma, smentisce o non è osservabile.
+ * Cosa NON facciamo: sostituire il collector o spacciare una quota sharp per
+ * un ordine eseguibile. Le quote di consenso restano quelle di BetExplorer;
+ * questa fonte aggiunge una fotografia indipendente, la dispersione e — solo
+ * quando la linea è completa — una fair di riferimento sharp.
  */
-import type { SelectionCode } from "@/db/schema";
+import { fairMarket } from "@/lib/drop/novig";
+import type { MarketType, SelectionCode } from "@/db/schema";
 import {
   bookSpread,
   extractBookLines,
@@ -47,6 +49,25 @@ export interface SharpBookLine {
   isSharp: boolean;
 }
 
+/** Linea completa di un bookmaker, conservata senza mescolare istanti diversi. */
+export interface SharpCompleteLine {
+  bookmakerKey: string;
+  isSharp: boolean;
+  market: MarketType;
+  prices: Partial<Record<SelectionCode, number>>;
+  observedAt: string;
+}
+
+/** Fair no-vig derivata da una linea sharp completa, non dal consenso. */
+export interface IndependentSharpFair {
+  sourceBook: string;
+  market: MarketType;
+  fairProbabilities: Partial<Record<SelectionCode, number>>;
+  fairOdds: Partial<Record<SelectionCode, number>>;
+  marginPct: number;
+  observedAt: string;
+}
+
 /** Fotografia della linea sharp per una partita. */
 export interface SharpSnapshot {
   /** bookmaker che ha fornito il prezzo, null se nessuno */
@@ -67,6 +88,12 @@ export interface SharpSnapshot {
   marketSpread: SpreadView | null;
   /** crediti residui dichiarati dal provider, quando li espone */
   remainingFromProvider: number | null;
+  /** mercato della selezione richiesta, se riconosciuto */
+  market: MarketType | null;
+  /** linee complete per bookmaker presenti nella stessa risposta */
+  completeLines: SharpCompleteLine[];
+  /** fair indipendente dalla prima linea sharp completa disponibile */
+  independentFair: IndependentSharpFair | null;
   readAt: string;
 }
 
@@ -76,6 +103,7 @@ interface ApiOutcome {
 }
 interface ApiMarket {
   key?: unknown;
+  point?: unknown;
   outcomes?: unknown;
 }
 interface ApiBookmaker {
@@ -83,8 +111,10 @@ interface ApiBookmaker {
   markets?: unknown;
 }
 interface ApiEvent {
+  id?: unknown;
   home_team?: unknown;
   away_team?: unknown;
+  commence_time?: unknown;
   bookmakers?: unknown;
 }
 
@@ -97,41 +127,78 @@ function norm(s: string): string {
     .replace(/[^a-z0-9]+/g, "");
 }
 
+/** Differenza massima accettata fra kickoff interno e timestamp del provider. */
+export const EVENT_TIME_TOLERANCE_MINUTES = 30;
+
 /**
- * Trova nell'elenco eventi quello che corrisponde alla partita cercata.
- * Il confronto è sui nomi normalizzati: se non combacia, si restituisce
- * `null` invece di prendere «l'evento più simile».
+ * Trova l'evento solo quando l'identità è sufficientemente determinata.
+ *
+ * I nomi normalizzati sono un primo filtro, non una licenza a prendere il primo
+ * risultato. Quando il kickoff interno è disponibile deve esistere anche il
+ * kickoff del provider entro la tolleranza; più corrispondenze o un timestamp
+ * mancante producono `null`.
  */
 export function findEvent(
   events: unknown,
   homeTeam: string,
   awayTeam: string,
+  kickoffAt: Date | null = null,
 ): ApiEvent | null {
   if (!Array.isArray(events)) return null;
   const h = norm(homeTeam);
   const a = norm(awayTeam);
+  if (h === "" || a === "") return null;
+
+  const candidates: ApiEvent[] = [];
   for (const e of events) {
     if (typeof e !== "object" || e === null) continue;
     const ev = e as ApiEvent;
     const eh = typeof ev.home_team === "string" ? norm(ev.home_team) : "";
     const ea = typeof ev.away_team === "string" ? norm(ev.away_team) : "";
     if (eh === "" || ea === "") continue;
-    const diretto =
+    const namesMatch =
       (eh.includes(h) || h.includes(eh)) && (ea.includes(a) || a.includes(ea));
-    if (diretto) return ev;
+    if (!namesMatch) continue;
+
+    if (kickoffAt !== null) {
+      const providerKickoff =
+        typeof ev.commence_time === "string" ? new Date(ev.commence_time) : null;
+      if (
+        providerKickoff === null ||
+        Number.isNaN(providerKickoff.getTime()) ||
+        Math.abs(providerKickoff.getTime() - kickoffAt.getTime()) >
+          EVENT_TIME_TOLERANCE_MINUTES * 60_000
+      ) {
+        continue;
+      }
+    }
+    candidates.push(ev);
   }
-  return null;
+
+  return candidates.length === 1 ? candidates[0] : null;
 }
 
-/** Selezione 1X2 → nome dell'esito nell'API. */
+/** Selezione interna → nome dell'esito nell'API. */
 function outcomeNameFor(
+  market: MarketType,
   selection: string,
   homeTeam: string,
   awayTeam: string,
 ): string {
+  if (market === "ou_2_5") return selection === "over" ? "Over" : "Under";
   if (selection === "home") return homeTeam;
   if (selection === "away") return awayTeam;
   return "Draw";
+}
+
+function marketForSelection(selection: string): MarketType | null {
+  if (selection === "home" || selection === "draw" || selection === "away") return "1x2";
+  if (selection === "over" || selection === "under") return "ou_2_5";
+  return null;
+}
+
+function expectedSelections(market: MarketType): SelectionCode[] {
+  return market === "1x2" ? ["home", "draw", "away"] : ["over", "under"];
 }
 
 /**
@@ -143,17 +210,20 @@ export function extractSharpPrice(
   selection: string,
   homeTeam: string,
   awayTeam: string,
+  market: MarketType = "1x2",
 ): { book: string | null; price: number | null } {
   if (event === null || !Array.isArray(event.bookmakers)) {
     return { book: null, price: null };
   }
-  const wanted = norm(outcomeNameFor(selection, homeTeam, awayTeam));
+  const wanted = norm(outcomeNameFor(market, selection, homeTeam, awayTeam));
+  const marketKey = market === "1x2" ? "h2h" : "totals";
   for (const key of SHARP_BOOKS) {
     for (const b of event.bookmakers as ApiBookmaker[]) {
       if (typeof b !== "object" || b === null || b.key !== key) continue;
       if (!Array.isArray(b.markets)) continue;
       for (const m of b.markets as ApiMarket[]) {
-        if (m.key !== "h2h" || !Array.isArray(m.outcomes)) continue;
+        if (m.key !== marketKey || !Array.isArray(m.outcomes)) continue;
+        if (market === "ou_2_5" && m.point !== 2.5) continue;
         for (const o of m.outcomes as ApiOutcome[]) {
           if (typeof o.name !== "string" || typeof o.price !== "number") continue;
           const n = norm(o.name);
@@ -165,6 +235,74 @@ export function extractSharpPrice(
     }
   }
   return { book: null, price: null };
+}
+
+/**
+ * Raggruppa le righe della risposta per bookmaker e conserva solo mercati
+ * completi, senza ereditare selezioni da un altro istante. Una fair derivata
+ * da due timestamp diversi sarebbe una fair costruita, quindi viene scartata.
+ */
+export function completeSharpLines(
+  lines: BookLine[],
+  market: MarketType,
+): SharpCompleteLine[] {
+  const expected = expectedSelections(market);
+  const byBook = new Map<string, BookLine[]>();
+  for (const line of lines) {
+    if (line.market !== market) continue;
+    const list = byBook.get(line.bookmakerKey) ?? [];
+    list.push(line);
+    byBook.set(line.bookmakerKey, list);
+  }
+
+  const complete: SharpCompleteLine[] = [];
+  for (const [bookmakerKey, bookLines] of byBook) {
+    const prices: Partial<Record<SelectionCode, number>> = {};
+    const timestamps = new Set<number>();
+    let duplicate = false;
+    for (const line of bookLines) {
+      if (prices[line.selection] !== undefined) duplicate = true;
+      prices[line.selection] = line.price;
+      timestamps.add(line.observedAt.getTime());
+    }
+    if (
+      duplicate ||
+      expected.some((selection) => prices[selection] === undefined) ||
+      timestamps.size !== 1
+    ) {
+      continue;
+    }
+    complete.push({
+      bookmakerKey,
+      isSharp: bookLines[0]?.isSharp === true,
+      market,
+      prices,
+      observedAt: new Date([...timestamps][0]).toISOString(),
+    });
+  }
+  return complete;
+}
+
+/** Seleziona la prima linea sharp completa secondo l'ordine dichiarato. */
+export function independentFairFromSharpLines(
+  lines: SharpCompleteLine[],
+  market: MarketType,
+): IndependentSharpFair | null {
+  const candidates = lines.filter((line) => line.isSharp && line.market === market);
+  const ordered = SHARP_BOOKS.flatMap((key) => candidates.filter((line) => line.bookmakerKey === key));
+  const line = ordered[0];
+  if (line === undefined) return null;
+
+  const fair = fairMarket({ market, prices: line.prices });
+  if (!fair.ok) return null;
+  return {
+    sourceBook: line.bookmakerKey,
+    market,
+    fairProbabilities: fair.data.fairProbs as Partial<Record<SelectionCode, number>>,
+    fairOdds: fair.data.fairPrices as Partial<Record<SelectionCode, number>>,
+    marginPct: fair.data.margin * 100,
+    observedAt: line.observedAt,
+  };
 }
 
 export type SharpFetch =
@@ -181,6 +319,8 @@ export async function fetchSharpLine(
     sportKey: string;
     homeTeam: string;
     awayTeam: string;
+    kickoffAt: Date;
+    market: MarketType;
     selection: string;
     consensusOpening: number | null;
     consensusCurrent: number | null;
@@ -224,25 +364,34 @@ export async function fetchSharpLine(
       };
     }
     const payload: unknown = await res.json();
-    const event = findEvent(payload, params.homeTeam, params.awayTeam);
+    const event = findEvent(
+      payload,
+      params.homeTeam,
+      params.awayTeam,
+      params.kickoffAt,
+    );
+    const eventForParsing = event as TheOddsApiEvent | null;
     const { book, price } = extractSharpPrice(
       event,
       params.selection,
-      params.homeTeam,
-      params.awayTeam,
+      typeof event?.home_team === "string" ? event.home_team : params.homeTeam,
+      typeof event?.away_team === "string" ? event.away_team : params.awayTeam,
+      params.market,
     );
 
     /* Stessa risposta, stessa chiamata già pagata: i prezzi per book si
        leggono qui senza spendere un credito in più. La dispersione è l'unica
        cosa che una fotografia consente di dire sui book — il movimento
        richiederebbe due fotografie e non lo inventiamo. */
-    const parsed = extractBookLines(
-      (event ?? { id: "" }) as TheOddsApiEvent,
+    const parsedAll = extractBookLines(
+      eventForParsing ?? { id: "" },
       now,
-    ).lines.filter(
-      (l) =>
-        l.market === "1x2" && l.selection === (params.selection as SelectionCode),
+    ).lines;
+    const parsed = parsedAll.filter(
+      (l) => l.market === params.market && l.selection === (params.selection as SelectionCode),
     );
+    const completeLines = completeSharpLines(parsedAll, params.market);
+    const independentFair = independentFairFromSharpLines(completeLines, params.market);
 
     const byKey = new Map<string, SharpBookLine>();
     /* il prezzo che ha prodotto il verdetto va per primo, se c'è */
@@ -296,6 +445,9 @@ export async function fetchSharpLine(
         marketSpread,
         remainingFromProvider:
           remaining !== null && Number.isFinite(remaining) ? remaining : null,
+        market: marketForSelection(params.selection),
+        completeLines,
+        independentFair,
         readAt: now.toISOString(),
       },
     };
@@ -346,6 +498,94 @@ export function normalizeSharpSnapshot(raw: unknown): SharpSnapshot | null {
         })
         .map((b) => ({ key: b.key, price: b.price, isSharp: b.isSharp === true }))
     : [];
+  const marketOf = (value: unknown): MarketType | null =>
+    value === "1x2" || value === "ou_2_5" ? value : null;
+  const pricesOf = (
+    value: unknown,
+    market: MarketType,
+  ): Partial<Record<SelectionCode, number>> | null => {
+    if (typeof value !== "object" || value === null) return null;
+    const source = value as Record<string, unknown>;
+    const prices: Partial<Record<SelectionCode, number>> = {};
+    for (const selection of expectedSelections(market)) {
+      const price = source[selection];
+      if (typeof price !== "number" || !Number.isFinite(price) || price <= 1) return null;
+      prices[selection] = price;
+    }
+    return prices;
+  };
+  const probabilitiesOf = (
+    value: unknown,
+    market: MarketType,
+  ): Partial<Record<SelectionCode, number>> | null => {
+    if (typeof value !== "object" || value === null) return null;
+    const source = value as Record<string, unknown>;
+    const probabilities: Partial<Record<SelectionCode, number>> = {};
+    for (const selection of expectedSelections(market)) {
+      const probability = source[selection];
+      if (
+        typeof probability !== "number" ||
+        !Number.isFinite(probability) ||
+        probability <= 0 ||
+        probability >= 1
+      ) {
+        return null;
+      }
+      probabilities[selection] = probability;
+    }
+    return probabilities;
+  };
+  const market = marketOf(r.market);
+  const completeLines =
+    market !== null && Array.isArray(r.completeLines)
+      ? r.completeLines.flatMap((value): SharpCompleteLine[] => {
+          if (typeof value !== "object" || value === null) return [];
+          const line = value as unknown as Record<string, unknown>;
+          const lineMarket = marketOf(line.market);
+          const prices = lineMarket === null ? null : pricesOf(line.prices, lineMarket);
+          if (
+            typeof line.bookmakerKey !== "string" ||
+            lineMarket === null ||
+            prices === null ||
+            typeof line.observedAt !== "string"
+          ) {
+            return [];
+          }
+          return [{
+            bookmakerKey: line.bookmakerKey,
+            isSharp: line.isSharp === true,
+            market: lineMarket,
+            prices,
+            observedAt: line.observedAt,
+          }];
+        })
+      : [];
+  const fairRaw = r.independentFair;
+  let independentFair: IndependentSharpFair | null = null;
+  if (typeof fairRaw === "object" && fairRaw !== null) {
+    const fair = fairRaw as unknown as Record<string, unknown>;
+    const fairMarket = marketOf(fair.market);
+    const fairProbabilities =
+      fairMarket === null ? null : probabilitiesOf(fair.fairProbabilities, fairMarket);
+    const fairOdds = fairMarket === null ? null : pricesOf(fair.fairOdds, fairMarket);
+    if (
+      typeof fair.sourceBook === "string" &&
+      fairMarket !== null &&
+      fairProbabilities !== null &&
+      fairOdds !== null &&
+      typeof fair.marginPct === "number" &&
+      typeof fair.observedAt === "string"
+    ) {
+      independentFair = {
+        sourceBook: fair.sourceBook,
+        market: fairMarket,
+        fairProbabilities,
+        fairOdds,
+        marginPct: fair.marginPct,
+        observedAt: fair.observedAt,
+      };
+    }
+  }
   const verdict: SharpVerdict =
     r.verdict === "conferma" || r.verdict === "smentisce"
       ? r.verdict
@@ -359,6 +599,9 @@ export function normalizeSharpSnapshot(raw: unknown): SharpSnapshot | null {
     marketSpread: spreadOf(r.marketSpread),
     remainingFromProvider:
       typeof r.remainingFromProvider === "number" ? r.remainingFromProvider : null,
+    market,
+    completeLines,
+    independentFair,
     readAt: typeof r.readAt === "string" ? r.readAt : "",
   };
 }

@@ -52,7 +52,7 @@ export function SharpLineBlock({ view }: { view: SharpView }) {
             </span>
             {snapshot.book !== null ? (
               <span className="text-xs text-slate-600">
-                {snapshot.book} · quota {fmtPrice(snapshot.price)}
+                {snapshot.book} · quota di riferimento {fmtPrice(snapshot.price)}
               </span>
             ) : null}
           </p>
@@ -100,9 +100,31 @@ export function SharpLineBlock({ view }: { view: SharpView }) {
               </ul>
             </details>
           ) : null}
+          {snapshot.independentFair !== null ? (
+            <div className="rounded-xl border border-cyan-200 bg-cyan-50 p-3 text-xs text-cyan-950">
+              <p className="font-semibold">Fair indipendente di riferimento</p>
+              <p className="mt-1 leading-relaxed">
+                No-vig proporzionale della linea completa di {snapshot.independentFair.sourceBook}
+                {": "}
+                {Object.entries(snapshot.independentFair.fairOdds)
+                  .map(([selection, odds]) => `${selection} ${Number(odds).toFixed(2)}`)
+                  .join(" · ")}
+                {" "}
+                (margine osservato {snapshot.independentFair.marginPct.toFixed(2)}%).
+              </p>
+              <p className="mt-1 text-[11px] text-cyan-800">
+                È una fair di riferimento da una fonte indipendente, non una previsione e non
+                una giocata: la quota osservata deve essere reale, fresca e verificata a parte.
+              </p>
+            </div>
+          ) : (
+            <p className="text-xs leading-relaxed text-slate-500">
+              Nessuna linea sharp completa: la fair indipendente non è calcolabile.
+            </p>
+          )}
           <p className="text-xs leading-relaxed text-slate-500">
-            Confrontiamo la direzione del consenso con quella di un bookmaker
-            sharp. Non è una previsione del risultato.
+            Confrontiamo la direzione del consenso con una linea sharp indipendente.
+            Non è una previsione del risultato e non conferma da sola un prezzo eseguibile.
           </p>
         </div>
       )}

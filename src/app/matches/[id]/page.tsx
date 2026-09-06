@@ -570,6 +570,8 @@ export default async function MatchDetailPage({
             sportKey: sportKeyFor(detail.match.league),
             homeTeam: detail.match.homeTeam,
             awayTeam: detail.match.awayTeam,
+            kickoffAt: new Date(detail.match.kickoffAt),
+            market: lead.market,
             selection: lead.selection,
             consensusOpening: leadSeries?.opening ?? null,
             consensusCurrent: leadSeries?.current ?? null,

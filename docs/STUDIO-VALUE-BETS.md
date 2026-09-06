@@ -279,6 +279,9 @@ linea completa resta una misura descrittiva; non è fair indipendente e non crea
 
 La vecchia pagina `/smart-bets` è stata dismessa e reindirizza a `/value-bets`: non
 esistono più Smart Score, Kelly inline o priorità operative basate su quella misura.
+Il percorso sharp della scheda partita ora conserva le linee complete della risposta e
+calcola una fair no-vig dalla prima linea sharp completa, ma questa fair resta un
+riferimento: non è ancora collegata allo scanner e non rende eseguibile il consenso.
 La specifica persistente completa, con hard gate, soglie provvisorie e prerequisiti di
 validazione, è `docs/CONTRATTO-DECISIONALE.md`.
 

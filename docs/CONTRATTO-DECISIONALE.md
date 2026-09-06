@@ -63,13 +63,17 @@ probabilità fair. I test sono in `src/lib/decision/__tests__/contract.test.ts`.
   come disponibile.
 - Esistono parser puri e un percorso sharp con budget in
   `src/lib/providers/optional/odds-api-odds.ts`,
-  `odds-api-sharp.ts` e `src/lib/repo/sharp.ts`. Questo non equivale a una
-  integrazione completa del collector o a una fonte già disponibile per lo
-  scanner: chiave, copertura, chiamata, persistenza e test end-to-end devono
-  essere verificati prima di promuovere una riga.
-- Il percorso sharp attuale è una seconda verifica per la scheda partita, con
-  budget conservativo e una lettura al giorno. Un risultato `non osservabile`
-  non è una smentita.
+  `odds-api-sharp.ts` e `src/lib/repo/sharp.ts`. Il percorso ora conserva, quando
+  la risposta lo permette, le linee complete per bookmaker e il no-vig della
+  prima linea sharp completa.
+- Questo non equivale a una integrazione completa del collector o a un prezzo
+  eseguibile per l'utente: la fotografia viene usata nella scheda partita, il
+  prezzo sharp è un riferimento e non viene promosso automaticamente a quota
+  acquistabile. La chiave, la copertura, il matching, la freshness e la
+  disponibilità del bookmaker devono essere verificati separatamente.
+- Il percorso sharp attuale ha budget conservativo e una lettura al giorno. Un
+  risultato `non osservabile` non è una smentita. Una fair sharp completa resta
+  comunque una fair di riferimento: non promuove da sola una riga a `CANDIDATA`.
 
 ## 4. Numeri e soglie dichiarate
 
