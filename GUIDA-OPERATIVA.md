@@ -44,6 +44,17 @@ nano .env  # o vim, o vscode
    ODDS_API_KEY="..."
    ```
 
+> **La fonte è SPENTA di proposito.** `ADAPTER_IMPLEMENTED = false` in
+> `src/lib/providers/optional/the-odds-api.ts`: finché lo smoke test live non è
+> stato eseguito con chiave e database reali, il sito non presenta le quote di
+> questa fonte come eseguibili e continua a dire **NO BET** quando manca un
+> prezzo realmente eseguibile. La verifica si fa in due esecuzioni manuali —
+> prima `npm run odds:find` (0 crediti, endpoint fuori quota), poi
+> `npm run smoke:odds-api -- --match-id <id>` (1 credito) — oppure dalla
+> workflow **Smoke The Odds API** su GitHub Actions, dove il database è già
+> raggiungibile. Procedura completa e codici di uscita:
+> `docs/SMOKE-THE-ODDS-API.md`.
+
 #### OddsPapi (opzionale) — Dati storici per backtesting
 1. Vai su https://oddspapi.io
 2. Registrati (free tier: 250 req/mese, **dati storici inclusi**)

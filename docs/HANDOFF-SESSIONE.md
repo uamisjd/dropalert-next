@@ -48,9 +48,19 @@ Stato reale:
   squadre/kickoff e DTO per-bookmaker con fixture testabili. Esiste anche il
   percorso esplicito `collectAndPersistTheOddsApiOdds` verso `odds_snapshots`.
   `ADAPTER_IMPLEMENTED` resta però `false`: manca ancora lo smoke test con chiave
-  reale e database raggiungibile; nessuna attivazione è stata simulata. Lo smoke
-  test manuale è `npm run smoke:odds-api`: richiede variabili temporanee per una
-  partita reale, consuma un credito e scrive solo snapshot nella partita indicata.
+  reale e database raggiungibile; nessuna attivazione è stata simulata.
+- **Aggiornamento 2026-09-06 (dopo PR #21)**: lo smoke test non richiede più sei
+  variabili scritte a mano. `npm run odds:find` individua le partite leggibili
+  usando l'endpoint `/v4/sports/{sport}/events`, che la documentazione della fonte
+  dichiara **fuori quota** (0 crediti); `npm run smoke:odds-api -- --match-id <id>`
+  deriva sport, fixture, squadre e orario dall'archivio, fa un pre-check gratuito
+  di matching e solo allora spende **1 credito**. Dopo la scrittura rilegge la
+  partita con `getMatchDetail` + `executablePriceFromSeries` e dichiara se esiste
+  una linea individuale fresca. L'esecuzione è manuale anche da GitHub Actions
+  (workflow `Smoke The Odds API`), dove `DATABASE_URL` è già un secret: la
+  procedura completa è in `docs/SMOKE-THE-ODDS-API.md`. **Lo smoke test live non è
+  ancora stato eseguito**: né la chiave né il database sono raggiungibili
+  dall'ambiente di sviluppo, quindi il provider resta SPENTO.
 - Non aggiungere dati, Kelly, stake, +EV o «giocata consigliata» per riempire una
   lista. La calcolatrice manuale è separata dalla decisione e non va collegata al
   flusso operativo.

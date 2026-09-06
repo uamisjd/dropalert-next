@@ -1,0 +1,209 @@
+# Smoke test live di The Odds API — procedura passo per passo
+
+> Documento operativo. Serve a chiudere l'ultimo gate del provider: una
+> chiamata reale, con chiave vera e database reale. Finché questa procedura
+> non produce un esito verificato, `ADAPTER_IMPLEMENTED` in
+> `src/lib/providers/optional/the-odds-api.ts` resta `false` e il sito continua
+> a dire **NO BET** quando manca un prezzo realmente eseguibile.
+>
+> Nessuna chiave e nessuna connection string va scritta in una chat, in un
+> commit o in un issue: si configurano solo come *secret* del repository.
+
+---
+
+## 1. Quale ambiente usare (e perché)
+
+**GitHub Actions**, tramite la workflow `Smoke The Odds API`.
+
+Il motivo non è di gusto, è di fatto: il test ha bisogno di **due** cose
+contemporaneamente — la chiave della fonte e il database reale — e questo è
+l'unico ambiente dove il database è già raggiungibile senza installare nulla.
+
+| Ambiente | Database reale | Chiave | Installazioni | Verdetto |
+|---|---|---|---|---|
+| **GitHub Actions** | ✅ già configurato (`DATABASE_URL`, lo stesso del giro di osservazione) | da aggiungere una volta come secret | nessuna | **scelto** |
+| Vercel | ✅ | ✅ già presente (`theoddsapiKey`) | nessuna | non adatto: non c'è un modo di eseguire uno script una tantum con output leggibile |
+| Locale | ❌ da esporre il Neon (tunnel/IP allowlist) | da mettere in un file `.env` | Node, npm, file `.env` | possibile ma più fragile e con più passaggi manuali |
+
+Il giro di osservazione (`Osservazione DropAlert`) gira su GitHub Actions e
+scrive sullo stesso database: è la prova che `DATABASE_URL` lì funziona.
+
+---
+
+## 2. Quanto costa
+
+Il piano gratuito dà **500 crediti al mese**; il budget dichiarato in
+`src/lib/providers/optional/odds-api-budget.ts` è **490**, con un tetto di 14
+al giorno.
+
+| Passo | Endpoint | Costo |
+|---|---|---|
+| Trovare la partita | `/v4/sports/{sport}/events` | **0 crediti** (la fonte dichiara questo endpoint fuori quota) |
+| Smoke test | `/v4/sports/{sport}/odds` con 1 mercato (`h2h`) × 1 regione (`eu`) | **1 credito** |
+
+L'intera verifica costa quindi **1 credito**. Il costo è controllato due volte:
+dalla scelta dell'endpoint gratuito per la ricerca, e dal pre-check dello smoke
+test che si ferma **prima** della chiamata a pagamento se la partita non è
+riconoscibile.
+
+---
+
+## 3. Prima di cominciare: la chiave come secret
+
+Da fare **una volta sola**.
+
+1. Apri `https://github.com/uamisjd/dropalert-next/settings/secrets/actions`.
+2. Se esiste già un secret chiamato `THE_ODDS_API_KEY`, salta al passo 4.
+3. Premi **New repository secret**.
+   - *Name*: `THE_ODDS_API_KEY`
+   - *Secret*: il valore della chiave, copiato da
+     `https://the-odds-api.com/account`
+   - Premi **Add secret**.
+4. Se la chiave esiste già su Vercel con il nome `theoddsapiKey`, **non serve
+   rinominare nulla**: la workflow accetta anche quel nome. Copia il valore da
+   Vercel (Settings → Environment Variables) e incollalo in un secret di
+   GitHub. Puoi usare il nome che preferisci fra `THE_ODDS_API_KEY`,
+   `ODDS_API_KEY`, `theoddsapiKey`, `THEODDSAPIKEY`.
+
+La workflow si ferma con un messaggio esplicito se la chiave manca: non parte
+nessuna chiamata.
+
+---
+
+## 4. Passo 1 — trova una partita valida (0 crediti)
+
+1. Apri `https://github.com/uamisjd/dropalert-next/actions`.
+2. Nella colonna di sinistra scegli **Smoke The Odds API**.
+3. A destra premi **Run workflow**.
+4. Scegli il branch (quello di lavoro, se la modifica non è ancora su `main`).
+5. Lascia `modalita` su **`trova-partita`** e `ore` su `48`.
+6. Premi **Run workflow** e apri l'esecuzione appena partita.
+
+Nel log trovi una riga per ogni partita in archivio, ad esempio:
+
+```
+  #1234  sab 12/09, 20:45  Inter — Milan
+          OK — evento unico sulla fonte: Inter — AC Milan (12/09, 20:45 ora italiana, id 9f2c…)
+```
+
+Cosa significano le etichette:
+
+| Etichetta | Significato | Cosa fare |
+|---|---|---|
+| `OK` | la fonte ha **un solo** evento con quei nomi e quell'orario | questa partita va bene: usa il suo id |
+| `GRAFIA INTERNA NON COMBACIATA` | i nostri nomi non contengono quelli della fonte | scegli un'altra partita, oppure correggi i nomi con le variabili descritte al §7 |
+| `AMBIGUO` | la fonte ha più eventi con gli stessi nomi | scegli un'altra partita: nessuno dei due è preferibile |
+| `NOMI PRESENTI MA ORARIO OLTRE 30 MINUTI` | nomi giusti, orario no | l'orario in archivio o quello della fonte è storto: verifica prima di spendere |
+| `NON VERIFICATO` | l'elenco eventi di quel campionato non è arrivato | riprova più tardi |
+
+Se non compare nessuna `OK`, la fonte non ha ancora pubblicato il turno:
+riprova con `ore` = `120`, oppure in un altro giorno. **Non è un guasto
+dell'adapter.**
+
+In fondo al log c'è il riepilogo dei crediti spesi: deve dire `0`.
+
+---
+
+## 5. Passo 2 — smoke test (1 credito)
+
+1. Stessa workflow, **Run workflow**.
+2. `modalita` = **`smoke-test`**.
+3. `match_id` = il numero visto nel passo precedente (es. `1234`).
+4. **Run workflow**.
+
+Lo script fa quattro cose, nell'ordine, e le stampa:
+
+1. **pre-check di matching** — endpoint gratuito; se la partita non è
+   riconoscibile si ferma qui **senza spendere il credito** (uscita `4`);
+2. **lettura delle quote** — l'unica chiamata a pagamento: quote 1X2 per ogni
+   bookmaker della regione `eu`;
+3. **scrittura in `odds_snapshots`** — quote individuali, con bookmaker, fonte
+   e orario della fonte;
+4. **verifica di freshness** — rilegge la partita con lo stesso percorso della
+   pagina (`getMatchDetail` + `executablePriceFromSeries`, soglia 90 minuti) e
+   dice se esiste davvero una linea individuale fresca.
+
+Esito atteso:
+
+```
+Esito
+  chiamata reale        : riuscita
+  matching partita      : verificato
+  quote individuali     : salvate in odds_snapshots
+  freshness             : verificata su 3 selezioni
+
+SMOKE OK — gate superati su dati reali.
+```
+
+Codici di uscita:
+
+| Codice | Significato | Crediti spesi |
+|---|---|---|
+| `0` | smoke test riuscito | 1 |
+| `1` | chiamata, persistenza o freshness fallite | 1 |
+| `2` | configurazione mancante (chiave, database, partita) | 0 |
+| `4` | pre-check negativo: partita non riconoscibile | 0 |
+
+---
+
+## 6. Cosa uno smoke test riuscito **non** autorizza
+
+- **Non** accende il provider. `ADAPTER_IMPLEMENTED` resta `false` e va cambiato
+  solo in una PR separata, con i check verdi.
+- **Non** trasforma il consensus in una quota eseguibile: sono due cose
+  diverse e restano separate.
+- **Non** aggiunge Kelly, stake o autobet: la UI non li mostra.
+- **Non** cambia il contratto decisionale: senza prezzo eseguibile, fair
+  indipendente, edge e freshness il sito dice **NO BET** o **OSSERVAZIONE**,
+  con il motivo.
+
+## 7. Se i nomi non combaciano
+
+Il matching accetta i nomi che si contengono a vicenda, entro 30 minuti di
+kickoff. Quando l'archivio usa un'abbreviazione ("Man Utd") e la fonte il nome
+esteso ("Manchester United"), la lettura non parte. In quel caso si passano i
+nomi reali della fonte come variabili, **solo per quella esecuzione**:
+
+```bash
+ODDS_API_SMOKE_MATCH_ID=1234 \
+ODDS_API_SMOKE_HOME_TEAM="Manchester United" \
+ODDS_API_SMOKE_AWAY_TEAM="Chelsea" \
+npm run smoke:odds-api
+```
+
+Le variabili esplicite vincono su quelle derivate dall'archivio; ogni altro
+valore (chiave sport, fixture, orario) continua ad arrivare dal database.
+Su GitHub Actions si aggiungono come *Variables* del repository con gli stessi
+nomi, oppure si esegue il comando in locale (§8).
+
+Se la grafia interna è sbagliata in modo sistematico, la correzione giusta è
+sull'anagrafica delle squadre, non un'eccezione nello smoke test.
+
+## 8. Alternativa locale
+
+Serve Node 22 e un `.env` nella root del progetto con `DATABASE_URL` e la
+chiave (file già ignorato da git):
+
+```bash
+npm ci
+npm run odds:find                     # 0 crediti
+npm run smoke:odds-api -- --match-id 1234
+```
+
+Il Neon va raggiungibile dalla macchina: da pannello Neon, *Network Security*,
+aggiungi l'IP pubblico oppure `0.0.0.0/0` solo per la durata del test, poi
+rimuovilo. È il passaggio in più che rende questa strada più fragile di
+GitHub Actions.
+
+## 9. File coinvolti
+
+| File | Ruolo |
+|---|---|
+| `src/scripts/find-odds-match.ts` | trova le partite leggibili, endpoint gratuito |
+| `src/scripts/smoke-odds-api.ts` | la verifica live: chiamata, persistenza, freshness |
+| `src/lib/providers/optional/the-odds-api-events.ts` | client dell'endpoint eventi (fuori quota) |
+| `src/lib/providers/optional/odds-match-resolver.ts` | regole pure di matching e di risoluzione |
+| `src/lib/providers/optional/the-odds-api-client.ts` | client delle quote (1 credito) |
+| `src/lib/providers/ingest-snapshots.ts` | scrittura in `odds_snapshots` |
+| `src/lib/decision/price-evidence.ts` | gate del prezzo eseguibile e della freshness |
+| `.github/workflows/smoke-odds.yml` | esecuzione manuale su GitHub Actions |
