@@ -26,7 +26,8 @@ Stato reale:
   bookmaker. Una quota consensus non va chiamata «eseguibile».
 - `/value-bets` misura il divario osservato contro il no-vig della linea completa
   della stessa fonte. Non è +EV indipendente: ogni riga è marcata `NON AZIONABILE`
-  dal contratto e la UI non mostra Kelly o stake.
+  dal contratto e la UI non mostra Kelly o stake. Anche la scheda partita mostra ora
+  lo stato decisionale e non contiene più la calcolatrice Kelly operativa.
 - Il parser The Odds API e il percorso sharp hanno parti pure e una verifica nella
   scheda partita. Ora il percorso sharp può conservare le linee complete dei
   bookmaker e calcolare il no-vig della prima linea sharp completa, ma il risultato
