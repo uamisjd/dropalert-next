@@ -5,8 +5,14 @@ import type { ArbitrageOpportunity } from "@/lib/quant/arbitrage";
 import { fmtDay, fmtTime } from "@/components/format";
 
 interface Props {
-  opportunities: ArbitrageOpportunity[];
+  /** Opportunità arricchite con l'età della lettura, calcolata dal server
+   *  alla generazione (stessa convenzione di SmartBetsTable/ValueScannerTable:
+   *  mai `Date.now()` nel render di un componente client). */
+  opportunities: ArbitrageRow[];
 }
+
+/** Riga della tabella: opportunità + età in minuti della lettura più vecchia. */
+export type ArbitrageRow = ArbitrageOpportunity & { lineAgeMinutes: number };
 
 function getProfitColor(profitPct: number): string {
   if (profitPct >= 3) return "text-emerald-700 bg-emerald-50 ring-emerald-300";
@@ -76,7 +82,7 @@ export function ArbitrageTable({ opportunities }: Props) {
               </h3>
 
               <p className="mt-2 text-[11px] text-slate-500">
-                Lettura più vecchia: {Math.round((Date.now() - opp.collectedAt.getTime()) / 60_000)} min fa
+                Lettura più vecchia: {opp.lineAgeMinutes} min fa
               </p>
             </div>
 

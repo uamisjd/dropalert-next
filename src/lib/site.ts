@@ -30,10 +30,11 @@ export const SITE_DESCRIPTION =
 
 /** Pagine pubbliche sempre presenti in sitemap.
  *
- * `/preferite` è esclusa di proposito: la lista vive nel localStorage del
- * visitatore, quindi per un crawler è sempre lo stesso guscio vuoto
- * (vedi anche il `noindex` nel suo layout). Segnalarla in sitemap
- * significherebbe chiedere l'indicizzazione di una pagina sottile. */
+ * `/preferite` e `/mio-bankroll` sono escluse di proposito: la lista (e il
+ * tracking) vivono nel localStorage del visitatore, quindi per un crawler
+ * sono sempre lo stesso guscio vuoto (vedi anche il `noindex` nei loro
+ * layout di rotta). Segnalarle in sitemap significherebbe chiedere
+ * l'indicizzazione di una pagina sottile. */
 export const PUBLIC_PAGES = [
   "/",
   "/ieri",
@@ -46,7 +47,9 @@ export const PUBLIC_PAGES = [
   "/performance",
   "/strumenti",
   "/value-bets",
+  "/smart-bets",
   "/trading",
+  "/arbitrage",
   "/surebet",
   "/simulator",
 ] as const;

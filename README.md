@@ -154,6 +154,9 @@ src/
 
 ## Comandi
 
+> Per chi lavora al codice: leggi prima **CONTRIBUTING.md** — regole precise su
+> gate locali, lint, nuove pagine e workflow, per non lasciare la CI rossa.
+
 ```bash
 npm run dev              # sviluppo
 npm run build            # build di produzione

@@ -1,15 +1,16 @@
 "use client";
 
 /**
- * Bankroll Tracker Personale — uso proprietario, dati in localStorage.
+ * Bankroll Tracker Personale — dati in localStorage.
  *
- * Questa pagina è per il solo proprietario del sito. Traccia le scommesse
- * piazzate, calcola il CLV personale (quota piazzata vs chiusura), e mostra
- * ROI, drawdown e profitto totale.
+ * Traccia le scommesse piazzate, calcola il CLV personale (quota piazzata
+ * vs chiusura), e mostra ROI, drawdown e profitto totale.
  *
- * I dati restano nel browser (localStorage), mai inviati al server.
- * La pagina è accessibile senza autenticazione nel codice, ma è nascosta
- * dalla navigazione pubblica: solo chi conosce l'URL la raggiunge.
+ * I dati restano nel browser (localStorage), mai inviati al server: per un
+ * visitatore che non è il proprietario la pagina è un guscio vuoto, come
+ * /preferite. È in navigazione (voce «Il mio bankroll» in SiteNav) ma non
+ * in sitemap, e il layout della rotta la marca noindex (contenuto sottile
+ * per definizione).
  */
 
 import { useState, useEffect, useCallback } from "react";
@@ -179,8 +180,15 @@ export default function MioBankrollPage() {
   const [formNotes, setFormNotes] = useState("");
 
   useEffect(() => {
-    setBets(loadBets());
-    setBankroll(loadBankroll());
+    /* Idratazione da localStorage: non può avvenire prima del mount (durante
+       la prerenderizzazione server il localStorage non esiste). Funzione
+       interna richiamata subito: stesso schema di /preferite, così il
+       ripristino resta un'operazione sola e riutilizzabile. */
+    const restore = () => {
+      setBets(loadBets());
+      setBankroll(loadBankroll());
+    };
+    restore();
   }, []);
 
   const persistBets = useCallback((newBets: PersonalBet[]) => {

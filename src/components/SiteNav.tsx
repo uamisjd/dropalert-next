@@ -3,14 +3,22 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
+/* Ordine per funzione: segnali (divari, smart, escursioni), opportunità
+   (arbitraggio, surebet, simulatore), strumenti, area personale, archivio,
+   metriche, documentazione. Le voci personali (Smart Bets, Arbitrage,
+   Il mio bankroll) sono strumenti del proprietario resi raggiungibili
+   anche dalla navigazione. */
 const LINKS: Array<{ href: string; label: string; badge?: string; highlight?: boolean }> = [
   { href: "/", label: "Movimenti" },
   { href: "/value-bets", label: "Divario di prezzo", highlight: false },
+  { href: "/smart-bets", label: "Smart Bets" },
   { href: "/trading", label: "Escursione prezzi" },
+  { href: "/arbitrage", label: "Arbitrage" },
   { href: "/surebet", label: "Surebet (calcolo)" },
   { href: "/simulator", label: "Simulatore xG" },
   { href: "/strumenti", label: "Strumenti" },
   { href: "/preferite", label: "Preferite" },
+  { href: "/mio-bankroll", label: "Il mio bankroll" },
   { href: "/ieri", label: "Ieri" },
   { href: "/domani", label: "Domani" },
   { href: "/performance", label: "Performance" },

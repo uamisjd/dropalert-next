@@ -240,47 +240,127 @@ export function calculateArbitrage(
   };
 }
 
+/** Oggetto JSON qualsiasi, per navigare una risposta sconosciuta senza `any`. */
+type JsonObject = Record<string, unknown>;
+
+/** Restituisce l'oggetto se è davvero un oggetto (non array/null), altrimenti null. */
+function asJsonObject(value: unknown): JsonObject | null {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    return null;
+  }
+  return value as JsonObject;
+}
+
+/** Numero finito se il valore lo è (o lo diventa con Number), altrimenti undefined. */
+function toFiniteNumber(value: unknown): number | undefined {
+  const n = typeof value === "number" ? value : Number(value);
+  return Number.isFinite(n) ? n : undefined;
+}
+
+/** Primo valore truthy fra quelli dati (stessa semantica della catena `a || b`). */
+function firstTruthy(...values: unknown[]): unknown {
+  for (const v of values) {
+    if (v) return v;
+  }
+  return undefined;
+}
+
 /**
  * Parser per la risposta di SharpAPI.
  * Adatta il formato JSON dell'API alla nostra interfaccia SharpMatchOdds.
  */
-function parseSharpOddsResponse(data: any): SharpMatchOdds | null {
+function parseSharpOddsResponse(data: unknown): SharpMatchOdds | null {
   try {
+    const root = asJsonObject(data);
+    if (!root) return null;
+
     // Adatta in base al formato reale di SharpAPI
     // Questa è una struttura ipotetica, va adattata quando si vede la risposta reale
-    const match = data.match || data;
+    const match = asJsonObject(root.match) ?? root;
 
-    const odds1X2 = match.odds?.find((o: any) => o.market === "1X2" || o.market === "moneyline");
+    const oddsEntries = Array.isArray(match.odds) ? match.odds : [];
+    const odds1X2 = oddsEntries
+      .map(asJsonObject)
+      .find(
+        (o): o is JsonObject =>
+          o !== null && (o.market === "1X2" || o.market === "moneyline"),
+      );
     if (!odds1X2) {
       return null;
     }
 
-    const findSelection = (sel: string) => {
-      const selection = odds1X2.selections?.find((s: any) => s.name === sel || s.label === sel);
+    const findSelection = (sel: string): SharpOdds | null => {
+      const selectionEntries = Array.isArray(odds1X2.selections)
+        ? odds1X2.selections
+        : [];
+      const selection = selectionEntries
+        .map(asJsonObject)
+        .find(
+          (s): s is JsonObject =>
+            s !== null && (s.name === sel || s.label === sel),
+        );
       if (!selection) return null;
 
+      const odds = toFiniteNumber(selection.odds ?? selection.price);
+      if (odds === undefined) return null;
+
+      const fair = toFiniteNumber(selection.fairOdds);
+      const prob = toFiniteNumber(selection.trueProbability);
+      const ev = toFiniteNumber(selection.evPercent);
+      const updatedAt = toFiniteNumber(selection.lastUpdate);
+
       return {
-        bookmaker: selection.bookmaker || "Pinnacle",
+        bookmaker:
+          typeof selection.bookmaker === "string"
+            ? selection.bookmaker
+            : "Pinnacle",
         market: "1X2",
         selection: sel,
-        odds: round(selection.odds || selection.price, 3),
-        fairOdds: selection.fairOdds ? round(selection.fairOdds, 3) : undefined,
-        trueProbability: selection.trueProbability ? round(selection.trueProbability, 4) : undefined,
-        evPercent: selection.evPercent ? round(selection.evPercent, 2) : undefined,
-        lastUpdate: new Date(selection.lastUpdate || Date.now()),
+        odds: round(odds, 3),
+        fairOdds: fair !== undefined ? round(fair, 3) : undefined,
+        trueProbability: prob !== undefined ? round(prob, 4) : undefined,
+        evPercent: ev !== undefined ? round(ev, 2) : undefined,
+        /* lastUpdate può essere un timestamp (numero) o una stringa ISO;
+           se manca del tutto si usa l'istante corrente. */
+        lastUpdate:
+          updatedAt !== undefined
+            ? new Date(updatedAt)
+            : typeof selection.lastUpdate === "string"
+              ? new Date(selection.lastUpdate)
+              : new Date(),
       };
     };
 
+    const textOf = (...values: unknown[]): string => {
+      for (const v of values) {
+        if (v) return typeof v === "string" ? v : String(v);
+      }
+      return "";
+    };
+
+    /* kickoff: può essere stringa ISO o timestamp numerico; si conserva il
+       valore grezzo (primo truthy), come faceva la catena `||` originale. */
+    const kickoffRaw = firstTruthy(
+      match.kickoffAt,
+      match.kickoff_at,
+      match.startTime,
+    );
+
     return {
-      matchId: match.id || match.matchId,
-      homeTeam: match.homeTeam || match.home_team,
-      awayTeam: match.awayTeam || match.away_team,
-      league: match.league || match.competition,
-      kickoffAt: new Date(match.kickoffAt || match.kickoff_at || match.startTime),
+      matchId: textOf(match.id, match.matchId),
+      homeTeam: textOf(match.homeTeam, match.home_team),
+      awayTeam: textOf(match.awayTeam, match.away_team),
+      league: textOf(match.league, match.competition),
+      /* senza kickoff il Date è volutamente invalido (come faceva
+         `new Date(undefined)` dell'originale): mai un istante inventato */
+      kickoffAt:
+        kickoffRaw === undefined
+          ? new Date("")
+          : new Date(kickoffRaw as string | number),
       odds: {
-        "1": findSelection("1") || findSelection("Home"),
-        X: findSelection("X") || findSelection("Draw"),
-        "2": findSelection("2") || findSelection("Away"),
+        "1": findSelection("1") ?? findSelection("Home"),
+        X: findSelection("X") ?? findSelection("Draw"),
+        "2": findSelection("2") ?? findSelection("Away"),
       },
     };
   } catch (error) {

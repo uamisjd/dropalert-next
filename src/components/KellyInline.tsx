@@ -27,12 +27,18 @@ export function KellyInline({ offeredOdds, trueProbPct, edgePct, compact = false
   const [editing, setEditing] = useState(false);
 
   useEffect(() => {
-    try {
-      const stored = localStorage.getItem(BANKROLL_KEY);
-      if (stored) setBankroll(Number(stored));
-    } catch {
-      // ignore
-    }
+    /* Il bankroll personale vive nel localStorage: si legge solo dopo il
+       mount (durante la prerenderizzazione server non esiste). Funzione
+       interna richiamata subito: stesso schema di /preferite. */
+    const restore = () => {
+      try {
+        const stored = localStorage.getItem(BANKROLL_KEY);
+        if (stored) setBankroll(Number(stored));
+      } catch {
+        // ignore
+      }
+    };
+    restore();
   }, []);
 
   const saveBankroll = (value: number) => {
