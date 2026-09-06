@@ -128,6 +128,22 @@ test("una grafia più lunga della fonte resta un match: la sottostringa basta", 
   assert(diagnosis.status === "unico", `atteso unico, ottenuto ${diagnosis.status}`);
 });
 
+test("particella «de»: i token combaciano dove la sola sottostringa falliva", () => {
+  /* Produzione, 06/09/2026 (controllo post-merge su soccer_portugal_primeira_
+     liga): chiave giusta, ma l'archivio dice «Academico Viseu» e la fonte
+     «Academico de Viseu». Credito già pagato per una fotografia vuota: la
+     regola per token porta la diagnosi a «unico» e il client a vedere lo
+     stesso evento — i due devono restare d'accordo. */
+  const viseu = { matchId: 3, homeTeam: "Gil Vicente", awayTeam: "Academico Viseu", kickoffAt: KICKOFF };
+  const events = [lite("e1", "Gil Vicente", "Academico de Viseu", KICKOFF, "soccer_portugal_primeira_liga")];
+  const diagnosis = diagnoseEventMatch(viseu, events);
+  assert(diagnosis.status === "unico", `atteso unico, ottenuto ${diagnosis.status}`);
+  assert(
+    findEvent(raw(events), viseu.homeTeam, viseu.awayTeam, viseu.kickoffAt) !== null,
+    "findEvent è d'accordo: l'evento c'è",
+  );
+});
+
 test("somiglianza: token condivisi pesano, nomi estranei restano sotto soglia", () => {
   assert(nameSimilarity("Manchester United", "Manchester Utd") > NEAR_MISS_THRESHOLD, "parziale");
   assert(nameSimilarity("Inter", "Juventus") === 0, "nessun token in comune");

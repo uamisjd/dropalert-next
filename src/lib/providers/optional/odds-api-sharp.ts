@@ -127,6 +127,48 @@ function norm(s: string): string {
     .replace(/[^a-z0-9]+/g, "");
 }
 
+/** Token normalizzati di un nome squadra: minuscolo, senza accenti, a parole. */
+function nameTokens(s: string): Set<string> {
+  return new Set(
+    s
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .split(/[^a-z0-9]+/)
+      .filter((token) => token !== ""),
+  );
+}
+
+/**
+ * Due nomi di squadra combaciano per la lettura?
+ *
+ * Regola DOPPIA, per costruzione conservativa:
+ *  1. sottostringa sulla forma unita (regola storica): «Inter» sta in
+ *     «Internazionale», «Milan» sta in «AC Milan»;
+ *  2. token contenuti in un senso o nell'altro: {academico, viseu} sta in
+ *     {academico, de, viseu}.
+ *
+ * La seconda manca alla prima nel caso delle particelle e dei suffissi
+ * societari: il 06/09/2026 la lettura di controllo ha pagato un credito su
+ * Gil Vicente — «Academico Viseu» (archivio) senza trovare l'evento perché
+ * la fonte chiama la squadra «Academico de Viseu» — la forma unita
+ * «academicodeviseu» non contiene «academicoviseu», ma i token significativi
+ * sono gli stessi. Un token davvero diverso (guimaraes vs sc) non combacia:
+ * quello è un caso per l'override esplicito, non per l'automatismo.
+ */
+export function teamNameMatches(internal: string, source: string): boolean {
+  const ni = norm(internal);
+  const ns = norm(source);
+  if (ni === "" || ns === "") return false;
+  if (ns.includes(ni) || ni.includes(ns)) return true;
+  const ti = nameTokens(internal);
+  const ts = nameTokens(source);
+  if (ti.size === 0 || ts.size === 0) return false;
+  const iInS = [...ti].every((token) => ts.has(token));
+  const sInI = [...ts].every((token) => ti.has(token));
+  return iInS || sInI;
+}
+
 /** Differenza massima accettata fra kickoff interno e timestamp del provider. */
 export const EVENT_TIME_TOLERANCE_MINUTES = 30;
 
@@ -145,19 +187,15 @@ export function findEvent(
   kickoffAt: Date | null = null,
 ): ApiEvent | null {
   if (!Array.isArray(events)) return null;
-  const h = norm(homeTeam);
-  const a = norm(awayTeam);
-  if (h === "" || a === "") return null;
+  if (norm(homeTeam) === "" || norm(awayTeam) === "") return null;
 
   const candidates: ApiEvent[] = [];
   for (const e of events) {
     if (typeof e !== "object" || e === null) continue;
     const ev = e as ApiEvent;
-    const eh = typeof ev.home_team === "string" ? norm(ev.home_team) : "";
-    const ea = typeof ev.away_team === "string" ? norm(ev.away_team) : "";
-    if (eh === "" || ea === "") continue;
-    const namesMatch =
-      (eh.includes(h) || h.includes(eh)) && (ea.includes(a) || a.includes(ea));
+    const eh = typeof ev.home_team === "string" ? ev.home_team : "";
+    const ea = typeof ev.away_team === "string" ? ev.away_team : "";
+    const namesMatch = teamNameMatches(homeTeam, eh) && teamNameMatches(awayTeam, ea);
     if (!namesMatch) continue;
 
     if (kickoffAt !== null) {

@@ -133,8 +133,14 @@ Poi aprire/mergiare la PR di attivazione solo con «Verifica» verde.
   nessuna spesa fuori controllo, sito in NO BET senza prezzo individuale
   fresco. **Trovata e corretta una collisione della mappa competizioni**
   («Brazil: Serie A» letto con la chiave italiana: 1 credito, fotografia
-  vuota) — vedi SMOKE §15. Dopo il merge della correzione: rilanciare
-  `which=control` da `main` per la lettura su partita coperta vera.
+  vuota) — vedi SMOKE §15.
+- [x] **Secondo controllo post-merge** (06/09/2026): chiave giusta
+  (Portugal: Liga Portugal), contatori esatti (9/490, 5/14), ma **matching
+  dei nomi fallito** («Academico Viseu» vs «Academico de Viseu»): altro
+  credito, altra fotografia vuota, uscita in errore come previsto. Corretto
+  (matching per token condiviso + diagnosi gratuita nel controllo) — vedi
+  SMOKE §16. **Dopo il merge della nuova correzione: rilanciare
+  `which=control` da `main`.**
 - [ ] Valutare dopo qualche giorno `COLLECT_HORIZON_HOURS=168` (variabile
   GitHub): serve perché l'archivio veda il turno corrente.
 

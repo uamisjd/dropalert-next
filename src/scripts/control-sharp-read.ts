@@ -33,6 +33,7 @@ import { db, sql } from "@/db/client";
 import { leagues, matches, teams } from "@/db/schema";
 import { sportKeyFor, COVERED_SPORT_KEYS } from "@/lib/providers/optional/sport-keys";
 import { fetchOddsApiEvents } from "@/lib/providers/optional/the-odds-api-events";
+import { describeDiagnosis, diagnoseEventMatch } from "@/lib/providers/optional/odds-match-resolver";
 import { pickUpcomingEvent, syntheticMatchId } from "@/lib/repo/control-fallback";
 import { getSharpLine } from "@/lib/repo/sharp";
 
@@ -211,23 +212,46 @@ async function main(): Promise<number> {
   }
 
   /* Lettura pagata ma VUOTA: nessun evento corrisponde ai nomi di questa
-     partita sulla chiave sport mappata. È l'esito del 06/09/2026 (run
+     partita sulla chiave sport usata. Primo caso (06/09/2026, run
      34046688765): «Brazil: Serie A» collideva con la regex della Serie A
-     italiana e il credito è stato speso sulla chiave sbagliata, con una
-     fotografia senza book e senza prezzo. Il credito è già contato: qui si
-     dichiara l'anomalia e si esce in errore, perché un controllo che dice
-     «linea letta» su una fotografia vuota nasconde il guasto che dovrebbe
-     trovare. */
+     italiana e il credito è stato speso sulla chiave sbagliata. Secondo caso
+     (06/09/2026, dopo il merge della correzione): chiave giusta
+     (Portugal: Liga Portugal → soccer_portugal_primeira_liga) ma l'archivio
+     chiama la squadra «Academico Viseu» e la fonte «Academico de Viseu»:
+     matching fallito, credito speso, fotografia vuota. Il credito è già
+     contato: qui si dichiara l'anomalia, la si spiega gratis e si esce in
+     errore, perché un controllo che dicesse «linea letta» su una fotografia
+     vuota nasconderebbe il guasto che deve trovare. */
   if (view.snapshot.book === null && view.snapshot.books.length === 0) {
     console.error(
       "\nESITO: lettura pagata ma NESSUNA linea — l'evento non risulta" +
-        ` sulla chiave sport mappata (${target.sportKey}).` +
-        "\n  Credito speso e fotografia vuota: rivedere la mappa competizioni → chiave" +
-        " (src/lib/providers/optional/sport-keys.ts).",
+        ` sulla chiave sport usata (${target.sportKey}).` +
+        "\n  Credito speso e fotografia vuota. Diagnosi gratuita qui sotto.",
     );
-    console.log("budget dopo la lettura:");
-    console.log(`  mese  : ${view.budget.usedThisMonth}/${view.budget.monthlyCap}`);
-    console.log(`  oggi  : ${view.budget.usedToday} (quota odierna ${view.budget.allowanceToday}, tetto ${view.budget.dailyHardCap})`);
+    /* Diagnosi GRATUITA: /events è fuori quota per dichiarazione della
+       fonte. Dice PERCHÉ la linea non c'è — nomi che non combaciano (con i
+       nomi reali della fonte), orario oltre la tolleranza, o davvero nessun
+       evento — senza spendere un altro credito. */
+    const events = await fetchOddsApiEvents({ sportKey: target.sportKey });
+    if (events.result.ok) {
+      const diagnosis = diagnoseEventMatch(
+        {
+          matchId: target.id,
+          homeTeam: target.home,
+          awayTeam: target.away,
+          kickoffAt: target.kickoffAt,
+        },
+        events.result.data,
+      );
+      console.log(`\ndiagnosi gratuita (/events, 0 crediti): ${describeDiagnosis(diagnosis)}`);
+      if (events.creditsUsed !== null && events.creditsUsed > 0) {
+        console.log(`  ATTENZIONE: /events ha addebitato ${events.creditsUsed} crediti (dovrebbe essere 0).`);
+      }
+    } else {
+      console.log(
+        `\ndiagnosi gratuita non disponibile: /events ha risposto — ${events.result.error.message}`,
+      );
+    }
     return 1;
   }
 
