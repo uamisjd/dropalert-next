@@ -28,6 +28,20 @@ l'unico ambiente dove il database è già raggiungibile senza installare nulla.
 Il giro di osservazione (`Osservazione DropAlert`) gira su GitHub Actions e
 scrive sullo stesso database: è la prova che `DATABASE_URL` lì funziona.
 
+### Quale workflow usare (importante, verificato il 06/09/2026)
+
+GitHub registra e rende lanciabili **solo le workflow presenti sul branch di
+default** (`main`). Una workflow nuova — come `smoke-odds.yml` — dà `404` finché
+non è mergiata, e noi non mergiamo nulla prima del test reale. La soluzione già
+in uso è la workflow manuale **`Verifica dati reali (manuale)`**, che esiste su
+`main` ed è fatta per le letture contro i dati veri: sul ramo di lavoro le è
+stata aggiunta la modalità `smoke-odds` (che quindi gira dal ramo, senza PR).
+
+Quindi: in *Actions* scegli **`Verifica dati reali (manuale)`**, branch
+`arena/01a07663-dropalert-next`, `which = smoke-odds`. Quando (e solo quando)
+questo strumento verrà mergiato su `main`, la workflow dedicata
+`Smoke The Odds API` diventerà lanciabile e prenderà il posto di questa.
+
 ---
 
 ## 2. Quanto costa
@@ -73,11 +87,14 @@ nessuna chiamata.
 ## 4. Passo 1 — trova una partita valida (0 crediti)
 
 1. Apri `https://github.com/uamisjd/dropalert-next/actions`.
-2. Nella colonna di sinistra scegli **Smoke The Odds API**.
+2. Nella colonna di sinistra scegli **Verifica dati reali (manuale)** (§1).
 3. A destra premi **Run workflow**.
-4. Scegli il branch (quello di lavoro, se la modifica non è ancora su `main`).
-5. Lascia `modalita` su **`trova-partita`** e `ore` su `48`.
-6. Premi **Run workflow** e apri l'esecuzione appena partita.
+4. *Use workflow from*: scegli il branch `arena/01a07663-dropalert-next`.
+5. `Quale verifica` = **`smoke-odds`**, `match_id` **vuoto**, `ore` = `72`
+   (l'intero orizzonte dell'archivio).
+6. Premi **Run workflow** e apri l'esecuzione appena partita, passo
+   **Smoke The Odds API**. La prima riga deve mostrare
+   `MARKER-SMOKE-ODDS-BRANCH-v1`: conferma che gira il codice del ramo.
 
 Nel log trovi una riga per ogni partita in archivio, ad esempio:
 
@@ -106,8 +123,9 @@ In fondo al log c'è il riepilogo dei crediti spesi: deve dire `0`.
 
 ## 5. Passo 2 — smoke test (1 credito)
 
-1. Stessa workflow, **Run workflow**.
-2. `modalita` = **`smoke-test`**.
+1. Stessa workflow (**Verifica dati reali (manuale)**), **Run workflow**,
+   stesso branch.
+2. `Quale verifica` = **`smoke-odds`**.
 3. `match_id` = il numero visto nel passo precedente (es. `1234`).
 4. **Run workflow**.
 
@@ -206,4 +224,35 @@ GitHub Actions.
 | `src/lib/providers/optional/the-odds-api-client.ts` | client delle quote (1 credito) |
 | `src/lib/providers/ingest-snapshots.ts` | scrittura in `odds_snapshots` |
 | `src/lib/decision/price-evidence.ts` | gate del prezzo eseguibile e della freshness |
-| `.github/workflows/smoke-odds.yml` | esecuzione manuale su GitHub Actions |
+| `.github/workflows/audit.yml` | workflow manuale che ospita la modalità `smoke-odds` |
+| `.github/workflows/smoke-odds.yml` | versione dedicata, lanciabile solo dopo il merge su `main` |
+
+## 10. Se ora non c'è una partita valida — non aspettare
+
+Il database contiene solo le partite entro l'orizzonte di raccolta
+(`COLLECT_HORIZON_HOURS`, default **72**). Se il giro trova «leggibili: 0» non
+è un guasto: semplicemente il prossimo turno dei campionati coperti non è
+ancora dentro la finestra. Due strade, in ordine di preferenza:
+
+1. **Allarga la ricerca, gratis.** Rilancia il passo 1 con `ore` più alto (es.
+   `168`). Non costa nulla: l'endpoint `/events` è fuori quota. Serve però che
+   la partita esista già in archivio, quindi da sola non basta se il turno è
+   oltre le 72h già raccolte.
+
+2. **Allarga l'orizzonte di raccolta, una volta sola.** Fai entrare nel
+   database il turno successivo così lo smoke test può usarlo subito:
+   1. *Settings → Secrets and variables → Actions → Variables* →
+      **New repository variable**: `COLLECT_HORIZON_HOURS` = `168`.
+   2. *Actions → Osservazione DropAlert → Run workflow* con `force = true` e
+      aspetta che finisca (qualche minuto): ora in archivio ci sono anche le
+      partite dei prossimi 7 giorni.
+   3. Rilancia il passo 1 (`ore = 168`): compariranno le `OK` dei campionati
+      coperti.
+   4. Esegui lo smoke test (§5) con l'id scelto.
+   5. Se vuoi tornare al comportamento consueto, riporta
+      `COLLECT_HORIZON_HOURS` a `72` (o elimina la variabile). Le partite già
+      raccolte restano, quindi lo smoke test funziona comunque.
+
+Allargare l'orizzonte aumenta le righe lette da BetExplorer in **un solo giro**;
+non cambia il budget di The Odds API, che resta governato da
+`odds-api-budget.ts` (lo smoke test costa 1 credito in tutto).
