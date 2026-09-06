@@ -23,6 +23,7 @@
     "job:analyze": "tsx --env-file-if-exists=.env src/scripts/run-analyze.ts",
     "smoke:odds-api": "tsx --env-file-if-exists=.env src/scripts/smoke-odds-api.ts",
     "odds:find": "tsx --env-file-if-exists=.env src/scripts/find-odds-match.ts",
+    "odds:control": "tsx --env-file-if-exists=.env src/scripts/control-sharp-read.ts",
     "test:providers": "tsx src/lib/providers/__tests__/providers.test.ts",
     "job:collect": "bash scripts/cycle.sh",
     "job:verify-results": "tsx --env-file-if-exists=.env src/scripts/verify-results.ts",

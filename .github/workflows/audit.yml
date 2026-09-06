@@ -19,6 +19,7 @@ on:
           - finished
           - both
           - smoke-odds
+          - control
       match_id:
         description: "Solo per smoke-odds: id partita. Vuoto = ricerca partita (0 crediti)"
         required: false
@@ -71,7 +72,7 @@ jobs:
       # Gli script non stampano la connection string, ma se il client fallisce
       # l'errore di `postgres` la include nell'message: si maschera in uscita.
       - name: Sguardo sui dati (read-only)
-        if: inputs.which != 'smoke-odds'
+        if: inputs.which != 'smoke-odds' && inputs.which != 'control'
         run: |
           status=0
           run_one() {
@@ -114,4 +115,19 @@ jobs:
           else
             npm run odds:find -- --ore ${{ inputs.ore }} 2>&1 | sed -E "$MASK"
           fi
+
+      # Lettura di controllo sul PERCORSO DI PRODUZIONE (getSharpLine) per un
+      # campionato coperto: budget → mappa → decisione → lettura reale →
+      # contatori in system_state. Va lanciata quando il turno entra in
+      # archivio; senza partite coperte non spende nulla. Vedi docs/SMOKE-THE-ODDS-API.md.
+      - name: Lettura di controllo (produzione)
+        if: inputs.which == 'control'
+        run: |
+          echo "MARKER-CONTROL-READ-v1"
+          MASK='s#(postgres(ql)?://)[^[:space:]"'"'"']*#\1<redacted>#g'
+          if [ -z "$THE_ODDS_API_KEY" ]; then
+            echo "::error::Chiave The Odds API assente fra i secrets."
+            exit 1
+          fi
+          npm run odds:control -- --ore ${{ inputs.ore }} 2>&1 | sed -E "$MASK"
 

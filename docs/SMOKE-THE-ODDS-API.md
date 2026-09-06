@@ -276,3 +276,22 @@ Cosa **non** dimostra: non valida il percorso di produzione sui campionati
 coperti (Serie A, EPL, …), che oggi non avevano partite con quote vive; quella
 verifica va fatta quando il prossimo turno entra nei movimenti. Non accende il
 provider: `ADAPTER_IMPLEMENTED` resta `false` e l'attivazione è una PR separata.
+
+## 12. Lettura di controllo sul percorso di produzione
+
+Prima di impostare `ODDS_ADAPTER_IMPLEMENTED=true`, si valida il percorso che
+userà la produzione — `getSharpLine` (vista budget → mappa `sportKeyFor` →
+decisione `decide` → lettura reale → contatori in `system_state` → snapshot) —
+su un campionato **coperto**. Strumento: `src/scripts/control-sharp-read.ts`,
+lanciato dalla workflow con `which = control` (o in locale `npm run odds:control`).
+
+- Se in archivio non c'è alcuna partita coperta (sosta / fra due turni), stampa
+  «NESSUNA PARTITA DI CAMPIONATO COPERTO» e **non spende nulla**: va rilanciata
+  quando entra il turno.
+- Se c'è, esegue **una** lettura (1 credito) e stampa budget prima/dopo, book
+  sharp, prezzo e verdetto: è la conferma che mapping, contatori e matching
+  funzionano nel percorso reale.
+
+`signalActive` è passato `true` in modo dichiarato: è una lettura di controllo
+voluta, non un segnale del monitor. I tetti mensili/giornalieri restano quelli
+di `odds-api-budget.ts`.
