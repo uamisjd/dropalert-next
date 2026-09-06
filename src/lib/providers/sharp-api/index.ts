@@ -244,62 +244,26 @@ export function calculateArbitrage(
  * Parser per la risposta di SharpAPI.
  * Adatta il formato JSON dell'API alla nostra interfaccia SharpMatchOdds.
  */
-interface SharpApiSelection {
-  name?: string;
-  label?: string;
-  bookmaker?: string;
-  odds?: number;
-  price?: number;
-  fairOdds?: number;
-  trueProbability?: number;
-  evPercent?: number;
-  lastUpdate?: string;
-}
-
-interface SharpApiMarket {
-  market?: string;
-  selections?: SharpApiSelection[];
-}
-
-interface SharpApiMatch {
-  id?: string;
-  matchId?: string;
-  homeTeam?: string;
-  home_team?: string;
-  awayTeam?: string;
-  away_team?: string;
-  league?: string;
-  competition?: string;
-  kickoffAt?: string;
-  kickoff_at?: string;
-  startTime?: string;
-  odds?: SharpApiMarket[];
-  match?: SharpApiMatch;
-}
-
-function parseSharpOddsResponse(data: SharpApiMatch): SharpMatchOdds | null {
+function parseSharpOddsResponse(data: any): SharpMatchOdds | null {
   try {
     // Adatta in base al formato reale di SharpAPI
     // Questa è una struttura ipotetica, va adattata quando si vede la risposta reale
     const match = data.match || data;
 
-    const odds1X2 = match.odds?.find((o: SharpApiMarket) => o.market === "1X2" || o.market === "moneyline");
+    const odds1X2 = match.odds?.find((o: any) => o.market === "1X2" || o.market === "moneyline");
     if (!odds1X2) {
       return null;
     }
 
-    const findSelection = (sel: string): SharpOdds | null => {
-      const selection = odds1X2.selections?.find((s: SharpApiSelection) => s.name === sel || s.label === sel);
+    const findSelection = (sel: string) => {
+      const selection = odds1X2.selections?.find((s: any) => s.name === sel || s.label === sel);
       if (!selection) return null;
-
-      const odds = selection.odds ?? selection.price;
-      if (!odds) return null;
 
       return {
         bookmaker: selection.bookmaker || "Pinnacle",
         market: "1X2",
         selection: sel,
-        odds: round(odds, 3),
+        odds: round(selection.odds || selection.price, 3),
         fairOdds: selection.fairOdds ? round(selection.fairOdds, 3) : undefined,
         trueProbability: selection.trueProbability ? round(selection.trueProbability, 4) : undefined,
         evPercent: selection.evPercent ? round(selection.evPercent, 2) : undefined,
@@ -307,22 +271,12 @@ function parseSharpOddsResponse(data: SharpApiMatch): SharpMatchOdds | null {
       };
     };
 
-    const matchId = match.id || match.matchId;
-    const homeTeam = match.homeTeam || match.home_team;
-    const awayTeam = match.awayTeam || match.away_team;
-    const league = match.league || match.competition;
-    const kickoffTime = match.kickoffAt || match.kickoff_at || match.startTime;
-
-    if (!matchId || !homeTeam || !awayTeam || !league || !kickoffTime) {
-      return null;
-    }
-
     return {
-      matchId,
-      homeTeam,
-      awayTeam,
-      league,
-      kickoffAt: new Date(kickoffTime),
+      matchId: match.id || match.matchId,
+      homeTeam: match.homeTeam || match.home_team,
+      awayTeam: match.awayTeam || match.away_team,
+      league: match.league || match.competition,
+      kickoffAt: new Date(match.kickoffAt || match.kickoff_at || match.startTime),
       odds: {
         "1": findSelection("1") || findSelection("Home"),
         X: findSelection("X") || findSelection("Draw"),

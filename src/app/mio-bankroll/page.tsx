@@ -12,8 +12,7 @@
  * dalla navigazione pubblica: solo chi conosce l'URL la raggiunge.
  */
 
-import { useState, useCallback } from "react";
-import { BankrollChart } from "@/components/BankrollChart";
+import { useState, useEffect, useCallback } from "react";
 
 interface PersonalBet {
   id: string;
@@ -161,24 +160,10 @@ function calculateStats(bets: PersonalBet[], initialBankroll: number): BankrollS
 }
 
 export default function MioBankrollPage() {
-  // Carica i dati iniziali una sola volta al mount del componente
-  const [bets, setBets] = useState<PersonalBet[]>(() => {
-    if (typeof window !== "undefined") {
-      return loadBets();
-    }
-    return [];
-  });
-
-  const [bankroll, setBankroll] = useState<number>(() => {
-    if (typeof window !== "undefined") {
-      return loadBankroll();
-    }
-    return 1000;
-  });
-
+  const [bets, setBets] = useState<PersonalBet[]>([]);
+  const [bankroll, setBankroll] = useState(1000);
   const [showForm, setShowForm] = useState(false);
   const [showExport, setShowExport] = useState(false);
-  const [filterStatus, setFilterStatus] = useState<"all" | "pending" | "won" | "lost">("all");
 
   // Form state
   const [formHome, setFormHome] = useState("");
@@ -192,6 +177,11 @@ export default function MioBankrollPage() {
   const [formKelly, setFormKelly] = useState("");
   const [formKickoff, setFormKickoff] = useState("");
   const [formNotes, setFormNotes] = useState("");
+
+  useEffect(() => {
+    setBets(loadBets());
+    setBankroll(loadBankroll());
+  }, []);
 
   const persistBets = useCallback((newBets: PersonalBet[]) => {
     setBets(newBets);
@@ -388,13 +378,6 @@ export default function MioBankrollPage() {
         ))}
       </div>
 
-      {/* Bankroll Chart */}
-      {stats.bankrollHistory.length > 1 && (
-        <div className="mb-6">
-          <BankrollChart history={stats.bankrollHistory} />
-        </div>
-      )}
-
       {/* CLV Assessment */}
       {stats.settledBets >= 10 && (
         <div className={`mb-6 rounded-2xl border p-4 ${stats.avgClvPct >= 2 ? "border-emerald-200 bg-emerald-50" : stats.avgClvPct >= 0 ? "border-amber-200 bg-amber-50" : "border-rose-200 bg-rose-50"}`}>
@@ -461,38 +444,7 @@ export default function MioBankrollPage() {
             </p>
           </div>
         )}
-
-        {/* Filtri */}
-        {bets.length > 0 && (
-          <div className="flex gap-2 mb-3 flex-wrap">
-            {([
-              { key: "all", label: "Tutte", count: bets.length },
-              { key: "pending", label: "⏳ In attesa", count: bets.filter(b => !b.result || b.result === "pending").length },
-              { key: "won", label: "✓ Vinte", count: bets.filter(b => b.result === "won").length },
-              { key: "lost", label: "✗ Perse", count: bets.filter(b => b.result === "lost").length },
-            ] as const).map(f => (
-              <button
-                key={f.key}
-                onClick={() => setFilterStatus(f.key)}
-                className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors ${
-                  filterStatus === f.key
-                    ? "bg-slate-900 text-white"
-                    : "bg-white border border-slate-200 text-slate-600 hover:bg-slate-50"
-                }`}
-              >
-                {f.label} ({f.count})
-              </button>
-            ))}
-          </div>
-        )}
-
-        {bets
-          .filter(b => {
-            if (filterStatus === "all") return true;
-            if (filterStatus === "pending") return !b.result || b.result === "pending";
-            return b.result === filterStatus;
-          })
-          .map((bet) => (
+        {bets.map((bet) => (
           <div
             key={bet.id}
             className={`rounded-xl border p-4 shadow-sm ${
