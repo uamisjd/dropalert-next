@@ -13,7 +13,7 @@ import { calculateEV, findValueFromSharpPrices } from "../ev-engine";
 import { computeValueGap } from "../value-gap";
 import { calculateKellyStake } from "../kelly";
 import { DEFAULT_MAX_GOALS, simulateDixonColes, estimateTeamExpectancy } from "../dixon-coles";
-import { calculateArbitrage, calculateDutching } from "../arbitrage";
+import { calculateArbitrage, calculateDutching } from "../arbitrage-client";
 import { calculateGreenUp, calculateTickDistance } from "../exchange-trading";
 import { buildSyntheticMarkets, detectMarketDiscrepancy } from "../synthetic-odds";
 

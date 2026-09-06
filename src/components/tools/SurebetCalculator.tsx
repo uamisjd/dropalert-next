@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import { calculateArbitrage } from "@/lib/quant/arbitrage";
+import { calculateArbitrage } from "@/lib/quant/arbitrage-client";
 import { isValidPrice } from "@/lib/drop/math";
 
 interface OutcomeInput {
