@@ -6,7 +6,12 @@
  * restituisce `null` invece di indovinare, e `resolveSportKey` la compone
  * correttamente a partire da paese e nome separati.
  */
-import { sportKeyFor, resolveSportKey, isCoveredBySportKey } from "../sport-keys";
+import {
+  sportKeyFor,
+  resolveSportKey,
+  isCoveredBySportKey,
+  COVERED_SPORT_KEYS,
+} from "../sport-keys";
 
 let passed = 0;
 let failed = 0;
@@ -71,6 +76,31 @@ test("isCoveredBySportKey: fuori mappa o non leggibile → false", () => {
   assert(isCoveredBySportKey(null, "Serie A") === false, "senza paese → false");
   assert(isCoveredBySportKey("Italy", "") === false, "senza nome → false");
   assert(isCoveredBySportKey("Spain", "Premier League") === false, "paese incoerente → false");
+});
+
+test("la chiave risolta ricade nel set di campionati coperti (catena mappa→fonte)", () => {
+  // La scheda partita fa: resolveSportKey(country, league) → sportKey → fetchSharpLine.
+  // Qui garantiamo il primo anello della catena: ogni campionato riconosciuto
+  // produce una chiave che è davvero nel set di quelli coperti dalla fonte,
+  // così la conferma sharp può scattare (era il bug scoperto).
+  const chiavi = [
+    ["Italy", "Serie A"],
+    ["England", "Premier League"],
+    ["Spain", "La Liga"],
+    ["Germany", "Bundesliga"],
+    ["France", "Ligue 1"],
+    ["Europe", "Champions League"],
+  ] as const;
+  for (const [paese, nome] of chiavi) {
+    const chiave = resolveSportKey(paese, nome);
+    assert(chiave !== null, `${paese}:${nome} → chiave non nulla`);
+    if (chiave === null) continue;
+    assert(
+      COVERED_SPORT_KEYS.includes(chiave),
+      `${paese}:${nome} → ${chiave} deve essere in COVERED_SPORT_KEYS`,
+    );
+    assert(isCoveredBySportKey(paese, nome) === true, `${paese}:${nome} → coperto`);
+  }
 });
 
 console.log(`\n${passed} passed, ${failed} failed`);
