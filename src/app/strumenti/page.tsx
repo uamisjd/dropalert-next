@@ -2,6 +2,7 @@
  * Pagina /strumenti — Suite Completa di Calcolo Quantitativo per Scommettitori e Trader.
  */
 import type { Metadata } from "next";
+import { SITE_NAME, SITE_URL } from "@/lib/site";
 import { MarginCalculator } from "@/components/tools/MarginCalculator";
 import { VarianceSimulator } from "@/components/tools/VarianceSimulator";
 import { SurebetCalculator } from "@/components/tools/SurebetCalculator";
@@ -19,8 +20,34 @@ export const metadata: Metadata = {
 export const dynamic = "force-static";
 
 export default function StrumentiPage() {
+  const jsonLd = {
+    "@context": "https://schema.org",
+    "@type": "WebApplication",
+    name: "Strumenti di Calcolo Quantitativo",
+    description:
+      "Suite completa di calcolatori per scommesse e trading sportivo: Margine e quote Fair No-Vig, Simulatore di Varianza, Surebet, Dutching e Green-Up Exchange.",
+    url: `${SITE_URL}/strumenti`,
+    applicationCategory: "FinanceApplication",
+    operatingSystem: "Web",
+    inLanguage: "it-IT",
+    offers: {
+      "@type": "Offer",
+      price: "0",
+      priceCurrency: "EUR",
+    },
+    author: {
+      "@type": "Organization",
+      name: SITE_NAME,
+      url: SITE_URL,
+    },
+  };
+
   return (
     <main id="main-content" className="mx-auto w-full max-w-5xl flex-1 px-4 py-5">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+      />
       {/* Header */}
       <header className="relative mb-6 overflow-hidden rounded-3xl bg-slate-950 px-6 py-8 text-white shadow-lg">
         <div
