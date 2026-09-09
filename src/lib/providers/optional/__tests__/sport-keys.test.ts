@@ -69,6 +69,33 @@ test("isCoveredBySportKey: coppa UEFA maschile → true (nel set)", () => {
   assert(isCoveredBySportKey("Europe", "Champions League") === true, "UCL coperta");
 });
 
+test("catalogo reale: MLS, Argentina, Belgio e divisioni inglesi → coperte", () => {
+  assert(resolveSportKey("USA", "MLS") === "soccer_mls", "USA MLS → soccer_mls");
+  assert(resolveSportKey("Brazil", "Campeonato") === "soccer_brazil_campeonato", "Brazil Campeonato");
+  assert(
+    resolveSportKey("Argentina", "Primera División") === "soccer_argentina_primera_division",
+    "Argentina Primera División",
+  );
+  assert(resolveSportKey("Belgium", "First Division") === "soccer_belgium_first_div", "Belgium First Division");
+  assert(resolveSportKey("England", "League One") === "soccer_england_league1", "England League One");
+  assert(resolveSportKey("England", "League Two") === "soccer_england_league2", "England League Two");
+  assert(sportKeyFor("USA: MLS") === "soccer_mls", "sportKeyFor USA: MLS");
+
+  for (const [paese, nome] of [
+    ["USA", "MLS"],
+    ["Brazil", "Campeonato"],
+    ["Argentina", "Primera División"],
+    ["Belgium", "First Division"],
+  ] as const) {
+    assert(isCoveredBySportKey(paese, nome) === true, `${paese}:${nome} → coperto dal catalogo reale`);
+  }
+});
+
+test("«Brazil: Serie A» resta NON mappata alla Serie A italiana (collision-safe)", () => {
+  assert(resolveSportKey("Brazil", "Serie A") === null, "Brazil + Serie A → null, non la Serie A italiana");
+  assert(isCoveredBySportKey("Brazil", "Serie A") === false, "Brazil Serie A non è la Serie A IT → false");
+});
+
 test("isCoveredBySportKey: fuori mappa o non leggibile → false", () => {
   assert(isCoveredBySportKey("Chad", "Division 1") === false, "Chad non coperta");
   assert(isCoveredBySportKey("Algeria", "Ligue 1") === false, "Algeria non coperta");

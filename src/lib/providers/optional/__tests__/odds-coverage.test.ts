@@ -78,15 +78,22 @@ const SOCCER: CoverageSport[] = [
   });
 
   await test("classifica in tre gruppi senza perdere campionati", async () => {
+    // Dal 06/09/2026 la copertura segue il catalogo reale: Liga MX non è più
+    // "simile" ma MAPPATA (la fonte la espone), Argentina "Primera" (abbreviazione
+    // di "Primera División") è "near", Algeria resta "uncovered".
     const leagues: CoverageLeague[] = [
       { key: "it-serie-a", name: "Serie A", country: "Italy" },
       { key: "mx-ligamx", name: "Liga MX", country: "Mexico" },
+      { key: "ar-primera", name: "Primera", country: "Argentina" },
       { key: "dz-ligue1", name: "Ligue 1", country: "Algeria" },
     ];
     const catalogKeys = new Set(["soccer_italy_serie_a", "soccer_mexico_ligamx"]);
     const report = classifyCoverage(leagues, catalogKeys, SOCCER);
-    assert(report.mapped.length === 1 && report.mapped[0].name === "Serie A", "Serie A deve essere mappata");
-    assert(report.near.length === 1 && report.near[0].league.name === "Liga MX", "Liga MX deve essere candidata");
+    assert(report.mapped.length === 2, "Serie A e Liga MX sono coperte dalla fonte");
+    assert(report.mapped.some((l) => l.name === "Serie A"), "Serie A deve essere mappata");
+    assert(report.mapped.some((l) => l.name === "Liga MX"), "Liga MX deve essere mappata (fonte la copre)");
+    assert(report.near.length === 1 && report.near[0].league.name === "Primera", "Argentina Primera deve essere candidata");
+    assert(report.near[0].candidate === "soccer_argentina_primera_division", "candidato Argentina errato");
     assert(report.uncovered.length === 1 && report.uncovered[0].name === "Ligue 1", "Algeria fuori copertura");
   });
 
@@ -119,14 +126,27 @@ const SOCCER: CoverageSport[] = [
   });
 
   await test("coverageClassFor: campionato simile → near, mai usato come certezza", async () => {
+    // "Argentina: Primera" è l'abbreviazione di "Primera División": la classe
+    // è near (candidato), MAI usata come certezza.
+    const c = coverageClassFor(
+      { key: "ar-primera", name: "Primera", country: "Argentina" },
+      ACTIVE_KEYS,
+      SOCCER,
+    );
+    assert(c.coverage === "near", `atteso near, trovato ${c.coverage}`);
+    assert(c.candidate === "soccer_argentina_primera_division", "candidato errato");
+    assert(c.reason !== null && c.reason!.length > 0, "near deve avere un motivo di verifica");
+  });
+
+  await test("coverageClassFor: campionato del catalogo reale → mapped (niente distinzione minori/maggiori)", async () => {
+    // Liga MX è nel catalogo della fonte e ATTIVA: ora è coperta, non più "near".
     const c = coverageClassFor(
       { key: "mx-ligamx", name: "Liga MX", country: "Mexico" },
       ACTIVE_KEYS,
       SOCCER,
     );
-    assert(c.coverage === "near", `atteso near, trovato ${c.coverage}`);
-    assert(c.candidate === "soccer_mexico_ligamx", "candidato errato");
-    assert(c.reason !== null && c.reason!.length > 0, "near deve avere un motivo di verifica");
+    assert(c.coverage === "mapped", `atteso mapped, trovato ${c.coverage}`);
+    assert(c.reason === null, "mapped non ha motivo di indisponibilità");
   });
 
   await test("coverageClassFor: campionato assente → uncovered con motivo onesto", async () => {
