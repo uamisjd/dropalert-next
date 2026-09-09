@@ -1,6 +1,6 @@
 /**
- * POST /api/jobs/capture-odds — porta in archivio la prossima partita di una
- * lega SERVITA da The Odds API, per chiudere il vero `SMOKE OK`.
+ * /api/jobs/capture-odds — porta in archivio la prossima partita di una lega
+ * SERVITA da The Odds API, per chiudere il vero `SMOKE OK`.
  *
  * Perché esiste: la scheda `smoke:odds-api` legge una partita dall'ARCHIVIO
  * (serve un `match_id` in `matches`). The Odds API (piano gratuito) espone
@@ -12,14 +12,15 @@
  * NON è un'attivazione: `ADAPTER_IMPLEMENTED` resta `false`; è un inserimento
  * manuale di verifica, come da dottrina.
  *
- * Corpo (JSON, tutto opzionale):
- *   {
- *     "sportKey": "soccer_italy_serie_a"   // default Serie A
- *   }
+ * Due modi per chiamarla, entrambi SENZA terminale:
+ *   GET  /api/jobs/capture-odds?token=<JOBS_TOKEN>&sportKey=soccer_italy_serie_a
+ *        (il token viaggia nell'URL: comodo da aprire nel browser)
+ *   POST /api/jobs/capture-odds  header x-jobs-token, body {"sportKey": "..."}
+ *        (per un cron/scheduler esterno)
  *
  * Autorizzazione: come `/api/jobs/analyze`, in produzione va protetta da
- * `JOBS_TOKEN` (header `x-jobs-token`). Senza `JOBS_TOKEN` risponde solo
- * fuori da NODE_ENV=production.
+ * `JOBS_TOKEN`. Senza `JOBS_TOKEN` e con NODE_ENV=production risponde 401;
+ * fuori da production (es. dev) si può chiamare liberamente.
  *
  * Costo: 0 crediti (endpoint eventi gratuito). La lettura vera (1 credito)
  * resta un passo esplicito dello smoke, non di questa rotta.
@@ -33,19 +34,30 @@ import { ingestOddsEvent } from "@/lib/providers/optional/ingest-odds-event";
 
 export const dynamic = "force-dynamic";
 
+const DEFAULT_SPORT_KEY = "soccer_italy_serie_a";
+
 const bodySchema = z.object({
-  sportKey: z.string().trim().min(1).default("soccer_italy_serie_a"),
+  sportKey: z.string().trim().min(1).default(DEFAULT_SPORT_KEY),
 });
+
+/** Estrae il token dall'header `x-jobs-token` o dal query param `token`. */
+function readToken(request: Request): string | null {
+  const header = request.headers.get("x-jobs-token");
+  if (header) return header;
+  try {
+    const url = new URL(request.url);
+    return url.searchParams.get("token");
+  } catch {
+    return null;
+  }
+}
 
 /** Verifica l'autorizzazione del job (stesso pattern di /api/jobs/analyze). */
 function authorize(request: Request): { ok: boolean; reason?: string } {
   const token = process.env.JOBS_TOKEN;
   if (token) {
-    const provided = request.headers.get("x-jobs-token");
-    if (provided !== token) {
-      return { ok: false, reason: "token non valido" };
-    }
-    return { ok: true };
+    if (readToken(request) === token) return { ok: true };
+    return { ok: false, reason: "token non valido" };
   }
   if (process.env.NODE_ENV === "production") {
     return {
@@ -57,9 +69,9 @@ function authorize(request: Request): { ok: boolean; reason?: string } {
 }
 
 /** Stato HTTP e messaggio onesti per un esito della fonte non `ok`. */
-function upstreamStatus(
-  outcome: { result: { ok: boolean; error?: { kind: string; httpStatus?: number; message: string } } },
-): { status: number; error: string } {
+function upstreamStatus(outcome: {
+  result: { ok: boolean; error?: { kind: string; httpStatus?: number; message: string } };
+}): { status: number; error: string } {
   const err = outcome.result.error;
   if (!err) return { status: 502, error: "La fonte non ha restituito un esito valido." };
   if (err.kind === "blocked") return { status: 403, error: err.message };
@@ -73,32 +85,8 @@ function upstreamStatus(
   return { status: 502, error: err.message };
 }
 
-export async function POST(request: Request) {
-  const auth = authorize(request);
-  if (!auth.ok) {
-    return NextResponse.json({ error: "non autorizzato", detail: auth.reason }, { status: 401 });
-  }
-
-  let body: z.infer<typeof bodySchema>;
-  try {
-    const rawBody = await request.text();
-    const parsed = bodySchema.safeParse(rawBody ? JSON.parse(rawBody) : {});
-    if (!parsed.success) {
-      return NextResponse.json(
-        {
-          error: "corpo della richiesta non valido",
-          details: parsed.error.issues.map((i) => i.message),
-        },
-        { status: 400 },
-      );
-    }
-    body = parsed.data;
-  } catch {
-    return NextResponse.json({ error: "JSON non valido" }, { status: 400 });
-  }
-
-  const sportKey = body.sportKey;
-
+/** Esegue la cattura vera e propria. */
+async function runCapture(sportKey: string): Promise<Response> {
   const apiKey = readOddsApiKey();
   if (apiKey === null) {
     return NextResponse.json(
@@ -165,7 +153,11 @@ export async function POST(request: Request) {
       matchKey: ingested.matchKey,
       created: ingested.created,
       sportKey,
-      league: { name: league.leagueRaw, country: league.countryRaw, slug: `${league.countrySlug}/${league.leagueSlug}` },
+      league: {
+        name: league.leagueRaw,
+        country: league.countryRaw,
+        slug: `${league.countrySlug}/${league.leagueSlug}`,
+      },
       homeTeam: event.homeTeam,
       awayTeam: event.awayTeam,
       kickoffAt: event.commenceTime.toISOString(),
@@ -180,14 +172,45 @@ export async function POST(request: Request) {
   );
 }
 
-/** GET: nessuna esecuzione, solo la spiegazione d'uso. */
-export async function GET() {
-  return NextResponse.json(
-    {
-      error: "metodo non consentito",
-      detail: "Usare POST con {\"sportKey\": \"soccer_italy_serie_a\"} per catturare la prossima partita servita.",
-      note: "La cattura è gratuita (endpoint eventi, 0 crediti). La lettura vera (1 credito) resta uno step esplicito dello smoke: which=smoke-odds, match_id=<id>. Vedi docs/SMOKE-THE-ODDS-API.md.",
-    },
-    { status: 405 },
-  );
+/** GET: cattura e restituisce la partita in JSON (apribile dal browser). */
+export async function GET(request: Request) {
+  const auth = authorize(request);
+  if (!auth.ok) {
+    return NextResponse.json({ error: "non autorizzato", detail: auth.reason }, { status: 401 });
+  }
+  try {
+    const url = new URL(request.url);
+    const sportKey = url.searchParams.get("sportKey") ?? DEFAULT_SPORT_KEY;
+    return await runCapture(sportKey);
+  } catch {
+    return NextResponse.json({ error: "URL non valido" }, { status: 400 });
+  }
+}
+
+/** POST: stessa cattura, con header `x-jobs-token` e corpo JSON. */
+export async function POST(request: Request) {
+  const auth = authorize(request);
+  if (!auth.ok) {
+    return NextResponse.json({ error: "non autorizzato", detail: auth.reason }, { status: 401 });
+  }
+
+  let body: z.infer<typeof bodySchema>;
+  try {
+    const rawBody = await request.text();
+    const parsed = bodySchema.safeParse(rawBody ? JSON.parse(rawBody) : {});
+    if (!parsed.success) {
+      return NextResponse.json(
+        {
+          error: "corpo della richiesta non valido",
+          details: parsed.error.issues.map((i) => i.message),
+        },
+        { status: 400 },
+      );
+    }
+    body = parsed.data;
+  } catch {
+    return NextResponse.json({ error: "JSON non valido" }, { status: 400 });
+  }
+
+  return await runCapture(body.sportKey);
 }

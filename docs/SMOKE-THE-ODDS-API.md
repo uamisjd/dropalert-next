@@ -271,13 +271,13 @@ reali della fonte (0 crediti) e scrive in archivio la **prossima partita** di
 una lega della base (default `soccer_italy_serie_a`), restituendo il
 `match_id` da usare nel passo 2.
 
-```bash
-# senza terminale: apri l'URL del deploy (Vercel) — GET spiega l'uso
-curl -X POST https://<tuo-deploy>/api/jobs/capture-odds \
-  -H "content-type: application/json" \
-  -H "x-jobs-token: $JOBS_TOKEN" \
-  -d '{"sportKey":"soccer_italy_serie_a"}'
-```
+La rotta si può chiamare in due modi, entrambi **senza terminale**:
+
+- **GET (comodo da aprire nel browser):**
+  `https://<tuo-deploy>/api/jobs/capture-odds?token=<JOBS_TOKEN>&sportKey=soccer_italy_serie_a`
+  → il browser mostra il JSON.
+- **POST (per un cron/scheduler esterno):**
+  header `x-jobs-token: <JOBS_TOKEN>`, body `{"sportKey":"soccer_italy_serie_a"}`.
 
 Risposta (201): `{ ok, matchId, homeTeam, awayTeam, kickoffAt, ... }`. Poi:
 
