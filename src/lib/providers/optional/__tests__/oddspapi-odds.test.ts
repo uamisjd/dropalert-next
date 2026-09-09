@@ -1,15 +1,17 @@
 /**
  * Test del parser di OddsPapi — da JSON della fonte a quote per book.
  *
- * Il test fissa la traduzione della fixture congelata dello schema documentato
- * (`bookmakerOdds[book][markets][marketKey][outcomes]`). Controlla le regole
- * di onestà del progetto:
+ * Il test fissa la traduzione della fixture congelata dello schema VERIFICATO
+ * (`GET /markets`, `GET /odds`: `bookmakerOdds[book][markets][marketId]
+ * [outcomes][outcomeId].players["0"].price`). Controlla le regole di onestà:
  *  - ogni bookmaker è una riga reale (mai consenso finto);
  *  - i bookmaker sharp (pinnacle, singbet, sbobet, betfair-exchange) sono
- *    marcati `isSharp = true`;
- *  - un esito che non corrisponde a casa/trasferta/pareggio o con prezzo non
- *    valido viene scartato e contato, mai indovinato;
- *  - i mercati non gestiti o le linee diverse da 2.5 non producono quote.
+ *    marcati `isSharp = true` dalla key, non dal prezzo;
+ *  - la selezione 1X2 si risolve per ID di esito verificato (101=home,
+ *    102=draw, 103=away) e la 2.5 per 1010/1011; un ID non gestito o un
+ *    prezzo non valido viene scartato e contato, mai indovinato;
+ *  - un book inattivo, un mercato non gestito o una linea diversa da 2.5
+ *    non producono quote.
  */
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -17,6 +19,7 @@ import {
   parseOddsResponse,
   extractBookLines,
   isSharpBookmaker,
+  SOCCER_SPORT_ID,
   type OddsPapiOdd,
 } from "../oddspapi-odds";
 
@@ -51,7 +54,7 @@ const observed = new Date("2026-09-12T18:55:00Z");
     assert(keys.has("pinnacle"), "manca pinnacle");
     assert(keys.has("bet365"), "manca bet365");
     assert(keys.has("draftkings"), "manca draftkings");
-    assert(!keys.has("outdatedbook"), "un book con esiti inattivi non deve produrre quote");
+    assert(!keys.has("outdatedbook"), "un book inattivo non deve produrre quote");
   });
 
   await test("marca come sharp solo i bookmaker della lista dichiarata", async () => {
@@ -70,17 +73,19 @@ const observed = new Date("2026-09-12T18:55:00Z");
     assert(!isSharpBookmaker("bet365"), "bet365 non per key");
   });
 
-  await test("risolve la selezione 1X2 per nome di squadra", async () => {
+  await test("risolve la selezione 1X2 per ID di esito verificato (101/102/103)", async () => {
     const lines = extractBookLines(payload, observed).lines;
-    const interPrices = lines.filter((l) => l.market === "1x2" && l.selection === "home");
-    assert(interPrices.length > 0, "attese quote sulla selezione home (Inter)");
-    const juvePrices = lines.filter((l) => l.market === "1x2" && l.selection === "away");
-    assert(juvePrices.length > 0, "attese quote sulla selezione away (Juventus)");
-    const drawPrices = lines.filter((l) => l.market === "1x2" && l.selection === "draw");
-    assert(drawPrices.length > 0, "attese quote sul pareggio");
+    const home = lines.filter((l) => l.market === "1x2" && l.selection === "home");
+    assert(home.length > 0, "attese quote sulla selezione home (Inter)");
+    const away = lines.filter((l) => l.market === "1x2" && l.selection === "away");
+    assert(away.length > 0, "attese quote sulla selezione away (Juventus)");
+    const draw = lines.filter((l) => l.market === "1x2" && l.selection === "draw");
+    assert(draw.length > 0, "attese quote sul pareggio");
+    // Il prezzo viene da players["0"].price, non da un campo sui nomi.
+    assert(home.every((l) => l.price > 1), "prezzo decimale valido per la home");
   });
 
-  await test("il mercato totals con linea 2.5 è tradotto in over/under", async () => {
+  await test("il mercato 1010 (O/U 2.5) è tradotto in over/under", async () => {
     const lines = extractBookLines(payload, observed).lines;
     const over = lines.filter((l) => l.market === "ou_2_5" && l.selection === "over");
     const under = lines.filter((l) => l.market === "ou_2_5" && l.selection === "under");
@@ -89,21 +94,23 @@ const observed = new Date("2026-09-12T18:55:00Z");
     assert(over.every((l) => l.price > 1), "prezzo valido");
   });
 
-  await test("un esito non risolvibile viene contato, non indovinato", async () => {
+  await test("un esito con ID non gestito viene contato, non indovinato", async () => {
     const odd: OddsPapiOdd = {
       fixtureId: "x",
-      participants: { home: { name: "Inter" }, away: { name: "Juventus" } },
+      participant1Name: "Inter",
+      participant2Name: "Juventus",
       bookmakerOdds: {
         pinnacle: {
+          bookmakerIsActive: true,
           markets: {
-            "131": {
-              name: "Money Line",
+            "101": {
+              marketActive: true,
               outcomes: {
-                "131": { id: "131", name: "Inter", price: 2.1, active: true },
-                "132": { id: "132", name: "Draw", price: 3.4, active: true },
-                "133": { id: "133", name: "Juventus", price: 3.75, active: true },
-                // esito sconosciuto: né casa, né trasferta, né pareggio
-                "999": { id: "999", name: "Mistero", price: 5.0, active: true },
+                "101": { players: { "0": { active: true, price: 2.1 } } },
+                "102": { players: { "0": { active: true, price: 3.4 } } },
+                "103": { players: { "0": { active: true, price: 3.75 } } },
+                // esito sconosciuto: ID non in 101/102/103
+                "999": { players: { "0": { active: true, price: 5.0 } } },
               },
             },
           },
@@ -118,14 +125,16 @@ const observed = new Date("2026-09-12T18:55:00Z");
   await test("un prezzo non valido viene scartato e contato", async () => {
     const odd: OddsPapiOdd = {
       fixtureId: "x",
-      participants: { home: { name: "Inter" }, away: { name: "Juventus" } },
+      participant1Name: "Inter",
+      participant2Name: "Juventus",
       bookmakerOdds: {
         bet365: {
+          bookmakerIsActive: true,
           markets: {
-            "131": {
-              name: "Money Line",
+            "101": {
+              marketActive: true,
               outcomes: {
-                "131": { id: "131", name: "Inter", price: 0.9, active: true },
+                "101": { players: { "0": { active: true, price: 0.9 } } },
               },
             },
           },
@@ -137,15 +146,40 @@ const observed = new Date("2026-09-12T18:55:00Z");
     assert(res.lines.length === 0, "prezzo sotto 1 non produce quote");
   });
 
+  await test("un book inattivo non produce quote ma conta come visto", async () => {
+    const odd: OddsPapiOdd = {
+      fixtureId: "x",
+      participant1Name: "Inter",
+      participant2Name: "Juventus",
+      bookmakerOdds: {
+        outdatedbook: {
+          bookmakerIsActive: false,
+          markets: {
+            "101": {
+              marketActive: true,
+              outcomes: {
+                "101": { players: { "0": { active: true, price: 2.2 } } },
+              },
+            },
+          },
+        },
+      },
+    };
+    const res = extractBookLines(odd, observed);
+    assert(res.bookmakersSeen === 1, `atteso 1 bookmaker visto, trovati ${res.bookmakersSeen}`);
+    assert(res.lines.length === 0, "book inattivo non produce quote");
+  });
+
   await test("un mercato non gestito non produce quote", async () => {
     const odd: OddsPapiOdd = {
       fixtureId: "x",
-      participants: { home: { name: "Inter" }, away: { name: "Juventus" } },
+      participant1Name: "Inter",
+      participant2Name: "Juventus",
       bookmakerOdds: {
         bet365: {
+          bookmakerIsActive: true,
           markets: {
-            // mercato diverso da moneyline e totals 2.5
-            "555": { name: "Correct Score", outcomes: {} },
+            "555": { marketActive: true, outcomes: {} },
           },
         },
       },
@@ -157,9 +191,6 @@ const observed = new Date("2026-09-12T18:55:00Z");
   await test("bookmakerSeen conta anche i book senza quote valide", async () => {
     const res = parseOddsResponse(payload, { fixtureKey: "be-test123", observedAt: observed });
     assert(res.bookmakersSeen === 7, `attesi 7 bookmaker visti, trovati ${res.bookmakersSeen}`);
-    // L'adapter ha scritto quote per almeno i 5 book "vivi" (il "outdatedbook"
-    // è inattivo e non traduce quote).
-    assert(typeof res.bookmakersUsed === "number", "bookmakersUsed deve essere un numero");
     assert(res.bookmakersUsed >= 5, `attesi almeno 5 bookmaker usati, trovati ${res.bookmakersUsed}`);
   });
 
@@ -167,6 +198,10 @@ const observed = new Date("2026-09-12T18:55:00Z");
     const result = parseOddsResponse(payload, { fixtureKey: "be-fixture-1", observedAt: observed });
     assert(result.quotes.every((q) => q.fixtureKey === "be-fixture-1"), "fixtureKey uniforme");
     assert(result.quotes.every((q) => q.observedAt.getTime() === observed.getTime()), "observedAt uniforme");
+  });
+
+  await test("il calcio è lo sportId 10 (verificato su GET /sports)", async () => {
+    assert(SOCCER_SPORT_ID === 10, `atteso sportId 10, trovato ${SOCCER_SPORT_ID}`);
   });
 
   console.log(`\n${passed} passed, ${failed} failed`);

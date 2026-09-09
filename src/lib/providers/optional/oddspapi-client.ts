@@ -152,7 +152,7 @@ export async function fetchOddsPapiOdds(
 
     const missing: string[] = [];
     if (parsed.skippedOutcomes > 0) {
-      missing.push(`${parsed.skippedOutcomes} esiti scartati per nome o prezzo non valido`);
+      missing.push(`${parsed.skippedOutcomes} esiti scartati per ID non gestito o prezzo non valido`);
     }
     return missing.length > 0
       ? partial(parsed.quotes, latencyMs, missing, payloadBytes)

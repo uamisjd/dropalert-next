@@ -173,18 +173,31 @@ toccati):
   `/odds`, con gestione errori (parse/network/429/disabled) e distinzione
   onesta tra "struttura cambiata" (errore parse) e "nessun evento" (parziale).
 - fixture congelata `oddspapi-odds.json` + test
-  (`oddspapi-odds.test.ts` 10 test, `oddspapi-client.test.ts` 6 test).
+  (`oddspapi-odds.test.ts` 12 test, `oddspapi-client.test.ts` 6 test).
 
-**Scoperta di design (importante).** Lo schema delle chiavi degli esiti
-(131/132/133) di OddsPapi **non è verificabile a memoria** e la prima
-bozza lo assumeva in modo errato (la chiave 132 risultava "pareggio" invece
-che "trasferta"). Corretto scegliendo la strada onesta del progetto:
-**la selezione 1X2 si risolve per NOME della squadra**, mai indovinando lo
-schema delle chiavi. Questo va confermato dalla fixture congelata e dallo
-smoke test live prima di attivare.
+**Contratto dati VERIFICATO (09/09/2026) su `oddspapi.io/en/docs`.** Non è più
+necessario risolvere "per nome" né indovinare lo schema delle chiavi: la
+documentazione pubblica di OddsPapi (`GET /sports`, `GET /markets`,
+`GET /odds`) è stata letta e conferma la tassonomia:
+
+- **Sport**: il calcio è `sportId: 10` (`slug: "soccer"`).
+- **1X2** (Full Time Result) = `marketId 101`, con esiti `101="1"` (casa),
+  `102="X"` (pareggio), `103="2"` (trasferta), `marketType: "1x2"`.
+- **Over/Under 2.5** = `marketId 1010`, con esiti `1010=Over`, `1011=Under`.
+- **Risposta `/odds`**: `bookmakerOdds[slug].markets[marketId].outcomes[
+  outcomeId].players["0"].price` (quota decimale); `bookmakerIsActive`,
+  `marketActive` e `active` su ogni esito. I nomi squadra stanno a livello
+  top (`participant1Name`/`participant2Name`), **non** sugli esiti.
+
+Quindi la selezione si risolve per **ID di esito verificato** (101/102/103 e
+1010/1011): è la strada onesta e precisa. Il fallback per nome non è più
+necessario perché la fonte non pubblica un `name` sugli esiti; un ID di esito
+non gestito o inattivo viene **contato**, mai indovinato. Questo è anche il
+motivo per cui la prima bozza (che assumeva 131/132/133 e risolveva per nome)
+è stata **sostituita** da mappatura ID verificata.
 
 **Nota sull'ambiente:** `node_modules` non è persistito nel sandbox; i test
-OddsPapi passano con `npm run test:odds-oddspapi` (16 verdi) e `npm run
+OddsPapi passano con `npm run test:odds-oddspapi` (18 verdi) e `npm run
 typecheck` è pulito. Il tutto è accanto agli altri test Odds (`test:odds-*`),
 già tutti verdi.
 

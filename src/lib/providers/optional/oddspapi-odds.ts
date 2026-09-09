@@ -1,30 +1,41 @@
 /**
  * Strato di parsing di OddsPapi — da JSON della fonte a quote per book.
  *
- * Perché esiste come modulo separato e puro (stesso criterio del parser di
- * The Odds API): la chiamata di rete è banale, il passaggio delicato è la
- * traduzione della risposta nel contratto interno `OddsQuoteDTO`, con le
- * regole di onestà del progetto:
+ * Lo schema è stato verificato sui docs pubblici (`GET /markets`, `GET /odds`)
+ * alla data 09/09/2026, quindi è usato e NON è indovinato:
+ *
+ *  - `GET /v4/sports` → il calcio è `sportId: 10`.
+ *  - `GET /v4/markets` → `marketType: "1x2"` è `marketId 101` con esiti
+ *    101="1"(home), 102="X"(pareggio), 103="2"(trasferta); il totale a 2.5
+ *    (`marketType: "totals"`) è `marketId 1010` con esiti 1010=Over,
+ *    1011=Under.
+ *  - `GET /v4/odds` → bordo `bookmakerOdds[slug]`, dentro `markets[marketId]`
+ *    e `outcomes[outcomeId]`, con la quota decimale in
+ *    `outcomes[outcomeId].players["0"].price`.
+ *
+ * Regole di onestà del progetto:
  *
  *  - ogni bookmaker della risposta è una riga **reale**, mai aggregata in un
  *    consenso finto: è proprio la pluralità dei book a rendere osservabile la
  *    dispersione delle linee;
  *  - un bookmaker è **sharp** se appartiene alla lista dichiarata
- *    (Pinnacle, Singbet, SBOBet, Betfair Exchange): non lo deduciamo mai
- *    dal prezzo o dal titolo, solo dalla key nota;
- *  - la selezione 1X2 si risolve confrontando `outcome.name` con i nomi di
- *    casa e trasferta dichiarati dall'evento: un nome che non corrisponde a
- *    nessuno dei due e non è il pareggio viene saltato e **contato**, mai
- *    indovinato;
- *  - un mercato non gestito o un prezzo non valido non produce quote.
+ *    (Pinnacle, Singbet, SBOBet, Betfair Exchange): non lo deduciamo mai dal
+ *    prezzo o dal titolo, solo dalla key nota. La lista va confermata contro
+ *    `GET /v4/bookmakers` al momento dello smoke test;
+ *  - le selezioni si risolvono per **ID di esito verificato** (101/102/103 e
+ *    1010/1011): la fonte non pubblica un `name` sugli esiti, quindi risolvere
+ *    per nome sarebbe impossibile, e indovinare gli ID no. Un ID di esito non
+ *    gestito o inattivo viene **contato**, mai indovinato;
+ *  - un book, un mercato o un esito inattivo, o un prezzo non valido, non
+ *    produce quote.
  *
  * Il modulo non tocca la rete: la rete sta nel chiamante, la traduzione è
- * testabile con una fixture congelata dello schema documentato.
+ * testabile con una fixture congelata dello schema verificato.
  */
 import type { MarketType, SelectionCode } from "@/db/schema";
 import type { OddsQuoteDTO } from "../types";
 
-/** Bookmaker riconosciuti come "sharp" (benchmark di riferimento). */
+/** Bookmaker riconosciuti come "sharp" (benchmark di riferimento), da confermare con /bookmakers. */
 const ODDS_PAPI_SHARP_BOOKS: readonly string[] = [
   "pinnacle",
   "singbet",
@@ -32,42 +43,54 @@ const ODDS_PAPI_SHARP_BOOKS: readonly string[] = [
   "betfair-exchange",
 ];
 
-/** Sottoinsieme tipizzato della risposta `GET /odds` di OddsPapi. */
+/** Sport del calcio su OddsPapi, verificato su GET /sports. */
+export const SOCCER_SPORT_ID = 10;
+
+/** Verificato su GET /markets: 1X2 (Full Time Result). */
+const FULL_TIME_RESULT_MARKET = "101";
+/** Verificato su GET /markets: Over/Under 2.5 Goals. */
+const OVER_UNDER_2_5_MARKET = "1010";
+
+/** Verificato su GET /markets: esiti del mercato 1X2. */
+const H2H_OUTCOME_HOME = "101";
+const H2H_OUTCOME_DRAW = "102";
+const H2H_OUTCOME_AWAY = "103";
+/** Verificato su GET /markets: esiti del mercato Over/Under 2.5. */
+const OU_OUTCOME_OVER = "1010";
+const OU_OUTCOME_UNDER = "1011";
+
+/** Tipo piú stretto della risposta `GET /odds` di OddsPapi (schema verificato). */
 export interface OddsPapiOdd {
   /** id del fixture presso la fonte */
   fixtureId: string;
-  participants?: {
-    home?: { name?: string; id?: string | number };
-    away?: { name?: string; id?: string | number };
-  };
+  /** nome del primo partecipante (casa), come la fonte lo pubblica */
+  participant1Name?: string;
+  /** nome del secondo partecipante (trasferta) */
+  participant2Name?: string;
   /** istante di inizio, se la fonte lo espone */
   startTime?: string;
-  /** bookmaker → mercati */
-  bookmakerOdds?: Record<
-    string,
-    {
-      /** mercato (es. "131" moneyline, "3" totals) → outcomes */
-      markets?: Record<
-        string,
-        {
-          /** descrizione / linea, es. "2.5" */
-          name?: string;
-          point?: number;
-          outcomes?: Record<
-            string,
-            {
-              /** id esito (131 home, 132 away, ...) */
-              id?: string | number;
-              name?: string;
-              /** quota decimale */
-              price?: number;
-              active?: boolean;
-            }
-          >;
-        }
-      >;
-    }
-  >;
+  /** bookmaker → mercati (chiavi come stringhe: "101", "1010", ...) */
+  bookmakerOdds?: Record<string, OddsPapiBook>;
+}
+
+interface OddsPapiBook {
+  bookmakerIsActive?: boolean;
+  suspended?: boolean;
+  markets?: Record<string, OddsPapiMarket>;
+}
+
+interface OddsPapiMarket {
+  marketActive?: boolean;
+  outcomes?: Record<string, OddsPapiOutcome>;
+}
+
+interface OddsPapiOutcome {
+  players?: Record<string, OddsPapiPlayer>;
+}
+
+interface OddsPapiPlayer {
+  active?: boolean;
+  price?: number;
 }
 
 /** Una riga per bookmaker, già risolta nei codici interni del progetto. */
@@ -93,37 +116,62 @@ export interface ParseOddsResult {
   bookmakersSeen: number;
   /** bookmaker tradotti in almeno una quota */
   bookmakersUsed: number;
-  /** esiti saltati (nome non risolvibile o prezzo non valido), contati */
+  /** esiti saltati (ID non gestito o prezzo non valido), contati */
   skippedOutcomes: number;
 }
-
-const H2H_MARKET = "131"; // moneyline 1X2 per OddsPapi
-const TOTALS_MARKET = "3"; // totals (over/under)
-const OVER_OUTCOME = "over";
-const UNDER_OUTCOME = "under";
 
 /** Un bookmaker della fonte è sharp se appartiene alla lista dichiarata. */
 export function isSharpBookmaker(bookmakerKey: string): boolean {
   return ODDS_PAPI_SHARP_BOOKS.includes(bookmakerKey.trim().toLowerCase());
 }
 
+function isActive(value: boolean | undefined | null): boolean {
+  return value !== false;
+}
+
 function validPrice(p: unknown): p is number {
   return typeof p === "number" && Number.isFinite(p) && p > 1;
 }
 
-function activeName(o: { name?: string; active?: boolean }): string {
-  if (o.active === false) return "";
-  return (o.name ?? "").trim().toLowerCase();
+/** Estrae la quota decimale valida dal blocco `players` di un esito. */
+function priceOfOutcome(o: OddsPapiOutcome | undefined): number | null {
+  if (!o) return null;
+  for (const player of Object.values(o.players ?? {})) {
+    if (validPrice(player.price) && isActive(player.active)) return player.price;
+  }
+  return null;
+}
+
+/** Mappa ID di esito (1X2) → selezione interna. */
+function h2hSelection(outcomeId: string): SelectionCode | null {
+  switch (outcomeId) {
+    case H2H_OUTCOME_HOME:
+      return "home";
+    case H2H_OUTCOME_DRAW:
+      return "draw";
+    case H2H_OUTCOME_AWAY:
+      return "away";
+    default:
+      return null;
+  }
+}
+
+/** Mappa ID di esito (Over/Under 2.5) → selezione interna. */
+function ouSelection(outcomeId: string): SelectionCode | null {
+  switch (outcomeId) {
+    case OU_OUTCOME_OVER:
+      return "over";
+    case OU_OUTCOME_UNDER:
+      return "under";
+    default:
+      return null;
+  }
 }
 
 /**
  * Traduce un evento in righe per bookmaker.
- * Mercati gestiti: moneyline 1X2 (`131`) e totals (`3`). Il resto è ignorato.
- *
- * La market-key `131`/`3` di OddsPapi è un dettaglio osservato nella
- * documentazione pubblica (es. `markets["131"]["outcomes"]`); è possibile che
- * la fonte la esprima diversamente — la fixture congelata e lo smoke test live
- * lo verificano prima di attivare l'adapter.
+ * Mercati gestiti: moneyline 1X2 (`101`) e totals 2.5 (`1010`). Il resto è
+ * ignorato. Gli ID di mercato/esito sono verificati su GET /markets.
  */
 export function extractBookLines(
   odd: OddsPapiOdd,
@@ -133,32 +181,27 @@ export function extractBookLines(
   let bookmakersSeen = 0;
   let skippedOutcomes = 0;
 
-  const home = (odd.participants?.home?.name ?? "").trim().toLowerCase();
-  const away = (odd.participants?.away?.name ?? "").trim().toLowerCase();
-
   for (const [bookKey, book] of Object.entries(odd.bookmakerOdds ?? {})) {
     const key = bookKey.trim();
     if (key === "") continue;
     bookmakersSeen += 1;
 
+    // Un book inattivo o sospeso non produce quote (ma conta come "visto").
+    if (!isActive(book.bookmakerIsActive) || book.suspended === true) continue;
+
     for (const [marketKey, market] of Object.entries(book.markets ?? {})) {
-      // Osservazione: usare marketKey; se la fonte usa anche `name` come
-      // descrizione (es. "Money Line"), la leggiamo ma non la assumiamo.
+      if (!isActive(market.marketActive)) continue;
       const outcomes = market.outcomes ?? {};
 
-      if (marketKey === H2H_MARKET) {
-        for (const o of Object.values(outcomes)) {
-          const name = activeName(o);
-          if (!validPrice(o.price) || name === "") {
+      if (marketKey === FULL_TIME_RESULT_MARKET) {
+        for (const [outcomeId, outcome] of Object.entries(outcomes)) {
+          const selection = h2hSelection(outcomeId);
+          if (selection === null) {
             skippedOutcomes += 1;
             continue;
           }
-          // Selezione per NOME della squadra, mai per chiave numerica dell'esito:
-          // lo schema delle chiavi (131/132/133) non è verificabile e dedurlo
-          // sarebbe indovinare. Il nome è ciò che la fonte pubblica.
-          const selection =
-            name === home ? "home" : name === away ? "away" : name === "draw" || name === "pareggio" ? "draw" : null;
-          if (selection === null) {
+          const price = priceOfOutcome(outcome);
+          if (price === null) {
             skippedOutcomes += 1;
             continue;
           }
@@ -167,26 +210,22 @@ export function extractBookLines(
             isSharp: isSharpBookmaker(key),
             market: "1x2",
             selection,
-            price: o.price!,
+            price,
             observedAt,
           });
         }
         continue;
       }
 
-      if (marketKey === TOTALS_MARKET) {
-        // La linea del mercato può stare in `point` o nel nome (es. "2.5").
-        const point = market.point ?? Number(market.name ?? "");
-        if (!Number.isFinite(point) || point !== 2.5) continue;
-        for (const [outcomeKey, o] of Object.entries(outcomes)) {
-          const name = activeName(o);
-          const selection =
-            name === OVER_OUTCOME || outcomeKey === OVER_OUTCOME
-              ? "over"
-              : name === UNDER_OUTCOME || outcomeKey === UNDER_OUTCOME
-                ? "under"
-                : null;
-          if (selection === null || !validPrice(o.price)) {
+      if (marketKey === OVER_UNDER_2_5_MARKET) {
+        for (const [outcomeId, outcome] of Object.entries(outcomes)) {
+          const selection = ouSelection(outcomeId);
+          if (selection === null) {
+            skippedOutcomes += 1;
+            continue;
+          }
+          const price = priceOfOutcome(outcome);
+          if (price === null) {
             skippedOutcomes += 1;
             continue;
           }
@@ -195,7 +234,7 @@ export function extractBookLines(
             isSharp: isSharpBookmaker(key),
             market: "ou_2_5",
             selection,
-            price: o.price!,
+            price,
             observedAt,
           });
         }
