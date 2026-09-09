@@ -50,7 +50,7 @@
     "test:odds-persistence": "tsx src/lib/providers/optional/__tests__/collect-the-odds-api.test.ts",
     "test:odds-resolver": "tsx src/lib/providers/optional/__tests__/odds-match-resolver.test.ts",
     "test:odds-events": "tsx src/lib/providers/optional/__tests__/the-odds-api-events.test.ts",
-    "test:odds-sports": "tsx src/lib/providers/optional/__tests__/odds-api-sports.test.ts && tsx src/lib/providers/optional/__tests__/the-odds-api-sports-client.test.ts && tsx src/lib/providers/optional/__tests__/odds-coverage.test.ts",
+    "test:odds-sports": "tsx src/lib/providers/optional/__tests__/odds-api-sports.test.ts && tsx src/lib/providers/optional/__tests__/sport-keys.test.ts && tsx src/lib/providers/optional/__tests__/the-odds-api-sports-client.test.ts && tsx src/lib/providers/optional/__tests__/odds-coverage.test.ts",
     "test:odds-oddspapi": "tsx src/lib/providers/optional/__tests__/oddspapi-odds.test.ts && tsx src/lib/providers/optional/__tests__/oddspapi-client.test.ts && tsx src/lib/providers/optional/__tests__/oddspapi-maps.test.ts && tsx src/lib/providers/optional/__tests__/oddspapi-discovery.test.ts",
     "test:odds-activation": "tsx src/lib/providers/optional/__tests__/the-odds-api-activation.test.ts",
     "test:control-fallback": "tsx src/lib/repo/__tests__/control-fallback.test.ts",

@@ -29,7 +29,7 @@ import { getNewsForMatch } from "@/lib/repo/news";
 import { getContextForMatch } from "@/lib/repo/context";
 import { DATA_REVALIDATE_SECONDS, cachedRead } from "@/lib/repo/cached";
 import { getSharpLine } from "@/lib/repo/sharp";
-import { sportKeyFor } from "@/lib/providers/optional/sport-keys";
+import { resolveSportKey } from "@/lib/providers/optional/sport-keys";
 import { isLowInformationCompetition } from "@/lib/context/pure";
 import { SharpLineBlock } from "@/components/SharpLineBlock";
 import { DecisionStatusBlock } from "@/components/DecisionStatusBlock";
@@ -570,7 +570,7 @@ export default async function MatchDetailPage({
       ? await getSharpLine(
           {
             matchId,
-            sportKey: sportKeyFor(detail.match.league),
+            sportKey: resolveSportKey(detail.match.country, detail.match.league),
             homeTeam: detail.match.homeTeam,
             awayTeam: detail.match.awayTeam,
             kickoffAt: new Date(detail.match.kickoffAt),

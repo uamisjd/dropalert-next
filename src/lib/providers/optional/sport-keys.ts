@@ -98,6 +98,28 @@ export function sportKeyFor(league: string | null): string | null {
   return null;
 }
 
+/**
+ * Risolve la sportKey della fonte per-bookmaker a partire da paese e nome
+ * della competizione SEPARATI (com'è nell'archivio: `leagues.country` e
+ * `leagues.name` sono campi distinti).
+ *
+ * `sportKeyFor` si aspetta il formato «Paese: Lega»: se il paese manca la
+ * chiave è illeggibile. Qui componiamo la stringa in un modo onesto:
+ *  - se manca il paese o il nome → `null` (competizione non leggibile, non si
+ *    indovina);
+ *  - altrimenti si compone «Paese: Lega» e si delega a `sportKeyFor`.
+ *
+ * È la funzione che la scheda partita userà (o un suo equivalente) per dire
+ * se la conferma sharp è leggibile, evitando il bug di passare un nome senza
+ * paese (che renderebbe `sportKeyFor` sempre `null`).
+ */
+export function resolveSportKey(country: string | null, name: string | null): string | null {
+  const c = (country ?? "").trim();
+  const n = (name ?? "").trim();
+  if (c === "" || n === "") return null;
+  return sportKeyFor(`${c}: ${n}`);
+}
+
 /** Competizioni coperte, per il pannello: si dichiara dove si spende. */
 export const COVERED_LABEL =
   "Serie A e B, Premier League e Championship, Liga, Bundesliga, Ligue 1, Eredivisie, Primeira Liga e coppe UEFA maschili";
