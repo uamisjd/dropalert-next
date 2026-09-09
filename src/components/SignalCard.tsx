@@ -33,6 +33,7 @@ import {
 } from "@/lib/view/plain";
 import { Info } from "./Info";
 import { Sparkline } from "./Sparkline";
+import { DecisionBadge } from "./DecisionBadge";
 import { STALE_SNAPSHOT_MINUTES } from "@/lib/drop/constants";
 
 function PriceStep({
@@ -313,6 +314,7 @@ export function SignalCard({
 
       {/* piè di card: indice e tracciabilità */}
       <footer className="flex flex-wrap items-center gap-1.5 border-t border-slate-100 pt-2.5">
+        <DecisionBadge signal={signal} />
         <MetaPill title="Indice di fiducia calcolato dal motore su ampiezza, conferme, persistenza e copertura dati.">
           Indice {signal.normalizedScore ?? signal.confidenceScore ?? ND}/100
           {signal.normalizedScore !== null ? " su base misurabile" : ""} ·{" "}

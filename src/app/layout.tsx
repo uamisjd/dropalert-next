@@ -68,6 +68,13 @@ export default function RootLayout({
   return (
     <html lang="it" className="h-full antialiased">
       <body className="flex min-h-full flex-col bg-slate-50">
+        {/* Skip-to-content: accessibilità per tastiera e screen reader */}
+        <a
+          href="#main-content"
+          className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-[100] focus:rounded-lg focus:bg-slate-950 focus:px-4 focus:py-2 focus:text-sm focus:font-bold focus:text-white focus:shadow-lg"
+        >
+          Vai al contenuto principale
+        </a>
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(SITE_JSON_LD) }}

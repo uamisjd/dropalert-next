@@ -299,7 +299,7 @@ export default function MioBankrollPage() {
   const currentBankroll = bankroll + stats.totalProfit;
 
   return (
-    <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-5">
+    <main id="main-content" className="mx-auto w-full max-w-6xl flex-1 px-4 py-5">
       <header className="mb-6 rounded-3xl bg-gradient-to-br from-slate-900 to-slate-800 px-6 py-8 text-white shadow-lg">
         <div className="flex items-center gap-2">
           <span className="h-2 w-2 rounded-full bg-amber-400" />

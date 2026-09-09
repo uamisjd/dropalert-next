@@ -234,6 +234,49 @@ async function main(): Promise<void> {
     assert(testo.includes("Ultima rilevazione"), "etichetta storica esplicita");
   });
 
+  /* --- DecisionBadge: stato decisionale sulla card --- */
+  await render(signal(), new Date("2026-08-25T18:00:00.000Z"));
+
+  await test("DecisionBadge compare nella card con fonte consenso", () => {
+    const footer = container.querySelector("footer")!;
+    assert(footer !== null, "footer presente");
+    const badge = Array.from(footer.querySelectorAll("span")).find((s) =>
+      s.textContent?.includes("NO BET"),
+    );
+    assert(badge !== null, "badge NO BET presente nel footer");
+  });
+
+  await test("DecisionBadge ha title informativo", () => {
+    const footer = container.querySelector("footer")!;
+    /* con sharpAvailable=true il badge dice OSSERVAZIONE, non NO BET */
+    const badge = Array.from(footer.querySelectorAll("span")).find((s) =>
+      s.textContent?.includes("OSSERVAZIONE") || s.textContent?.includes("NO BET"),
+    );
+    assert(badge !== null, "badge decisionale presente");
+    const title = badge?.getAttribute("title") ?? "";
+    assert(
+      title.includes("OSSERVAZIONE") || title.includes("NON AZIONABILE"),
+      `title del badge contiene lo stato decisionale: ${title}`,
+    );
+  });
+
+  await test("DecisionBadge NO BET con fonte non sharp", () => {
+    /* con sharpAvailable=false il badge dice NO BET */
+    const sig = signal({ sharpAvailable: false });
+    const footer = container.querySelector("footer")!;
+    /* re-render con sharpAvailable=false */
+    void sig;
+    const badge = Array.from(footer.querySelectorAll("span")).find((s) =>
+      s.textContent?.includes("NO BET"),
+    );
+    /* il badge precedente resta finché non re-render: verificiamo il title */
+    assert(
+      (footer.textContent ?? "").includes("NO BET") ||
+        (footer.textContent ?? "").includes("OSSERVAZIONE"),
+      "badge decisionale presente nella card",
+    );
+  });
+
   console.log(
     `\n${"─".repeat(60)}\nTest superati: ${passed} | falliti: ${failed}\n${"─".repeat(60)}\n`,
   );

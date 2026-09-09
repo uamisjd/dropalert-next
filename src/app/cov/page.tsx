@@ -10,6 +10,7 @@
  * visibile resta `/coverage`, riscritto in `next.config.ts`.
  */
 import Link from "next/link";
+import { SITE_NAME, SITE_URL } from "@/lib/site";
 import { getCoverageHistory } from "@/lib/repo/coverage-history";
 import {
   readRateLimitNotice,
@@ -35,6 +36,27 @@ export const metadata = {
 };
 
 export default async function CoveragePage() {
+  const jsonLd = {
+    "@context": "https://schema.org",
+    "@type": "WebPage",
+    name: "Copertura della raccolta",
+    description:
+      "Quante righe dell'elenco della fonte diventano dato utile, e dove finiscono quelle che non ci arrivano.",
+    url: `${SITE_URL}/coverage`,
+    inLanguage: "it-IT",
+    isPartOf: {
+      "@type": "WebSite",
+      name: SITE_NAME,
+      url: SITE_URL,
+    },
+    about: {
+      "@type": "Thing",
+      name: "Copertura dati",
+      description:
+        "Misura di completezza del dato raccolto dal sistema di monitoraggio",
+    },
+  };
+
   const now = new Date();
 
   let view = null;
@@ -71,7 +93,11 @@ export default async function CoveragePage() {
   }
 
   return (
-    <main className="mx-auto w-full max-w-4xl flex-1 px-4 py-5">
+    <main id="main-content" className="mx-auto w-full max-w-4xl flex-1 px-4 py-5">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+      />
       <header className="mb-5">
         <nav className="mb-2 text-xs text-slate-500">
           <Link href="/" className="underline hover:text-slate-800">

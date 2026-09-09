@@ -11,6 +11,7 @@
  * è una tendenza. E l'avviso fisso: non è un rendimento né un consiglio.
  */
 import Link from "next/link";
+import { SITE_NAME, SITE_URL } from "@/lib/site";
 import { getYesterdayView, type YesterdayItem } from "@/lib/repo/yesterday";
 import { fmtDay, fmtPrice, fmtTime } from "@/components/format";
 
@@ -107,6 +108,27 @@ function SignalRow({ item }: { item: YesterdayItem }) {
 }
 
 export default async function YesterdayPage() {
+  const jsonLd = {
+    "@context": "https://schema.org",
+    "@type": "WebPage",
+    name: "Ieri — segnali ed esiti",
+    description:
+      "I movimenti rilevati sulle partite di ieri, con l'esito descrittivo centrata o mancata calcolato dai gol finali.",
+    url: `${SITE_URL}/ieri`,
+    inLanguage: "it-IT",
+    isPartOf: {
+      "@type": "WebSite",
+      name: SITE_NAME,
+      url: SITE_URL,
+    },
+    about: {
+      "@type": "Thing",
+      name: "Segnali e risultati delle partite",
+      description:
+        "Risultati delle partite monitorate dal sistema DropAlert",
+    },
+  };
+
   const now = new Date();
 
   let view = null;
@@ -122,7 +144,11 @@ export default async function YesterdayPage() {
   }
 
   return (
-    <main className="mx-auto w-full max-w-4xl flex-1 px-4 py-5">
+    <main id="main-content" className="mx-auto w-full max-w-4xl flex-1 px-4 py-5">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+      />
       <header className="mb-5">
         <nav className="mb-2 text-xs text-slate-500">
           <Link href="/" className="underline hover:text-slate-800">

@@ -179,7 +179,7 @@ export default async function Home({
   );
 
   return (
-    <main className="mx-auto w-full max-w-4xl flex-1 px-4 py-5">
+    <main id="main-content" className="mx-auto w-full max-w-4xl flex-1 px-4 py-5">
       <header className="relative mb-5 overflow-hidden rounded-3xl bg-slate-950 px-6 py-8 text-white shadow-lg sm:px-8 sm:py-10">
         <div
           aria-hidden

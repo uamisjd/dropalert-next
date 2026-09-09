@@ -674,8 +674,49 @@ export default async function MatchDetailPage({
     ? detail.series.filter((series) => series !== primarySeries)
     : [];
 
+  /* JSON-LD strutturato (SportsEvent schema.org). YMYL: le macchine devono
+     poter verificare chi pubblica cosa, in che contesto sportivo. */
+  const matchJsonLd = {
+    "@context": "https://schema.org",
+    "@type": "SportsEvent",
+    name: `${match.homeTeam} vs ${match.awayTeam}`,
+    description: `${match.homeTeam} vs ${match.awayTeam}${match.league ? ` — ${match.league}` : ""}. Segnali quantitativi sui movimenti di quota. Nessuna vincita garantita.`,
+    url: `${SITE_URL}/matches/${matchId}`,
+    startDate: new Date(match.kickoffAt).toISOString(),
+    eventStatus: "https://schema.org/EventScheduled",
+    sport: "Football",
+    organizer: {
+      "@type": "Organization",
+      name: SITE_NAME,
+      url: SITE_URL,
+    },
+    ...(match.league
+      ? {
+          superEvent: {
+            "@type": "SportsOrganization",
+            name: match.league,
+            sport: "Football",
+          },
+        }
+      : {}),
+    homeTeam: { "@type": "SportsTeam", name: match.homeTeam },
+    awayTeam: { "@type": "SportsTeam", name: match.awayTeam },
+    ...(hasResult
+      ? {
+          result: {
+            "@type": "QuantitativeValue",
+            value: `${match.homeGoals}–${match.awayGoals}`,
+          },
+        }
+      : {}),
+  };
+
   return (
-    <main className="mx-auto w-full max-w-4xl flex-1 px-4 py-6 sm:py-8">
+    <main id="main-content" className="mx-auto w-full max-w-4xl flex-1 px-4 py-6 sm:py-8">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(matchJsonLd) }}
+      />
       <Link
         href="/"
         className="mb-4 inline-flex items-center gap-1 text-xs font-medium text-slate-600 hover:text-slate-950"

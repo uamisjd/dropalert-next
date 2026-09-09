@@ -3,25 +3,24 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
-/* Ordine per funzione: segnali (divari, smart, escursioni), opportunità
-   (arbitraggio, surebet, simulatore), strumenti, area personale, archivio,
-   metriche, documentazione. Le voci personali (Smart Bets, Arbitrage,
-   Il mio bankroll) sono strumenti del proprietario resi raggiungibili
-   anche dalla navigazione. */
-const LINKS: Array<{ href: string; label: string; badge?: string; highlight?: boolean }> = [
+/* Ordine per funzione: segnali (divari, escursioni, arbitraggio),
+   calcolatori (surebet, simulatore, strumenti), archivio (ieri, domani),
+   area personale (preferite, bankroll), metriche e documentazione.
+   Le voci personali sono strumenti del proprietario. */
+const LINKS: Array<{ href: string; label: string; badge?: string; highlight?: boolean; group?: string }> = [
   { href: "/", label: "Movimenti" },
   { href: "/value-bets", label: "Divario di prezzo", highlight: false },
   { href: "/trading", label: "Escursione prezzi" },
   { href: "/arbitrage", label: "Arbitrage" },
-  { href: "/surebet", label: "Surebet (calcolo)" },
-  { href: "/simulator", label: "Simulatore xG" },
-  { href: "/strumenti", label: "Strumenti" },
-  { href: "/preferite", label: "Preferite" },
-  { href: "/mio-bankroll", label: "Il mio bankroll" },
-  { href: "/ieri", label: "Ieri" },
-  { href: "/domani", label: "Domani" },
-  { href: "/performance", label: "Performance" },
-  { href: "/coverage", label: "Copertura" },
+  { href: "/surebet", label: "Surebet", group: "calcolatori" },
+  { href: "/simulator", label: "Simulatore xG", group: "calcolatori" },
+  { href: "/strumenti", label: "Strumenti", group: "calcolatori" },
+  { href: "/preferite", label: "Preferite", group: "personale" },
+  { href: "/mio-bankroll", label: "Bankroll", group: "personale" },
+  { href: "/ieri", label: "Ieri", group: "archivio" },
+  { href: "/domani", label: "Domani", group: "archivio" },
+  { href: "/performance", label: "Performance", group: "metriche" },
+  { href: "/coverage", label: "Copertura", group: "metriche" },
   { href: "/guida", label: "Come si legge" },
   { href: "/metodologia", label: "Metodo" },
 ];
@@ -56,26 +55,42 @@ export function SiteNav() {
           className="min-w-0 flex-1 overflow-x-auto"
         >
           <div className="flex min-w-max items-center justify-end gap-1">
-            {LINKS.map((link) => {
+            {LINKS.map((link, i) => {
               const active =
                 link.href === "/"
                   ? pathname === "/"
                   : pathname.startsWith(link.href);
+              const showSep =
+                i > 0 &&
+                link.group !== undefined &&
+                link.group !== LINKS[i - 1]?.group;
               return (
-                <Link
-                  key={link.href}
-                  href={link.href}
-                  aria-current={active ? "page" : undefined}
-                  className={`relative rounded-lg px-2.5 py-1.5 text-xs font-semibold transition-colors ${
-                    active
-                      ? "bg-slate-950 text-white"
-                      : link.highlight
-                        ? "bg-emerald-50 text-emerald-800 hover:bg-emerald-100"
-                        : "text-slate-600 hover:bg-slate-100 hover:text-slate-950"
-                  }`}
-                >
-                  {link.label}
-                </Link>
+                <span key={link.href} className="flex items-center">
+                  {showSep ? (
+                    <span
+                      aria-hidden
+                      className="mx-0.5 h-4 w-px bg-slate-200"
+                    />
+                  ) : null}
+                  <Link
+                    href={link.href}
+                    aria-current={active ? "page" : undefined}
+                    className={`relative rounded-lg px-2.5 py-1.5 text-xs font-semibold transition-colors ${
+                      active
+                        ? "bg-slate-950 text-white"
+                        : link.highlight
+                          ? "bg-emerald-50 text-emerald-800 hover:bg-emerald-100"
+                          : "text-slate-600 hover:bg-slate-100 hover:text-slate-950"
+                    }`}
+                  >
+                    {link.label}
+                    {link.badge ? (
+                      <span className="ml-1 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-cyan-100 px-1 text-[9px] font-bold text-cyan-800">
+                        {link.badge}
+                      </span>
+                    ) : null}
+                  </Link>
+                </span>
               );
             })}
           </div>

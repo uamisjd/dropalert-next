@@ -59,7 +59,7 @@ export default async function ArbitragePage() {
   }));
 
   return (
-    <main className="mx-auto w-full max-w-5xl flex-1 px-4 py-5">
+    <main id="main-content" className="mx-auto w-full max-w-5xl flex-1 px-4 py-5">
       <header className="relative mb-6 overflow-hidden rounded-3xl bg-gradient-to-br from-purple-700 to-indigo-800 px-6 py-8 text-white shadow-lg">
         <div
           aria-hidden

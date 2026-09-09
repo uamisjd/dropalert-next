@@ -11,6 +11,7 @@
  * «quote in arrivo»: sono già osservazioni, non ancora misure.
  */
 import Link from "next/link";
+import { SITE_NAME, SITE_URL } from "@/lib/site";
 import { getTomorrowView, type TomorrowMatch } from "@/lib/repo/tomorrow";
 import { fmtDay, fmtPrice, fmtTime } from "@/components/format";
 import { getCalendar } from "@/lib/repo/calendar";
@@ -97,6 +98,26 @@ function MatchRow({ match }: { match: TomorrowMatch }) {
 }
 
 export default async function TomorrowPage() {
+  const jsonLd = {
+    "@context": "https://schema.org",
+    "@type": "WebPage",
+    name: "Domani — programma dall'archivio",
+    description:
+      "Le partite di domani che l'archivio del monitor ha già incontrato, con le ultime quote osservate.",
+    url: `${SITE_URL}/domani`,
+    inLanguage: "it-IT",
+    isPartOf: {
+      "@type": "WebSite",
+      name: SITE_NAME,
+      url: SITE_URL,
+    },
+    about: {
+      "@type": "Thing",
+      name: "Programma delle partite",
+      description: "Partite di domani con quote in archivio",
+    },
+  };
+
   const now = new Date();
 
   let view = null;
@@ -116,7 +137,11 @@ export default async function TomorrowPage() {
   }
 
   return (
-    <main className="mx-auto w-full max-w-4xl flex-1 px-4 py-5">
+    <main id="main-content" className="mx-auto w-full max-w-4xl flex-1 px-4 py-5">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+      />
       <header className="mb-5">
         <nav className="mb-2 text-xs text-slate-500">
           <Link href="/" className="underline hover:text-slate-800">
