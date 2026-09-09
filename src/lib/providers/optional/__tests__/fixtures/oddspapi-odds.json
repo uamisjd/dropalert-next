@@ -1,0 +1,112 @@
+{
+  "fixtureId": "id1300010963301407",
+  "sportId": 10,
+  "league": { "name": "Serie A", "slug": "italy-serie-a" },
+  "startTime": "2026-09-12T19:00:00Z",
+  "participants": {
+    "home": { "id": "team-1", "name": "Inter" },
+    "away": { "id": "team-2", "name": "Juventus" }
+  },
+  "bookmakerOdds": {
+    "pinnacle": {
+      "markets": {
+        "131": {
+          "name": "Money Line",
+          "outcomes": {
+            "131": { "id": "131", "name": "Inter", "price": 2.1, "active": true },
+            "132": { "id": "132", "name": "Draw", "price": 3.4, "active": true },
+            "133": { "id": "133", "name": "Juventus", "price": 3.75, "active": true }
+          }
+        },
+        "3": {
+          "name": "2.5",
+          "point": 2.5,
+          "outcomes": {
+            "201": { "id": "201", "name": "Over", "price": 1.95, "active": true },
+            "202": { "id": "202", "name": "Under", "price": 1.95, "active": true }
+          }
+        }
+      }
+    },
+    "singbet": {
+      "markets": {
+        "131": {
+          "name": "Money Line",
+          "outcomes": {
+            "131": { "id": "131", "name": "Inter", "price": 2.12, "active": true },
+            "132": { "id": "132", "name": "Draw", "price": 3.38, "active": true },
+            "133": { "id": "133", "name": "Juventus", "price": 3.7, "active": true }
+          }
+        }
+      }
+    },
+    "bet365": {
+      "markets": {
+        "131": {
+          "name": "Money Line",
+          "outcomes": {
+            "131": { "id": "131", "name": "Inter", "price": 2.4, "active": true },
+            "132": { "id": "132", "name": "Draw", "price": 3.5, "active": true },
+            "133": { "id": "133", "name": "Juventus", "price": 3.0, "active": true }
+          }
+        },
+        "3": {
+          "name": "2.5",
+          "point": 2.5,
+          "outcomes": {
+            "201": { "id": "201", "name": "Over", "price": 1.8, "active": true },
+            "202": { "id": "202", "name": "Under", "price": 2.05, "active": true }
+          }
+        }
+      }
+    },
+    "betfair-exchange": {
+      "markets": {
+        "131": {
+          "name": "Money Line",
+          "outcomes": {
+            "131": { "id": "131", "name": "Inter", "price": 2.05, "active": true },
+            "132": { "id": "132", "name": "Draw", "price": 3.45, "active": true },
+            "133": { "id": "133", "name": "Juventus", "price": 3.85, "active": true }
+          }
+        }
+      }
+    },
+    "draftkings": {
+      "markets": {
+        "131": {
+          "name": "Money Line",
+          "outcomes": {
+            "131": { "id": "131", "name": "Inter", "price": 2.45, "active": true },
+            "132": { "id": "132", "name": "Draw", "price": 3.6, "active": true },
+            "133": { "id": "133", "name": "Juventus", "price": 2.95, "active": true }
+          }
+        }
+      }
+    },
+    "betano": {
+      "markets": {
+        "3": {
+          "name": "2.5",
+          "point": 2.5,
+          "outcomes": {
+            "201": { "id": "201", "name": "Over", "price": 1.9, "active": true },
+            "202": { "id": "202", "name": "Under", "price": 1.92, "active": true }
+          }
+        }
+      }
+    },
+    "outdatedbook": {
+      "markets": {
+        "131": {
+          "name": "Money Line",
+          "outcomes": {
+            "131": { "id": "131", "name": "Inter", "price": 2.2, "active": false },
+            "132": { "id": "132", "name": "Draw", "price": 3.4, "active": false },
+            "133": { "id": "133", "name": "Juventus", "price": 3.6, "active": false }
+          }
+        }
+      }
+    }
+  }
+}
