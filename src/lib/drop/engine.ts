@@ -73,17 +73,44 @@ function lastPoint(series: BookmakerSeries): PricePoint | null {
 }
 
 /**
+ * Vero se la serie è una linea di consenso (aggregato), NON un operatore.
+ * Un aggregato non va mai contato come un bookmaker reale: va distinto sia
+ * nella mediana di consenso sia nella coordinazione fra operatori.
+ */
+function isConsensusSeries(s: BookmakerSeries): boolean {
+  return s.isConsensus === true;
+}
+
+/**
  * Consenso di mercato a un dato istante: mediana delle quote note dei book
  * che avevano già una quotazione a quell'istante (last-observation-carried-forward).
  * La mediana è preferita alla media perché resiste al book fuori linea.
+ *
+ * Il consenso si calcola SOLO sui bookmaker reali. Se in quell'istante non c'è
+ * ancora la quotazione di alcun book reale (caso oggi frequente: esiste soltanto
+ * la linea di consenso della fonte), si fa fallback sulla mediana di tutte le
+ * serie, così la misura di ampiezza resta calcolabile senza inventare book.
  */
 export function consensusAt(series: BookmakerSeries[], at: Date): number | null {
-  const prices: number[] = [];
-  for (const s of series) {
+  const lastPriceFor = (s: BookmakerSeries): number | null => {
     const pts = sortPoints(s.points).filter((p) => p.at.getTime() <= at.getTime());
-    if (pts.length > 0) prices.push(pts[pts.length - 1].price);
+    return pts.length > 0 ? pts[pts.length - 1].price : null;
+  };
+
+  const realPrices: number[] = [];
+  for (const s of series) {
+    if (isConsensusSeries(s)) continue;
+    const p = lastPriceFor(s);
+    if (p !== null) realPrices.push(p);
   }
-  return median(prices);
+  if (realPrices.length > 0) return median(realPrices);
+
+  const allPrices: number[] = [];
+  for (const s of series) {
+    const p = lastPriceFor(s);
+    if (p !== null) allPrices.push(p);
+  }
+  return median(allPrices);
 }
 
 /** Griglia temporale unificata: tutti gli istanti osservati, ordinati. */
@@ -158,6 +185,12 @@ export function computeMagnitude(series: BookmakerSeries[]): MagnitudeResult | n
  * Quanti book confermano la direzione del movimento di consenso.
  * Un book conferma se si muove nella stessa direzione di almeno metà
  * della soglia di rumore (1 pp): sotto quel livello è considerato fermo.
+ *
+ * Conta SOLO i bookmaker reali. Una linea di consenso (aggregato) non è un
+ * operatore e non può né confermare né smentire: la si esclude da conteggi,
+ * pesi e dettaglio. Se per un mercato ci sono solo aggregati, la coordinazione
+ * resta non osservabile (`booksTotal = 0`) e il punteggio non la accredita —
+ * coerente con «mai presentare il consenso come conferma di un book».
  */
 export function computeCoordination(
   series: BookmakerSeries[],
@@ -165,6 +198,7 @@ export function computeCoordination(
 ): CoordinationResult {
   const direction = Math.sign(consensusDeltaPp);
   const minMovePp = MAGNITUDE_THRESHOLDS.noise / 2;
+  const books = series.filter((s) => !isConsensusSeries(s));
 
   let confirming = 0;
   let opposing = 0;
@@ -174,7 +208,7 @@ export function computeCoordination(
 
   const perBook: CoordinationResult["perBook"] = [];
 
-  for (const s of series) {
+  for (const s of books) {
     const first = firstPoint(s);
     const last = lastPoint(s);
     const openingPrice = first?.price ?? null;
