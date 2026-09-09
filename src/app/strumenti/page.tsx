@@ -20,7 +20,7 @@ export const dynamic = "force-static";
 
 export default function StrumentiPage() {
   return (
-    <main className="mx-auto w-full max-w-5xl flex-1 px-4 py-5">
+    <main id="main-content" className="mx-auto w-full max-w-5xl flex-1 px-4 py-5">
       {/* Header */}
       <header className="relative mb-6 overflow-hidden rounded-3xl bg-slate-950 px-6 py-8 text-white shadow-lg">
         <div

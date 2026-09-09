@@ -44,8 +44,39 @@ function Sample({ children }: { children: React.ReactNode }) {
 }
 
 export default function GuidaPage() {
+  const jsonLd = {
+    "@context": "https://schema.org",
+    "@type": "Article",
+    headline: "Come si sceglie una partita con questi dati",
+    description:
+      "Che cosa questo sito può dirti su una partita, che cosa non può dirti, e in che ordine leggere i numeri. Con i campioni e i risultati negativi lasciati dove sono.",
+    url: "https://dropalert-next.vercel.app/guida",
+    author: {
+      "@type": "Organization",
+      name: "DropAlert",
+      url: "https://dropalert-next.vercel.app",
+    },
+    publisher: {
+      "@type": "Organization",
+      name: "DropAlert",
+      url: "https://dropalert-next.vercel.app",
+    },
+    inLanguage: "it-IT",
+    datePublished: "2026-09-05",
+    dateModified: "2026-09-09",
+    about: {
+      "@type": "Thing",
+      name: "Scommesse sportive quantitative",
+      description: "Metodi quantitativi per l'analisi delle quote nel calcio",
+    },
+  };
+
   return (
-    <main className="mx-auto w-full max-w-4xl flex-1 px-4 py-5">
+    <main id="main-content" className="mx-auto w-full max-w-4xl flex-1 px-4 py-5">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+      />
       <h1 className="text-xl font-bold tracking-tight text-slate-900">
         Come si sceglie una partita con questi dati
       </h1>
@@ -346,6 +377,86 @@ export default function GuidaPage() {
         </p>
       </section>
 
+      {/* ---------------------------------------------------------------- */}
+      <section className="mt-6">
+        <h2 className="mb-1.5 text-sm font-semibold text-slate-900">
+          8. Come si usa questo sito, in pratica
+        </h2>
+        <p className="text-sm leading-relaxed text-slate-700">
+          Il sito è uno strumento di osservazione, non un operatore. Ecco come
+          usarlo in modo coerente con ciò che i dati permettono.
+        </p>
+        <ol className="mt-3 list-decimal space-y-2 pl-5 text-sm leading-relaxed text-slate-700">
+          <li>
+            <strong>Leggi la home.</strong> I movimenti più forti sono in cima.
+            Guarda l&apos;ampiezza (pp), la tenuta (ore) e se il movimento è
+            rimbalzato. Un segnale «forte» con un rimbalzo del 60% è meno
+            credibile di uno «reale» sostenuto per ore.
+          </li>
+          <li>
+            <strong>Controlla il dettaglio.</strong> Clicca sulla card: la
+            pagina della partita mostra la scomposizione dell&apos;indice,
+            la serie storica, il Contesto 360° e — se disponibile — la linea
+            sharp. Ogni componente dice se è misurata o se è un{" "}
+            <code className="rounded bg-slate-100 px-1">GAP</code>.
+          </li>
+          <li>
+            <strong>Valuta il divario.</strong>{" "}
+            <Link href="/value-bets" className="font-semibold text-cyan-700 hover:underline">
+              /value-bets
+            </Link>{" "}
+            mostra quanto margine resta nella quota. Con BetExplorer è un
+            auto-confronto: quasi sempre negativo, per definizione. Non è
+            un&apos;occasione: è una misura.
+          </li>
+          <li>
+            <strong>Usa gli strumenti.</strong> Se vuoi calcolare Kelly,
+            varianza o surebet, vai in{" "}
+            <Link href="/strumenti" className="font-semibold text-cyan-700 hover:underline">
+              /strumenti
+            </Link>
+            : i numeri li inserisci tu, il sito fa l&apos;aritmetica.
+          </li>
+          <li>
+            <strong>Registra.</strong> Se piazzi una scommessa, registrala in{" "}
+            <Link href="/mio-bankroll" className="font-semibold text-cyan-700 hover:underline">
+              /mio-bankroll
+            </Link>{" "}
+            (dati locali, mai inviati al server). Il CLV personale è l&apos;unica
+            metrica che dice se il tuo metodo funziona.
+          </li>
+        </ol>
+      </section>
+
+      {/* ---------------------------------------------------------------- */}
+      <section className="mt-6">
+        <h2 className="mb-1.5 text-sm font-semibold text-slate-900">
+          9. Limiti di sicurezza consigliati
+        </h2>
+        <p className="text-sm leading-relaxed text-slate-700">
+          Questi numeri vengono da studi statistici, non da garanzie.
+          Rispettali per non trasformare uno strumento di misura in un
+          gioco compulsivo.
+        </p>
+        <ul className="mt-2 list-disc space-y-1 pl-5 text-sm leading-relaxed text-slate-700">
+          <li>
+            Mai più del <strong>3%</strong> del bankroll per singola scommessa
+            (quarter Kelly con cap).
+          </li>
+          <li>
+            Mai più del <strong>10%</strong> del bankroll in un giorno.
+          </li>
+          <li>
+            Se il drawdown supera il <strong>20%</strong>, fermati e rivedi i
+            filtri prima di riprendere.
+          </li>
+          <li>
+            Il profitto atteso esiste solo su <strong>200+ scommesse</strong>:
+            su piccole serie domina la varianza.
+          </li>
+        </ul>
+      </section>
+
       <p className="mt-6 flex flex-wrap gap-x-4 gap-y-1 text-xs">
         <Link href="/" className="text-slate-600 underline underline-offset-2 hover:text-slate-900">
           ← Torna ai movimenti
@@ -355,6 +466,12 @@ export default function GuidaPage() {
           className="text-slate-600 underline underline-offset-2 hover:text-slate-900"
         >
           Metodologia e verifiche storiche →
+        </Link>
+        <Link
+          href="/strumenti"
+          className="text-slate-600 underline underline-offset-2 hover:text-slate-900"
+        >
+          Strumenti di calcolo →
         </Link>
         <Link
           href="/gioco-responsabile"

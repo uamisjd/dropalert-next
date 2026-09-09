@@ -33,6 +33,27 @@ const DISCLAIMER =
   "Non è un rendimento né un consiglio: il CLV confronta il segnale con la quota di chiusura, non con l'esito della partita.";
 
 export default async function PerformancePage() {
+  const jsonLd = {
+    "@context": "https://schema.org",
+    "@type": "WebPage",
+    name: "Performance — DropAlert",
+    description:
+      "Evoluzione nel tempo del CLV, l'unica metrica di qualità pubblicata da DropAlert, con il campione dichiarato.",
+    url: "https://dropalert-next.vercel.app/performance",
+    inLanguage: "it-IT",
+    isPartOf: {
+      "@type": "WebSite",
+      name: "DropAlert",
+      url: "https://dropalert-next.vercel.app",
+    },
+    about: {
+      "@type": "Thing",
+      name: "Closing Line Value (CLV)",
+      description:
+        "Metrica di qualità che confronta il segnale con la quota di chiusura",
+    },
+  };
+
   const now = new Date();
   const [view, clv] = await Promise.all([
     getPerformanceView(now).catch(() => null),
@@ -42,7 +63,11 @@ export default async function PerformancePage() {
   const geo = view === null ? null : buildClvChart(view.points);
 
   return (
-    <main className="mx-auto w-full max-w-4xl flex-1 px-4 py-5">
+    <main id="main-content" className="mx-auto w-full max-w-4xl flex-1 px-4 py-5">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+      />
       <h1 className="text-xl font-bold tracking-tight text-slate-900">
         Performance
       </h1>

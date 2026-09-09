@@ -39,7 +39,7 @@ function Section({
 
 export default function PrivacyPage() {
   return (
-    <main className="mx-auto w-full max-w-4xl flex-1 px-4 py-5">
+    <main id="main-content" className="mx-auto w-full max-w-4xl flex-1 px-4 py-5">
       <h1 className="text-xl font-bold tracking-tight text-slate-900">
         Informativa privacy
       </h1>
