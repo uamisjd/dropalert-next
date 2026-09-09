@@ -107,23 +107,18 @@ dottrina di cortesia del progetto.
 L'architettura è già pronta: `OddsProvider` (interfaccia), registry
 (`registerProvider`), ingest (`ingest-snapshots.ts` → `writeProviderSnapshots`
 → `ensureBookmaker`, che già mappa `isSharp`), e `the-odds-api.ts` come
-**template da clonare**. Per aggiungere OddsPapi servirebbe:
+**template da clonare**. Stato di ogni voce (09/09/2026):
 
-1. **Nuovo provider** `provide/optional/oddspapi.ts` — implementa `OddsProvider`
-   (clone di `createTheOddsApiProvider`), attivo dietro flag-ambiente (default OFF).
-2. **Client + parser** `oddspapi-client.ts` / `oddspapi-parse.ts` — chiama
-   `/fixtures`, `/odds`; legge `bookmakerOdds`, `markets`, `outcomes`.
-3. **Mappa sportId/lega → sportKey** — come `sport-keys.ts` (solo le leghe
-   verificate nel catalogo reale, prima via `/sports`).
-4. **Mappa bookmaker → `bookmakerKey` + `isSharp`** — `pinnacle`, `singbet`,
-   `sbobet`, `betfair-exchange` → `isSharp=true`; il resto `false`.
-5. **Mappa mercati** — `moneyline` → `1x2`, `totals`/`over_under` → `ou_2_5`,
-   `btts` → `btts`.
-6. **Registrazione** in `src/lib/providers/index.ts`.
-7. **Budget** — estensione/modula di `odds-api-budget.ts` (tetto =
-   richieste/mese, `decide()` come unico gate).
-8. **Fixture congelata + test** dello schema reale (come già si fa per The
-   Odds API) e **smoke test live** con chiave reale prima di attivare.
+| # | Voce | Stato |
+|---|---|---|
+| 1 | **Provider** `optional/oddspapi.ts` (clone di `createTheOddsApiProvider`), attivo dietro flag | ✅ **fatto**, ma **non registrato** e `ADAPTER_IMPLEMENTED=false` |
+| 2 | **Client + parser** `oddspapi-client.ts` / `oddspapi-odds.ts` (legge `/odds`, `bookmakerOdds`/`markets`/`outcomes`) | ✅ **fatto** e testato |
+| 3 | **Mappa sport** → `sportId` (calcio = 10, verificato su `/sports`) | ✅ **fatto** (`sportIdForSportKey`); la mappa lega/`tournamentId` resta per la scoperta fixture |
+| 4 | **Mappa bookmaker → `bookmakerKey` + `isSharp`** (pinnacle, singbet, sbobet, betfair-exchange) | ✅ **fatto** in `oddspapi-maps.ts` (da confermare con `/bookmakers` allo smoke test) |
+| 5 | **Mappa mercati** (`1x2`→`101`, `ou_2_5`→`1010`, verificato su `/markets`) | ✅ **fatto** |
+| 6 | **Registrazione** in `src/lib/providers/index.ts` | ⛔ da fare (gated: dopo smoke test) |
+| 7 | **Budget** — estensione di `odds-api-budget.ts` (tetto richieste/mese, `decide()` unico gate) | ⛔ da fare (gated) |
+| 8 | **Fixture congelata + test** dello schema reale, **smoke test live** | ✅ fixture+test fatti; ⛔ smoke test live (serve chiave + DB) |
 
 ### Il difetto da risolvere (fondamentale)
 
@@ -196,10 +191,17 @@ non gestito o inattivo viene **contato**, mai indovinato. Questo è anche il
 motivo per cui la prima bozza (che assumeva 131/132/133 e risolveva per nome)
 è stata **sostituita** da mappatura ID verificata.
 
+**Dopo la verifica** (stesso giorno) è stato centralizzato il contratto in
+`oddspapi-maps.ts` (fonte unica di verità: sportId 10, mercati 101/1010,
+esiti, lista sharp) e costruito l'adapter `optional/oddspapi.ts`, **non
+registrato e disattivo di default** (`ODDS_PAPI_ADAPTER_IMPLEMENTED=false`),
+clone del template The Odds API. Il client è stato corretto per inviare solo
+`fixtureId` (+ `oddsFormat=decimal`) coerentemente con `GET /odds`.
+
 **Nota sull'ambiente:** `node_modules` non è persistito nel sandbox; i test
-OddsPapi passano con `npm run test:odds-oddspapi` (18 verdi) e `npm run
-typecheck` è pulito. Il tutto è accanto agli altri test Odds (`test:odds-*`),
-già tutti verdi.
+OddsPapi passano con `npm run test:odds-oddspapi` (parser 12 + client 6 +
+mappature 6 = 24 verdi) e `npm run typecheck` è pulito. Il tutto è accanto
+agli altri test Odds (`test:odds-*`), già tutti verdi.
 
 ---
 

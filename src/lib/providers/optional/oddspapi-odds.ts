@@ -34,30 +34,16 @@
  */
 import type { MarketType, SelectionCode } from "@/db/schema";
 import type { OddsQuoteDTO } from "../types";
+import {
+  FULL_TIME_RESULT_MARKET,
+  OVER_UNDER_2_5_MARKET,
+  SOCCER_SPORT_ID,
+  isSharpBookmaker,
+  selectionForOutcome,
+} from "./oddspapi-maps";
 
-/** Bookmaker riconosciuti come "sharp" (benchmark di riferimento), da confermare con /bookmakers. */
-const ODDS_PAPI_SHARP_BOOKS: readonly string[] = [
-  "pinnacle",
-  "singbet",
-  "sbobet",
-  "betfair-exchange",
-];
-
-/** Sport del calcio su OddsPapi, verificato su GET /sports. */
-export const SOCCER_SPORT_ID = 10;
-
-/** Verificato su GET /markets: 1X2 (Full Time Result). */
-const FULL_TIME_RESULT_MARKET = "101";
-/** Verificato su GET /markets: Over/Under 2.5 Goals. */
-const OVER_UNDER_2_5_MARKET = "1010";
-
-/** Verificato su GET /markets: esiti del mercato 1X2. */
-const H2H_OUTCOME_HOME = "101";
-const H2H_OUTCOME_DRAW = "102";
-const H2H_OUTCOME_AWAY = "103";
-/** Verificato su GET /markets: esiti del mercato Over/Under 2.5. */
-const OU_OUTCOME_OVER = "1010";
-const OU_OUTCOME_UNDER = "1011";
+/** Re-export per chi importa dal parser (le mappature sono la fonte unica). */
+export { SOCCER_SPORT_ID, isSharpBookmaker };
 
 /** Tipo piú stretto della risposta `GET /odds` di OddsPapi (schema verificato). */
 export interface OddsPapiOdd {
@@ -120,11 +106,6 @@ export interface ParseOddsResult {
   skippedOutcomes: number;
 }
 
-/** Un bookmaker della fonte è sharp se appartiene alla lista dichiarata. */
-export function isSharpBookmaker(bookmakerKey: string): boolean {
-  return ODDS_PAPI_SHARP_BOOKS.includes(bookmakerKey.trim().toLowerCase());
-}
-
 function isActive(value: boolean | undefined | null): boolean {
   return value !== false;
 }
@@ -140,32 +121,6 @@ function priceOfOutcome(o: OddsPapiOutcome | undefined): number | null {
     if (validPrice(player.price) && isActive(player.active)) return player.price;
   }
   return null;
-}
-
-/** Mappa ID di esito (1X2) → selezione interna. */
-function h2hSelection(outcomeId: string): SelectionCode | null {
-  switch (outcomeId) {
-    case H2H_OUTCOME_HOME:
-      return "home";
-    case H2H_OUTCOME_DRAW:
-      return "draw";
-    case H2H_OUTCOME_AWAY:
-      return "away";
-    default:
-      return null;
-  }
-}
-
-/** Mappa ID di esito (Over/Under 2.5) → selezione interna. */
-function ouSelection(outcomeId: string): SelectionCode | null {
-  switch (outcomeId) {
-    case OU_OUTCOME_OVER:
-      return "over";
-    case OU_OUTCOME_UNDER:
-      return "under";
-    default:
-      return null;
-  }
 }
 
 /**
@@ -195,7 +150,7 @@ export function extractBookLines(
 
       if (marketKey === FULL_TIME_RESULT_MARKET) {
         for (const [outcomeId, outcome] of Object.entries(outcomes)) {
-          const selection = h2hSelection(outcomeId);
+          const selection = selectionForOutcome("1x2", outcomeId);
           if (selection === null) {
             skippedOutcomes += 1;
             continue;
@@ -219,7 +174,7 @@ export function extractBookLines(
 
       if (marketKey === OVER_UNDER_2_5_MARKET) {
         for (const [outcomeId, outcome] of Object.entries(outcomes)) {
-          const selection = ouSelection(outcomeId);
+          const selection = selectionForOutcome("ou_2_5", outcomeId);
           if (selection === null) {
             skippedOutcomes += 1;
             continue;

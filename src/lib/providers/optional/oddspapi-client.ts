@@ -66,12 +66,13 @@ export async function fetchOddsPapiOdds(
   const timer = setTimeout(() => controller.abort(), ODDS_PAPI_TIMEOUT_MS);
   const startedAt = Date.now();
 
-  // Parametri secondo la documentazione pubblica (query-param auth).
-  // La chiave dello sport va tradotta nella tassonomia della fonte.
+  // Parametri secondo la documentazione pubblica (auth via query-param).
+  // `/odds` richiede SOLO `fixtureId`; lo `sportKey` non va inviato (serve solo
+  // alla mappatura in `oddspapi-maps` e per i log). La quota è sempre decimale.
   const params = new URLSearchParams({
     apiKey,
-    sportId: request.sportKey,
     fixtureId: request.providerMatchId,
+    oddsFormat: "decimal",
   });
 
   try {
