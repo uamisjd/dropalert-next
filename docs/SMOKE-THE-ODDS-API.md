@@ -257,6 +257,41 @@ Allargare l'orizzonte aumenta le righe lette da BetExplorer in **un solo giro**;
 non cambia il budget di The Odds API, che resta governato da
 `odds-api-budget.ts` (lo smoke test costa 1 credito in tutto).
 
+## 10-bis. Cattura senza terminale: porta una partita SERVITA in archivio
+
+Quando le partite in archivio sono di leghe che The Odds API (piano gratuito)
+**non** espone, il passo 1 non trova nulla («leggibili: 0»). Non è un guasto:
+è il limite della fonte — come verificato il 10/09/2026, `soccer_mls` risponde
+**HTTP 404** (non servito dal piano) mentre `soccer_italy_serie_a` restituisce
+**20 eventi, 0 crediti**.
+
+Per chiudere il vero `SMOKE OK` serve una partita in archivio di una lega
+servita. La rotta protetta **`POST /api/jobs/capture-odds`** legge gli eventi
+reali della fonte (0 crediti) e scrive in archivio la **prossima partita** di
+una lega della base (default `soccer_italy_serie_a`), restituendo il
+`match_id` da usare nel passo 2.
+
+```bash
+# senza terminale: apri l'URL del deploy (Vercel) — GET spiega l'uso
+curl -X POST https://<tuo-deploy>/api/jobs/capture-odds \
+  -H "content-type: application/json" \
+  -H "x-jobs-token: $JOBS_TOKEN" \
+  -d '{"sportKey":"soccer_italy_serie_a"}'
+```
+
+Risposta (201): `{ ok, matchId, homeTeam, awayTeam, kickoffAt, ... }`. Poi:
+
+- `which = smoke-odds`, `match_id = <matchId>`, `sport_key = soccer_italy_serie_a`.
+
+Regole:
+- **0 crediti**: l'endpoint `/events` è fuori quota; la lettura vera (1
+  credito) resta lo step esplicito dello smoke (§5).
+- **L'adapter resta OFF** (`ADAPTER_IMPLEMENTED=false`): è un inserimento
+  manuale di verifica, non un'attivazione.
+- Le leghe catturabili sono dichiarate in `odds-capture-league.ts` (base
+  esplicita e verificata: Serie A/B, Premier, Liga, Bundesliga, Ligue 1).
+  Una chiave fuori base → la rotta risponde `null` e non inventa un titolo.
+
 ## 11. Esito del primo smoke test live (06/09/2026)
 
 Eseguito su GitHub Actions (run `34036327654`) contro una partita **vera** già
