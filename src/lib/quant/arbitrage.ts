@@ -86,6 +86,19 @@ export interface ArbitrageScanResult {
   minProfitPct: number;
   /** finestra temporale delle letture considerate (ore) */
   windowHours: number;
+  /**
+   * Quanti operatori distinti sono stati realmente letti nella finestra.
+   * È la grandezza su cui si valuta se l'arbitraggio sia osservabile: 0 =
+   * nessuna lettura, 1 = una sola linea (il consenso), ≥2 = multi-bookmaker.
+   */
+  bookmakersInWindow: number;
+  /**
+   * Dichiarazione onesta sulla capacità della fonte, pensata per la pagina:
+   * distingue «arbitraggio non osservabile perché la fonte espone una sola
+   * linea» da «nessuna opportunità trovata fra più operatori». Non è mai un
+   * dato inventato: descrive ciò che la scansione ha davvero letto.
+   */
+  sourceNote: string;
   error: string | null;
 }
 
@@ -94,6 +107,31 @@ const WINDOW_HOURS = 2;
 
 /** Soglia minima di profitto per considerare un'opportunità. */
 const MIN_PROFIT_PCT = 0.5;
+
+/**
+ * Numero di operatori distinti che hanno prodotto le quote migliori di una
+ * combinazione di gambe. Le chiavi sono normalizzate (minuscolo, senza spazi)
+ * per non contare due volte lo stesso bookmaker scritto in modo diverso.
+ */
+export function distinctBookmakerKeys(legs: { bookmakerKey: string }[]): number {
+  return new Set(
+    legs.map((l) => l.bookmakerKey.trim().toLowerCase()).filter((k) => k !== ""),
+  ).size;
+}
+
+/**
+ * Un arbitraggio genuino richiede che le quote migliori delle selezioni
+ * provengano da ALMENO DUE operatori distinti.
+ *
+ * Se tutte le gambe stanno sulla stessa linea (es. il consenso BetExplorer),
+ * la somma delle probabilità implicite è sempre ≥ 1 perché quella linea
+ * contiene il margine: non esiste alcun arbitraggio. Non è una questione di
+ * «opportunità rare», è la struttura della fonte. Esigere bookmaker distinti
+ * impedisce di spacciare una singola linea arrotondata per una surebet.
+ */
+export function isCrossBookmaker(legs: { bookmakerKey: string }[]): boolean {
+  return distinctBookmakerKeys(legs) >= 2;
+}
 
 /**
  * Carica le quote più recenti per ogni (match, market, selection, bookmaker).
@@ -236,6 +274,9 @@ export async function scanArbitrage(
         scannedAt: now,
         minProfitPct,
         windowHours: WINDOW_HOURS,
+        bookmakersInWindow: 0,
+        sourceNote:
+          "Nessuna partita futura in archivio da scansionare: non è una questione di opportunità, non c'è un mercato da leggere.",
         error: null,
       };
     }
@@ -280,6 +321,12 @@ export async function scanArbitrage(
         const legs = findBestOdds(odds, matchId, market);
         if (!legs) continue;
 
+        /* Un arbitraggio genuino richiede che le quote migliori vengano da
+           operatori distinti. Se le gambe stanno sulla stessa linea (es. il
+           consenso), la somma delle probabilità implicite è ≥ 1 e la riga non
+           è una surebet: non va spacciata per «nessuna opportunità». */
+        if (!isCrossBookmaker(legs)) continue;
+
         const totalImpliedProb = legs.reduce((sum, l) => sum + l.impliedProb, 0);
         const profitPct = (1 - totalImpliedProb) * 100;
 
@@ -322,6 +369,25 @@ export async function scanArbitrage(
     // Ordina per profitto decrescente
     opportunities.sort((a, b) => b.profitPct - a.profitPct);
 
+    /* Quanti operatori distinti sono stati realmente letti nella finestra.
+       Da qui dipende la dichiarazione onesta della pagina: con una sola linea
+       (il consenso) l'arbitraggio cross-bookmaker non è osservabile, e va
+       detto, non attribuito all'assenza di «opportunità rare». */
+    const bookmakersInWindow = new Set(
+      odds.map((o) => o.bookmakerKey.trim().toLowerCase()).filter((k) => k !== ""),
+    ).size;
+
+    let sourceNote: string;
+    if (bookmakersInWindow === 0) {
+      sourceNote =
+        "Nessuna lettura di quote nella finestra: non si può scansionare, perché non ci sono prezzi da confrontare.";
+    } else if (bookmakersInWindow === 1) {
+      sourceNote =
+        "La fonte espone una sola linea di consenso: con un solo operatore l'arbitraggio cross-bookmaker non è osservabile, non «raro». Serve una fonte per singolo bookmaker.";
+    } else {
+      sourceNote = "";
+    }
+
     return {
       opportunities,
       matchesScanned: matchIds.length,
@@ -329,6 +395,8 @@ export async function scanArbitrage(
       scannedAt: now,
       minProfitPct,
       windowHours: WINDOW_HOURS,
+      bookmakersInWindow,
+      sourceNote,
       error: null,
     };
   } catch (err) {
@@ -340,6 +408,8 @@ export async function scanArbitrage(
       scannedAt: now,
       minProfitPct,
       windowHours: WINDOW_HOURS,
+      bookmakersInWindow: 0,
+      sourceNote: "Scansione non riuscita: non c'è un risultato da leggere.",
       error: "scansione non riuscita (dettaglio nel log del server)",
     };
   }

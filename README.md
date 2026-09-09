@@ -177,7 +177,7 @@ npm run test:clv-basis   # la base del CLV è contata e dichiarata, non mescolat
 npm run test:score-ceiling # il tetto strutturale dell'indice, verificato contro il motore
 npm run test:odds-adapter # parsing di The Odds API su JSON congelato
 npm run test:clv-rebasis # ribasatura del CLV sulla base allineata
-npm run test:all         # tutte le suite (35)
+npm run test:all         # tutte le suite (44)
 npm run job:analyze      # solo analisi + chiusura, senza rete
 npm run job:collect      # giro completo: raccolta + analisi + chiusura + notifiche
 npm run job:collect -- --force         # ignora l'intervallo minimo

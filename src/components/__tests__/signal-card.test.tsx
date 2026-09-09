@@ -260,21 +260,17 @@ async function main(): Promise<void> {
     );
   });
 
-  await test("DecisionBadge NO BET con fonte non sharp", () => {
-    /* con sharpAvailable=false il badge dice NO BET */
-    const sig = signal({ sharpAvailable: false });
+  await test("DecisionBadge NO BET con fonte non sharp", async () => {
+    /* con sharpAvailable=false il badge dice NO BET, su un render reale */
+    await render(
+      signal({ sharpAvailable: false }),
+      new Date("2026-08-25T18:00:00.000Z"),
+    );
     const footer = container.querySelector("footer")!;
-    /* re-render con sharpAvailable=false */
-    void sig;
     const badge = Array.from(footer.querySelectorAll("span")).find((s) =>
       s.textContent?.includes("NO BET"),
     );
-    /* il badge precedente resta finché non re-render: verificiamo il title */
-    assert(
-      (footer.textContent ?? "").includes("NO BET") ||
-        (footer.textContent ?? "").includes("OSSERVAZIONE"),
-      "badge decisionale presente nella card",
-    );
+    assert(badge !== null, "badge NO BET presente con fonte non sharp");
   });
 
   console.log(

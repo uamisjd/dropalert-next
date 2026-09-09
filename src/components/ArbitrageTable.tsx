@@ -44,7 +44,9 @@ export function ArbitrageTable({ opportunities }: Props) {
         <p className="mt-1 text-[11px] leading-relaxed">
           Ordinate per profitto decrescente. Ogni opportunità mostra le quote
           migliori disponibili per ogni selezione, il bookmaker che le offre, e
-          la ripartizione degli stake per garantire il profitto.
+          la ripartizione matematica degli stake su operatori distinti: è un
+          calcolo teorico, non una raccomandazione di puntata né una garanzia di
+          esecuzione.
         </p>
       </div>
 
@@ -93,7 +95,7 @@ export function ArbitrageTable({ opportunities }: Props) {
               )}`}
             >
               <div className="text-[10px] font-bold uppercase">
-                Profitto Garantito
+                Profitto teorico
               </div>
               <div className="text-2xl font-extrabold tabular-nums">
                 +{opp.profitPct.toFixed(2)}%
@@ -107,7 +109,7 @@ export function ArbitrageTable({ opportunities }: Props) {
           {/* Gambe dell'arbitraggio */}
           <div className="mt-4 border-t border-slate-100 pt-4">
             <p className="mb-2 text-xs font-semibold text-slate-700 uppercase">
-              Ripartizione Scommesse
+              Ripartizione matematica (teorica)
             </p>
             <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
               {opp.legs.map((leg) => (
