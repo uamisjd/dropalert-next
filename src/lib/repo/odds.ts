@@ -14,6 +14,16 @@ import {
 import { STALE_SNAPSHOT_MINUTES } from "@/lib/drop/constants";
 import { num } from "@/lib/drop/math";
 import type { BookmakerSeries } from "@/lib/drop/types";
+import { isConsensusBookmakerKey } from "@/lib/decision/price-evidence";
+
+/**
+ * Interruttore: quando `true`, la riga di consenso (es. `betexplorer-consensus`)
+ * viene marcata `isConsensus` e il motore la ESCLUDE da mediana di consenso e
+ * coordinazione (correzione §4.7). Default `false` per non cambiare i segnali
+ * esistenti finché non c'è una fonte per-bookmaker reale a fianco del consenso.
+ * Va attivato SOLO dopo uno smoke test live riuscito del cablaggio.
+ */
+const EXCLUDE_CONSENSUS_BOOKS = process.env.DROP_EXCLUDE_CONSENSUS_BOOKS === "true";
 
 /** Coppia mercato/selezione osservata per una partita. */
 export interface MarketKey {
@@ -75,6 +85,10 @@ export async function getSeriesForMatch(
         bookmakerKey: r.bookmakerKey,
         bookmakerName: r.bookmakerName,
         isSharp: r.isSharp,
+        /* il flag decide se la riga di consenso va distinta dai book reali */
+        isConsensus: EXCLUDE_CONSENSUS_BOOKS
+          ? isConsensusBookmakerKey(r.bookmakerKey)
+          : undefined,
         weight: num(r.weight) ?? 1,
         points: [],
       };

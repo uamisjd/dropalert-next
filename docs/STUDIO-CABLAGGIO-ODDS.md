@@ -368,11 +368,14 @@ comportamento dei dati attuali:
   `npm run typecheck`: pulito.
 
 **Resta da fare al momento del cablaggio (dietro flag + smoke test live):**
-- popolare `isConsensus = true` in `getSeriesForMatch` (`src/lib/repo/odds.ts`)
-  per la riga di consenso (chiave `betexplorer-consensus`), così il motore la
-  esclude davvero dai dati di produzione;
-- verificare che il punteggio dei segnali in modalità mista (consenso + per-book)
-  non regredisca, con un test di confronto prima/dopo.
+- il cablaggio in `getSeriesForMatch` è **già pronto** (`src/lib/repo/odds.ts`):
+  se l'env `DROP_EXCLUDE_CONSENSUS_BOOKS=true`, la riga di consenso (chiave
+  `betexplorer-consensus`) viene marcata `isConsensus` e il motore la esclude
+  davvero dai dati di produzione. **Default `false`**: finché il flag è spento,
+  il comportamento dei segnali esistenti resta identico a oggi;
+- attivarlo **solo dopo** uno smoke test live riuscito del cablaggio per-bookmaker,
+  e verificare con un test di confronto prima/dopo che il punteggio dei segnali
+  in modalità mista (consenso + per-book) non regredisca.
 
 ---
 
