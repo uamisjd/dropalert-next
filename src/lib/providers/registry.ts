@@ -112,7 +112,7 @@ export function describeRegistry(): ProviderDescriptor[] {
     rateLimit: p.rateLimit,
     note: p.enabled
       ? p.capabilities.perBookmakerOdds
-        ? "Attiva. Espone quote per singolo bookmaker."
+        ? "Attiva: può leggere quote per singolo bookmaker. La capacità NON entra di default nel ciclo di raccolta: finché un adapter per-bookmaker non alimenta il monitor, i segnali restano su consenso e il buco bookmaker_missing resta aperto."
         : "Attiva. Espone solo la linea di consenso: coordinazione e conferma sharp non sono calcolabili da questa fonte."
       : "Disattivata da configurazione.",
   }));
