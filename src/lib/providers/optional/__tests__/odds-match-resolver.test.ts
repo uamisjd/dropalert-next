@@ -307,5 +307,27 @@ test("lega del catalogo reale (Scotland Premiership) ora è coperta, non rifiuta
   }
 });
 
+test("override su lega GIÀ coperta: la nota non dichiara «fuori mappa»", () => {
+  // Serie A è nella mappa di budget. Passare --sport-key a mano non la rende
+  // «fuori mappa»: la nota deve dirlo (era il messaggio fuorviante del 10/09).
+  const resolution = resolveSmokeMatch(
+    row,
+    new Date("2026-09-10T12:00:00.000Z"),
+    "soccer_italy_serie_a",
+  );
+  assert(resolution.ok, "con override su lega coperta è leggibile");
+  if (resolution.ok) {
+    assert(resolution.params.sportKey === "soccer_italy_serie_a", "chiave esplicita usata");
+    assert(
+      resolution.notes.some((n) => n.includes("coperta dalla mappa")),
+      "la nota dichiara che la lega è coperta",
+    );
+    assert(
+      !resolution.notes.some((n) => n.includes("fuori dalla mappa")),
+      "non deve dire «fuori mappa» per una lega coperta",
+    );
+  }
+});
+
 console.log(`\n${"─".repeat(60)}\nTest superati: ${passed} | falliti: ${failed}\n${"─".repeat(60)}\n`);
 if (failed > 0) process.exit(1);

@@ -502,3 +502,47 @@ United») e i qualificatori diversi («Vitoria Guimaraes» ↔ «Vitoria SC»)
 restano volutamente non-matching — l'audit completo del matching è già al
 punto 2 del «prossimo ordine di lavoro» dell'handoff. Ogni nuovo caso costa
 ora 1 credito ma si spiega gratis.
+
+## 17. Smoke test riuscito senza terminale (10/09/2026) — `SMOKE OK` della Serie A
+
+Obiettivo dell'utente: nessuna distinzione tra «leghe minori e maggiori», e un
+modo per fare tutta la verifica **senza terminale**. Il percorso finale è:
+
+1. **Mappa guidata dal catalogo reale** (`sport-catalog.ts` + fallback in
+   `sport-keys.ts`): non si bloccano più le leghe minori a priori; si copre
+   qualunque campionato che la fonte offre davvero.
+2. **Cattura senza terminale** (`/api/jobs/capture-odds`, 0 crediti): porta in
+   archivio la prossima partita di una lega servita, restituendo il `match_id`.
+3. **Smoke** (`which=smoke-odds`, `match_id=<id>`, 1 credito) su GitHub Actions.
+
+### La partita catturata
+`POST/GET /api/jobs/capture-odds?sportKey=soccer_italy_serie_a` → match **#788**,
+**Venezia — Fiorentina**, kickoff `2026-09-11T18:45:00Z`, 0 crediti, 20 eventi
+dalla fonte, `creditsRemaining: 493`.
+
+### L'esito dello smoke (`run` con `which=smoke-odds`, `match_id=788`)
+```
+SMOKE OK — gate superati su dati reali. Il provider resta comunque SPENTO:
+l'attivazione è un passo separato e controllato, non una conseguenza di questo script.
+
+1/4 pre-check di matching (0 crediti)  → evento unico: Venezia — Fiorentina
+2/4 lettura quote individuali (1 credito) → 72 quote da 24 bookmaker
+3/4 scrittura in odds_snapshots → snapshot 72, duplicati 0, anagrafiche 24
+4/4 freshness e prezzo eseguibile (soglia 90 min) → PREZZO ESEGUIBILE 1x2
+    home 3.10 / draw 3.30 / away 2.30 (tipico_de, età 0 min)
+
+Esito: chiamata reale riuscita · matching verificato · quote individuali
+salvate · freshness verificata su 72 selezioni.
+```
+
+### Punti onesti
+- **L'adapter resta OFF** (`ADAPTER_IMPLEMENTED=false`): lo smoke prova il
+  percorso (mappa → matching → lettura → snapshot → freshness), non attiva il
+  provider nel flusso che genera le giocate.
+- **Prezzi esecutibili individuali** (da `tipico_de`, un singolo book, età 0
+  min): rispettano la dottrina «NO BET senza prezzo individuale fresco».
+- **Nota corretta**: prima, passando `--sport-key` a mano, il log stampava
+  «competizione fuori dalla mappa di budget» anche per una lega coperta (Serie
+  A). Ora il resolver distingue: se la lega è coperta, la nota dice
+  «la lega è comunque coperta dalla mappa»; «fuori mappa» resta solo per le
+  leghe davvero scoperte (fix in `odds-match-resolver.ts`).
