@@ -6,7 +6,7 @@
  * restituisce `null` invece di indovinare, e `resolveSportKey` la compone
  * correttamente a partire da paese e nome separati.
  */
-import { sportKeyFor, resolveSportKey } from "../sport-keys";
+import { sportKeyFor, resolveSportKey, isCoveredBySportKey } from "../sport-keys";
 
 let passed = 0;
 let failed = 0;
@@ -53,6 +53,24 @@ test("resolveSportKey: manca paese o nome → null (competizione non leggibile)"
 
 test("resolveSportKey: case e spazi non contano", () => {
   assert(resolveSportKey("  italy ", " serie a ") === "soccer_italy_serie_a", "trim case-insensitive");
+});
+
+test("isCoveredBySportKey: campionato nel set coperto → true", () => {
+  assert(isCoveredBySportKey("Italy", "Serie A") === true, "Serie A coperta");
+  assert(isCoveredBySportKey("England", "Premier League") === true, "Premier coperta");
+});
+
+test("isCoveredBySportKey: coppa UEFA maschile → true (nel set)", () => {
+  assert(isCoveredBySportKey("Europe", "Champions League") === true, "UCL coperta");
+});
+
+test("isCoveredBySportKey: fuori mappa o non leggibile → false", () => {
+  assert(isCoveredBySportKey("Chad", "Division 1") === false, "Chad non coperta");
+  assert(isCoveredBySportKey("Algeria", "Ligue 1") === false, "Algeria non coperta");
+  assert(isCoveredBySportKey("Italy", "Serie A femminile") === false, "esclusione → false");
+  assert(isCoveredBySportKey(null, "Serie A") === false, "senza paese → false");
+  assert(isCoveredBySportKey("Italy", "") === false, "senza nome → false");
+  assert(isCoveredBySportKey("Spain", "Premier League") === false, "paese incoerente → false");
 });
 
 console.log(`\n${passed} passed, ${failed} failed`);

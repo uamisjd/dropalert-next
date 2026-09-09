@@ -120,6 +120,31 @@ export function resolveSportKey(country: string | null, name: string | null): st
   return sportKeyFor(`${c}: ${n}`);
 }
 
+/**
+ * Dice se una competizione (paese + nome) è CERTAMENTE coperta dalla fonte
+ * per-bookmaker, senza bisogno del catalogo a runtime.
+ *
+ * Usa la chiave risolta (`resolveSportKey`) e la confronta con le chiavi
+ * coperte dichiarate (`COVERED_SPORT_KEYS`). Regole di onestà:
+ *  - un nome o paese non leggibile → `false` (non si indovina: la copertura
+ *    non è verificabile, quindi non si dichiara);
+ *  - un nome simile ma NON in mappa → `false` (una somiglianza non è
+ *    copertura: verrebbe da `findNearKey` che qui non usiamo per non mentire);
+ *  - solo una chiave esatta nella mappa coperte → `true`.
+ *
+ * È il test che la scheda partita può fare a costo zero (senza caricare il
+ * catalogo) per dire se la conferma sharp è attendibile o se la competizione
+ * è fuori copertura.
+ */
+export function isCoveredBySportKey(
+  country: string | null,
+  name: string | null,
+): boolean {
+  const key = resolveSportKey(country, name);
+  if (key === null) return false;
+  return COVERED_SPORT_KEYS.includes(key);
+}
+
 /** Competizioni coperte, per il pannello: si dichiara dove si spende. */
 export const COVERED_LABEL =
   "Serie A e B, Premier League e Championship, Liga, Bundesliga, Ligue 1, Eredivisie, Primeira Liga e coppe UEFA maschili";
