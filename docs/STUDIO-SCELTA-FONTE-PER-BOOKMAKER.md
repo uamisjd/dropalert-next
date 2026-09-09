@@ -78,9 +78,10 @@ OddsPortal è da scartare per coerenza con la dottrina del progetto.
 
 ## 3. VALUTAZIONE e RACCOMANDAZIONE
 
-**Raccomandazione: OddsPapi come fonte per-bookmaker.**
+**Raccomandazione (storica, poi rivista dai dati): OddsPapi come fonte
+per-bookmaker.**
 
-Motivi:
+Motivi che avevano spinto verso OddsPapi (restano veri sul piano *qualitativo*):
 1. **Free tier con gli sharps e i minori** — la cosa che serve al concetto.
    Unici tra quelli analizzati a includere Pinnacle/Singbet/Betfair Exchange
    e 9.600+ leghe nel piano gratuito.
@@ -99,6 +100,38 @@ provare il concetto. Non giustificato prima di un POC.
 **Perché non OddsPortal**: nessuna API, robots.txt/ToS contrari, scraping
 fragile e costoso (proxies/anti-bot/manutenzione), in contrasto con la
 dottrina di cortesia del progetto.
+
+### 3.1 CORREZIONE DELLA RACCOMANDAZIONE ALLA LUCE DEI DATI REALI (09/2026)
+
+**La verifica con chiave reale ha cambiato la risposta.** La chiave OddsPapi è
+valida (il servizio la riconosce) e il contratto è corretto (schema verificato
+su `GET /sports`, `/markets`, `/odds`: sport 10, mercati 101 e 1010), ma il
+**piano gratuito di OddsPapi è 250 richieste al mese**, e la chiave di test
+risultava **già a 287/250** (contatore esaurito). In parole semplici:
+
+- **un free tier da 250 richieste/mese NON regge la raccolta continua**
+  per-bookmaker su molte partite: lo si brucia in una manciata di fixture;
+- una raccolta continua richiederebbe un **piano a pagamento** con tetto molto
+  più alto, cioè un costo ricorrente e una decisione di spesa;
+- quindi **collegare OddsPapi al collettore (`odds_snapshots`) è sbagliato
+  con il piano attuale** — non per un bug, ma perché la fonte si esaurirebbe
+  in un giorno e lascerebbe dati a metà.
+
+**Raccomandazione RIVISTA (decisione presa):**
+- **The Odds API resta la fonte per-bookmaker attiva** già integrata, con budget
+  e conferma sharp sulla scheda partita (`getSharpLine`). Si usa per il
+  sottoinsieme di competenze che copre.
+- **OddsPapi NON si integra nella raccolta continua.** È un'opzione valida a
+  **basso volume, on-demand, per la conferma sharp puntuale** della scheda
+  partita (qualche chiamata al giorno), dove il tetto di 250 regge senza
+  problemi; oppure, se si vogliono davvero i minori in raccolta continua,
+  occorre un **piano a pagamento** con quota adeguata — decisione di spesa
+  che va rimandata a quando il sistema lo giustifica.
+- Il lavoro tecnico già fatto su OddsPapi (parser, client, mappature verificate,
+  adapter disattivo, scoperta, smoke script) **resta valido e pronto**: è
+  riutilizzabile in entrambi gli scenari futuri (on-demand sharp o piano a
+  pagamento). Non va buttato, ma **resta spento** finché non c'è una ragione
+  economica/operativa per attivarlo.
 
 ---
 

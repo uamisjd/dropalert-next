@@ -146,3 +146,66 @@ export function classifyCoverage(
 
   return { mapped, near, uncovered };
 }
+
+/** Classe di copertura di una singola competizione (per la scheda partita). */
+export type CoverageClass = "mapped" | "near" | "uncovered" | "unknown";
+
+/** Esito della classificazione di una singola competizione. */
+export interface CoverageClassResult {
+  /** classe: mappata con certezza, candidata da verificare, fuori copertura */
+  coverage: CoverageClass;
+  /**
+   * Motivazione onesta della classe, da mostrare all'utente o da loggare.
+   * `null` quando la classe è `mapped` (non c'è un motivo: è coperta).
+   */
+  reason: string | null;
+  /** se candidata, la chiave/il titolo della fonte da verificare a mano */
+  candidate?: string;
+  title?: string;
+}
+
+/**
+ * Classifica UNA competizione rispetto alla copertura di The Odds API.
+ *
+ * È il "livello singolo" di `classifyCoverage`: serve alla scheda partita per
+ * dire perché la conferma sharp è o non è disponibile, con lo stesso criterio
+ * di onestà (una somiglianza non è una copertura; ciò che la fonte non espone
+ * resta fuori copertura, mai stimato).
+ *
+ * `uncertain` è il fallback quando la competizione non è leggibile (nomi
+ * vuoti): in quel caso non si decide nulla invece di sbagliare (fallire
+ * chiuso non costa crediti né dati falsi).
+ */
+export function coverageClassFor(
+  league: CoverageLeague,
+  catalogKeys: Set<string>,
+  soccer: CoverageSport[],
+): CoverageClassResult {
+  const country = league.country ?? "";
+  const name = league.name ?? "";
+  if (name.trim() === "" && country.trim() === "") {
+    return { coverage: "unknown", reason: "competizione non leggibile" };
+  }
+
+  const exact = sportKeyFor(
+    country !== "" ? `${country}: ${name}` : name,
+  );
+  if (exact !== null && catalogKeys.has(exact)) {
+    return { coverage: "mapped", reason: null };
+  }
+
+  const candidate = findNearKey(league, soccer);
+  if (candidate !== null) {
+    return {
+      coverage: "near",
+      reason: "trovata una competizione simile nella fonte: da verificare a mano, mai usata come certezza",
+      candidate: candidate.candidate,
+      title: candidate.title,
+    };
+  }
+
+  return {
+    coverage: "uncovered",
+    reason: "la fonte per-bookmaker non espone questo campionato: la conferma sharp resta non osservabile",
+  };
+}

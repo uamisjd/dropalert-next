@@ -10,6 +10,7 @@
 import {
   classifyCoverage,
   findNearKey,
+  coverageClassFor,
   type CoverageLeague,
   type CoverageSport,
 } from "../odds-coverage";
@@ -94,6 +95,54 @@ const SOCCER: CoverageSport[] = [
     const leagues: CoverageLeague[] = [{ key: "at-bundesliga", name: "Bundesliga", country: "Austria" }];
     const report = classifyCoverage(leagues, new Set(["soccer_germany_bundesliga"]), SOCCER);
     assert(report.mapped.length === 0, "Austria Bundesliga non deve essere mappata (non attiva nel catalogo)");
+  });
+
+  /* ------------------------------------------------------------------ */
+  /* coverageClassFor — la classe di UNA competizione (scheda partita)   */
+  /* ------------------------------------------------------------------ */
+
+  const ACTIVE_KEYS = new Set([
+    "soccer_italy_serie_a",
+    "soccer_mexico_ligamx",
+    "soccer_denmark_superliga",
+    "soccer_mls",
+  ]);
+
+  await test("coverageClassFor: campionato mappato → mapped senza motivo", async () => {
+    const c = coverageClassFor(
+      { key: "it-serie-a", name: "Serie A", country: "Italy" },
+      ACTIVE_KEYS,
+      SOCCER,
+    );
+    assert(c.coverage === "mapped", `atteso mapped, trovato ${c.coverage}`);
+    assert(c.reason === null, "mapped non ha motivo di indisponibilità");
+  });
+
+  await test("coverageClassFor: campionato simile → near, mai usato come certezza", async () => {
+    const c = coverageClassFor(
+      { key: "mx-ligamx", name: "Liga MX", country: "Mexico" },
+      ACTIVE_KEYS,
+      SOCCER,
+    );
+    assert(c.coverage === "near", `atteso near, trovato ${c.coverage}`);
+    assert(c.candidate === "soccer_mexico_ligamx", "candidato errato");
+    assert(c.reason !== null && c.reason!.length > 0, "near deve avere un motivo di verifica");
+  });
+
+  await test("coverageClassFor: campionato assente → uncovered con motivo onesto", async () => {
+    const c = coverageClassFor(
+      { key: "chad-div1", name: "Division 1", country: "Chad" },
+      ACTIVE_KEYS,
+      SOCCER,
+    );
+    assert(c.coverage === "uncovered", `atteso uncovered, trovato ${c.coverage}`);
+    assert(c.reason !== null && c.reason!.includes("non osservabile"), "il motivo dichiara la non osservabilità");
+  });
+
+  await test("coverageClassFor: competizione non leggibile → unknown, mai decisa", async () => {
+    const c = coverageClassFor({ key: "x", name: "", country: "" }, ACTIVE_KEYS, SOCCER);
+    assert(c.coverage === "unknown", `atteso unknown, trovato ${c.coverage}`);
+    assert(c.reason !== null && c.reason!.includes("non leggibile"), "unknown dichiara il motivo");
   });
 
   console.log(`\n${passed} passed, ${failed} failed`);
