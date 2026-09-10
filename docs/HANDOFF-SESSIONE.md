@@ -60,10 +60,12 @@ bookmaker disponibili.» il deploy di `main` non è ancora aggiornato).
    (`scheduler.ts`, fase «1b», solo modalità `full`, mai `collect_only` né
    `--no-collect`) e si accende **solo con entrambi** `ODDS_WIRE_COLLECT=true`
    e `DROP_EXCLUDE_CONSENSUS_BOOKS=true` (`wireGate()`). Regole applicate: solo
-   segnali `active` con indice ≥ 45, competizioni coperte, mai demo/non giocabili/
+   segnali `active` con indice ≥ 45, **solo mercato 1x2** (la lettura h2h non
+   copre `ou_2_5`/`btts`), competizioni coperte, mai demo/non giocabili/
    kickoff passato, 1 lettura/partita/giorno (marcatore + cache sharp), budget
-   via `decide()` come unico gate di rete. Test puri: `npm run test:odds-wire`
-   (20 asserzioni). **Restano i passi umani**: smoke test live del cablaggio +
+   via `decide()` come unico gate di rete; credito contato alla lettura anche
+   se la scrittura fallisce (`persistenceError`). Test puri: `npm run test:odds-wire`
+   (26 asserzioni). **Restano i passi umani**: smoke test live del cablaggio +
    confronto prima/dopo sui punteggi in modalità mista, poi accensione dei due
    flag su Vercel (il token dell'agente non tocca Vercel).
 2. **Ampliare la "base di cattura"** (`src/lib/providers/optional/odds-capture-league.ts`,

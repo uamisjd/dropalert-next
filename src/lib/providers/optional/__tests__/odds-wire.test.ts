@@ -60,6 +60,7 @@ function row(partial: Partial<WireSignalRow> & { matchId: number }): WireSignalR
     matchKey: "be-abc123",
     signalStatus: "active",
     matchStatus: "scheduled",
+    market: "1x2",
     confidenceScore: 60,
     kickoffAt: FUTURE,
     country: "Italy",
@@ -231,6 +232,25 @@ test("competizione senza paese → scartato (fallire chiuso, non si indovina)", 
   assertEqual(candidates.length, 0);
   assertEqual(skipped.length, 1);
   assert(skipped[0].reason.includes("fuori copertura"), skipped[0].reason);
+});
+
+test("segnale su mercato diverso dall'h2h → scartato (la lettura copre solo 1x2)", () => {
+  const { candidates, skipped } = pickWireCandidates(
+    [row({ matchId: 11, market: "ou_2_5" })],
+    NOW,
+  );
+  assertEqual(candidates.length, 0);
+  assertEqual(skipped.length, 1);
+  assert(skipped[0].reason.includes("1x2"), skipped[0].reason);
+});
+
+test("segnale su btts → scartato, nessun credito speso per una lettura impossibile", () => {
+  const { candidates, skipped } = pickWireCandidates(
+    [row({ matchId: 12, market: "btts" })],
+    NOW,
+  );
+  assertEqual(candidates.length, 0);
+  assertEqual(skipped.length, 1);
 });
 
 /* ------------------------------------------------------------------ */

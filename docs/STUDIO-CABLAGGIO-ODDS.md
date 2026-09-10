@@ -382,11 +382,16 @@ comportamento dei dati attuali:
   accende **solo con entrambi** `ODDS_WIRE_COLLECT=true` e
   `DROP_EXCLUDE_CONSENSUS_BOOKS=true`, altrimenti resta spenta dichiarando
   il motivo. Regole applicate (tutte con motivo in italiano): solo segnali
-  `active` con indice ≥ 45, mai partite demo o non giocabili, mai kickoff
-  passato, mai competizioni fuori copertura, una lettura per partita al
-  giorno (marcatore dedicato + cache della linea sharp), budget via
-  `decide()` come unico gate di rete, credito contato quando la richiesta
-  esce davvero. Test puri: `npm run test:odds-wire` (24 asserzioni).
+  `active` con indice ≥ 45, solo segnali sul mercato **1x2** (la lettura
+  per-book usa `markets=h2h`, quindi un segnale `ou_2_5`/`btts` non può essere
+  servito e va scartato prima di spendere: non si legge a vuoto), mai partite
+  demo o non giocabili, mai kickoff passato, mai competizioni fuori copertura,
+  una lettura per partita al giorno (marcatore dedicato + cache della linea
+  sharp), budget via `decide()` come unico gate di rete, credito contato
+  quando la richiesta esce davvero — anche se la scrittura in `odds_snapshots`
+  fallisce dopo una lettura riuscita (`persistenceError` distinto: la fonte ha
+  già addebitato il credito e la contabilità non va persa). Test puri:
+  `npm run test:odds-wire` (26 asserzioni).
 
   Completata anche la **chiusura del cerchio** attorno alla fase:
   - **una sola lettura al giorno, su entrambi i percorsi**: la regola

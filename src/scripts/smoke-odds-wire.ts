@@ -165,6 +165,12 @@ async function readMatch(matchId: number): Promise<void> {
   console.log(`quote lette           : ${outcome.result.data.length} su ${books.length} bookmaker`);
   console.log(`bookmaker             : ${books.slice(0, 14).join(", ")}${books.length > 14 ? " …" : ""}`);
   console.log(`crediti spesi         : ${credits}`);
+  if (outcome.persistenceError !== null) {
+    console.log(`persistenza           : FALLITA — ${outcome.persistenceError}`);
+    console.log("\nSMOKE PARZIALE — lettura riuscita ma scrittura in odds_snapshots fallita.");
+    process.exitCode = 4;
+    return;
+  }
   console.log(
     `snapshot scritti      : ${outcome.persistence?.written ?? 0} (sorgente ${SMOKE_SOURCE})`,
   );

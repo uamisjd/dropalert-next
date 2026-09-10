@@ -43,6 +43,7 @@ import {
   matches,
   systemState,
   teams,
+  type MarketType,
   type SignalStatus,
 } from "@/db/schema";
 import { resolveSportKey } from "./sport-keys";
@@ -112,6 +113,8 @@ export interface WireSignalRow {
   matchKey: string;
   signalStatus: SignalStatus;
   matchStatus: string;
+  /** mercato del segnale: la lettura per-book copre SOLO l'h2h (1x2) */
+  market: MarketType;
   confidenceScore: number;
   kickoffAt: Date;
   country: string | null;
@@ -170,6 +173,12 @@ export function pickWireCandidates(
     if (row.confidenceScore < WIRE_MIN_CONFIDENCE) {
       skip(
         `indice di fiducia ${row.confidenceScore} sotto la soglia ${WIRE_MIN_CONFIDENCE}`,
+      );
+      continue;
+    }
+    if (row.market !== "1x2") {
+      skip(
+        `segnale su mercato ${row.market}: la lettura per-book copre solo il mercato 1x2 (h2h)`,
       );
       continue;
     }
@@ -323,6 +332,7 @@ export async function listWireSignalRows(): Promise<WireSignalRow[]> {
       matchKey: matches.key,
       signalStatus: dropSignals.status,
       matchStatus: matches.status,
+      market: dropSignals.market,
       confidenceScore: dropSignals.confidenceScore,
       kickoffAt: matches.kickoffAt,
       country: leagues.country,
@@ -355,6 +365,7 @@ export async function listWireSignalRows(): Promise<WireSignalRow[]> {
     matchKey: r.matchKey,
     signalStatus: r.signalStatus,
     matchStatus: r.matchStatus,
+    market: r.market,
     confidenceScore: Number(r.confidenceScore),
     kickoffAt: r.kickoffAt,
     country: r.country,
@@ -476,6 +487,8 @@ export async function runPerBookmakerWire(
       continue;
     }
 
+    /* Il credito si conta quando la richiesta è uscita, anche se la scrittura
+       in `odds_snapshots` fallisce dopo: la fonte l'ha già addebitato. */
     const spent = creditsSpentFor(outcome.result);
     if (spent > 0) {
       await addCredits(monthKey(now), spent, now).catch(() => undefined);
@@ -487,6 +500,11 @@ export async function runPerBookmakerWire(
 
     if (outcome.result.ok) {
       report.quotesWritten += outcome.persistence?.written ?? 0;
+      if (outcome.persistenceError !== null) {
+        report.errors.push(
+          `cablaggio partita ${candidate.matchId}: lettura riuscita ma scrittura fallita — ${outcome.persistenceError}`,
+        );
+      }
     } else {
       report.errors.push(
         `cablaggio partita ${candidate.matchId}: ${outcome.result.error.kind} — ${outcome.result.error.message}`,
