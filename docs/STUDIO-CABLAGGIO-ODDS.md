@@ -110,7 +110,9 @@ Per non ripetere l'errore già fatto con "Brazil: Serie A" (mappare a memoria),
   (monitor) col catalogo reale della fonte: classifica in **mappati** (chiave
   esatta), **candidati per somiglianza** (da verificare a mano, mai usati
   così), **fuori copertura** (buchi dichiarati). Uso: `npm run odds:scopri`
-  (richiede chiave + DB), `npm run odds:scopri -- --senza-fonte` (solo archivio).
+  (richiede chiave + DB), oppure offline con `--catalogo <file>.json` e
+  `--leagues <file>.json` (nessuna rete, nessun DB). Non esiste una modalità
+  «solo archivio senza catalogo»: senza catalogo non c'è nulla da confrontare.
 - test con fixture congelata: `npm run test:odds-sports`.
 
 Questo strumento **non scrive nulla nel database e non stampa mai la chiave**,
@@ -494,10 +496,7 @@ The Odds API?» con dati reali. **Non scrive nel DB e non stampa la chiave.**
 # Misura reale (chiave + DB in produzione):
 npm run odds:scopri
 
-# Solo archivio, nessuna chiamata alla fonte:
-npm run odds:scopri -- --senza-fonte
-
-# Offline, con file (per provarlo senza rete né DB):
+# Offline, con file (nessuna rete, nessun DB):
 npm run odds:scopri -- --catalogo <file>.json --leagues <file>.json
 ```
 
