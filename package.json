@@ -23,6 +23,7 @@
     "report:coverage": "tsx --env-file=.env src/scripts/run-coverage.ts",
     "job:analyze": "tsx --env-file-if-exists=.env src/scripts/run-analyze.ts",
     "smoke:odds-api": "tsx --env-file-if-exists=.env src/scripts/smoke-odds-api.ts",
+    "smoke:odds-wire": "tsx --env-file-if-exists=.env src/scripts/smoke-odds-wire.ts",
     "smoke:oddspapi": "tsx --env-file-if-exists=.env src/scripts/smoke-oddspapi.ts",
     "odds:capture": "tsx --env-file-if-exists=.env src/scripts/capture-odds-api.ts",
     "odds:find": "tsx --env-file-if-exists=.env src/scripts/find-odds-match.ts",

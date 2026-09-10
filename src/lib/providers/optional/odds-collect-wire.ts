@@ -47,11 +47,13 @@ import {
 } from "@/db/schema";
 import { resolveSportKey } from "./sport-keys";
 import {
+  alreadyReadToday,
   dayKey,
   decide,
   matchKey,
   monthKey,
   readOddsApiKey,
+  wireMatchKey,
 } from "./odds-api-budget";
 import { collectAndPersistTheOddsApiOdds } from "./collect-the-odds-api";
 import type { OddsQuoteDTO, ProviderResult } from "../types";
@@ -251,12 +253,6 @@ export function creditsSpentFor(result: ProviderResult<OddsQuoteDTO[]>): number 
 /* Stato persistente (contatori e marcatori)                           */
 /* ------------------------------------------------------------------ */
 
-/** Marcatore «questa partita è già stata letta oggi dal cablaggio». */
-export function wireMatchKey(matchId: number, now: Date): string {
-  const day = dayKey(now); // "odds-api:day:2026-09-10"
-  return `odds-api:wire:match:${day.slice("odds-api:day:".length)}:${matchId}`;
-}
-
 async function readCounter(key: string): Promise<number> {
   const [row] = await db
     .select({ value: systemState.value })
@@ -300,19 +296,27 @@ async function markWireRead(matchId: number, now: Date): Promise<void> {
  *
  * Si guardano entrambi: il marcatore del cablaggio e la cache della linea
  * sharp (`matchKey`), così «una lettura per partita al giorno» vale davvero
- * per l'intero sistema e non per ciascun percorso preso da solo.
+ * per l'intero sistema e non per ciascun percorso preso da solo. La regola
+ * condivisa sta in `alreadyReadToday` (odds-api-budget): il tetto è del
+ * sistema, non del singolo percorso.
  */
 async function matchAlreadyReadToday(matchId: number, now: Date): Promise<boolean> {
-  if (await keyExists(wireMatchKey(matchId, now))) return true;
-  if (await keyExists(matchKey(matchId, now))) return true;
-  return false;
+  const wireHit = await keyExists(wireMatchKey(matchId, now));
+  const sharpHit = await keyExists(matchKey(matchId, now));
+  return alreadyReadToday(sharpHit, wireHit);
 }
 
 /* ------------------------------------------------------------------ */
 /* Lettura dei segnali attivi                                          */
 /* ------------------------------------------------------------------ */
 
-async function listWireSignalRows(): Promise<WireSignalRow[]> {
+/**
+ * Riga dei segnali attivi, per la fase e per lo smoke test (`smoke:odds-wire`).
+ * Esportata perché lo strumento di verifica dell'attivazione deve poter
+ * elencare i candidati con la STESSA selezione del ciclo: una selezione
+ * diversa nello smoke non proverebbe nulla su ciò che il ciclo farebbe.
+ */
+export async function listWireSignalRows(): Promise<WireSignalRow[]> {
   const rows = await db
     .select({
       matchId: matches.id,

@@ -12,6 +12,12 @@ export interface CollectTheOddsApiParams {
   awayTeam: string;
   kickoffAt: Date;
   runId?: number | null;
+  /**
+   * Sorgente scritta su `odds_snapshots`. Default: la sorgente di produzione
+   * dell'adapter. Lo smoke test la cambia (`the-odds-api-wire-smoke`) per non
+   * mescolare una verifica ai dati reali, come già fa `smoke:odds-api`.
+   */
+  source?: string;
 }
 
 export interface CollectTheOddsApiResult {
@@ -49,7 +55,7 @@ export async function collectAndPersistTheOddsApiOdds(
     params.matchId,
     result.data,
     params.runId ?? null,
-    THE_ODDS_API_SNAPSHOT_SOURCE,
+    params.source ?? THE_ODDS_API_SNAPSHOT_SOURCE,
   );
   return { result, persistence };
 }

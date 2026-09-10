@@ -15,10 +15,10 @@ import {
   creditsSpentFor,
   pickWireCandidates,
   wireGate,
-  wireMatchKey,
   WIRE_MIN_CONFIDENCE,
   type WireSignalRow,
 } from "../odds-collect-wire";
+import { alreadyReadToday, wireMatchKey } from "../odds-api-budget";
 import type { OddsQuoteDTO, ProviderResult } from "../../types";
 
 let passed = 0;
@@ -277,6 +277,32 @@ test("il marcatore del cablaggio è distinto dalla cache della linea sharp", () 
   assert(wire.includes("2026-09-10"), `giorno mancante: ${wire}`);
   assert(wire.includes("42"), `partita mancante: ${wire}`);
   assert(!wire.startsWith("odds-api:match:"), "non deve collidere con la cache sharp");
+});
+
+/* ------------------------------------------------------------------ */
+/* 5. Una lettura al giorno, attraverso entrambi i percorsi            */
+/* ------------------------------------------------------------------ */
+
+test("nessuno dei due percorsi ha letto → partita leggibile", () => {
+  assert(!alreadyReadToday(false, false), "entrambe le cache vuote → leggibile");
+});
+
+test("il cablaggio ha già letto → la scheda partita non deve rileggere", () => {
+  assert(
+    alreadyReadToday(false, true),
+    "marcatore del cablaggio presente → non rileggere dalla scheda partita",
+  );
+});
+
+test("la scheda partita ha già letto → il cablaggio non deve rileggere", () => {
+  assert(
+    alreadyReadToday(true, false),
+    "cache sharp presente → non rileggere dal cablaggio",
+  );
+});
+
+test("entrambi hanno letto → partita non rileggibile", () => {
+  assert(alreadyReadToday(true, true), "entrambe le cache presenti → non rileggibile");
 });
 
 /* ------------------------------------------------------------------ */

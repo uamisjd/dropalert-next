@@ -386,7 +386,23 @@ comportamento dei dati attuali:
   passato, mai competizioni fuori copertura, una lettura per partita al
   giorno (marcatore dedicato + cache della linea sharp), budget via
   `decide()` come unico gate di rete, credito contato quando la richiesta
-  esce davvero. Test puri: `npm run test:odds-wire` (20 asserzioni).
+  esce davvero. Test puri: `npm run test:odds-wire` (24 asserzioni).
+
+  Completata anche la **chiusura del cerchio** attorno alla fase:
+  - **una sola lettura al giorno, su entrambi i percorsi**: la regola
+    condivisa `alreadyReadToday` (in `odds-api-budget.ts`) fa sì che il
+    cablaggio non rilegga una partita già letta dalla scheda partita e
+    viceversa (`getSharpLine` ora controlla il marcatore del cablaggio,
+    `wireMatchKey`): niente doppio credito sulla stessa partita;
+  - **osservabilità**: `/api/jobs/analyze` restituisce il report della fase
+    (`wire`), e `/api/health` dichiara `wire.enabled`/`wire.reason` e, quando
+    è accesa, il budget condiviso; la nota `capabilities.note` distingue i tre
+    casi reali (fonte per-book assente / cablaggio pronto ma spento / attivo);
+  - **smoke test dell'attivazione**: `npm run smoke:odds-wire` elenca i
+    candidati del ciclo a zero crediti con la STESSA selezione (`listWireSignalRows`
+    + `pickWireCandidates`), e `npm run smoke:odds-wire -- --read <id>` esegue
+    la lettura reale (1 credito) con la stessa persistenza del ciclo
+    (sorgente `the-odds-api-wire-smoke`, separata dai dati reali).
   Restano quindi, come da dottrina, **solo** i passi umani: smoke test live
   del cablaggio e confronto prima/dopo sui punteggi in modalità mista
   (consenso + per-book) prima di accendere i due flag su Vercel.

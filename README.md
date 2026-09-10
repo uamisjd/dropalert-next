@@ -385,7 +385,10 @@ Accenderla richiede **due flag insieme** — mai uno solo:
 
 L'accensione resta un passo deliberato, da fare solo dopo uno smoke test live
 del cablaggio e un confronto prima/dopo sui punteggi in modalità mista:
-dettagli in `docs/STUDIO-CABLAGGIO-ODDS.md` §4.7.
+dettagli in `docs/STUDIO-CABLAGGIO-ODDS.md` §4.7 e procedura in
+`docs/REGOLE-OPERATIVE-ODDS.md`. Lo smoke test è pronto e a costo zero per
+l'elenco candidati (`npm run smoke:odds-wire`), con lettura reale opzionale da
+1 credito (`npm run smoke:odds-wire -- --read <id>`).
 
 ### Variabili d'ambiente delle fonti
 
