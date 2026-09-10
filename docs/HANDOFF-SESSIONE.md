@@ -13,12 +13,14 @@
 
 ### 0.1 Dove siamo (verificato, non a memoria)
 
-- **PR #26 MERGIATA su `main`** (ramo `arena/01a086f3-dropalert-next`,
-  `https://github.com/uamisjd/dropalert-next/pull/26`). Conteneva: onestà
+- **PR #26 MERGIATA su `main`** — merge commit **`ceb4f3a`**
+  (`https://github.com/uamisjd/dropalert-next/pull/26`). Conteneva: onestà
   fonte/verdetto (`/arbitrage`, `/api/health`, motore `drop`), copertura The Odds
   API **guidata dal catalogo reale**, cattura senza terminale, `SMOKE OK` live.
-  Per l'hash esatto: `git log --oneline -1 main` (dopo il merge il primo commit è
-  il merge di #26).
+- **PR #27 MERGIATA subito dopo** — merge commit **`0dcb581`**: rimuoveva il flag
+  fantasma `--senza-fonte` da `odds:scopri` (era documentato ma non implementato:
+  i doc ora indicano il percorso offline reale `--catalogo` + `--leagues`).
+  Questi due hash sono fissi e restano validi anche quando `main` avanza.
 - **Obiettivo dell'utente raggiunto**: `SMOKE OK` su dati reali **senza terminale**
   (match #788 Venezia—Fiorentina, 72 quote da 24 bookmaker, freshness a 0 min).
   Dettagli in `docs/SMOKE-THE-ODDS-API.md` §17.
