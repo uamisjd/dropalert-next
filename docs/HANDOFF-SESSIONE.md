@@ -21,6 +21,14 @@
   fantasma `--senza-fonte` da `odds:scopri` (era documentato ma non implementato:
   i doc ora indicano il percorso offline reale `--catalogo` + `--leagues`).
   Questi due hash sono fissi e restano validi anche quando `main` avanza.
+- **PR #29 MERGIATA il 10/09/2026** — merge commit **`71c59ef`**: cablaggio
+  per-bookmaker nel ciclo (dietro doppio flag default OFF), CLV su base
+  allineata raw-vs-raw, base di cattura derivata dal catalogo, modalità
+  `which=smoke-wire` in `audit.yml` + primo smoke live. «Verifica» su `main`
+  verde post-merge (run `34475105406`). Restano i soli passi umani: ribasatura
+  CLV storico (`clv:rebase` con `DATABASE_URL`), lettura reale del cablaggio
+  (1 credito, serve un segnale `active` ≥ 45 su competizione coperta),
+  eventuale accensione dei due flag su Vercel dopo il confronto prima/dopo.
 - **Obiettivo dell'utente raggiunto**: `SMOKE OK` su dati reali **senza terminale**
   (match #788 Venezia—Fiorentina, 72 quote da 24 bookmaker, freshness a 0 min).
   Dettagli in `docs/SMOKE-THE-ODDS-API.md` §17.
