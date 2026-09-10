@@ -287,6 +287,12 @@ popolosa e la peggiore per t).
    snapshot (i dati ci sono: `parseDroppingOdds` salva H/D/A correnti a ogni giro) e salvare il CLV su base
    `fair_fair`, mantenendo `raw_raw` come secondo numero. Test attesi: (a) con terna completa il CLV su base
    mista non è mai salvato; (b) un segnale con `closingPrice == signalPrice` produce `basis = "not_measurable"`.
+
+   > **Risoluzione (10/09/2026):** applicata con la convenzione **grezzo contro grezzo** (`raw_consensus`),
+   > non `fair_fair`. Il prezzo del segnale è sempre grezzo e a registro non ne esiste una versione
+   > depurata: depurare la sola chiusura deprimeva il CLV di −1,86 pp. La pipeline ora scrive le nuove
+   > osservazioni sulla base allineata e lo storico si ribasa con `npm run clv:rebase`.
+   > Vedi `docs/AUDIT-CONTENUTI.md` §2.1 («Premessa corretta») e `docs/DECISIONI-APERTE.md` §1.
 2. `src/lib/pipeline/closing.ts` + `src/lib/repo/performance.ts` — soglia dichiarata per la chiusura
    (proposta: `minutesBeforeKickoff ≤ 60`, configurabile) e distribuzione pubblicata in `/coverage`; i CLV
    fuori soglia restano in archivio ma escono dalle medie, con il conteggio di quanti ne escono.

@@ -290,6 +290,14 @@ Quando vorrai l'allineamento, la convenzione che consiglio è **fair contro
 fair** (de-vigare anche il prezzo del segnale), perché è la stessa già usata in
 `/value-bets` e nella chiusura preferita: una sola regola in tutto il sito.
 
+> **Aggiornamento (10/09/2026).** Rileggendo lo studio §1.1 prima di scrivere il
+> ricalcolo è emerso che la coppia allineata è **grezzo contro grezzo**, non fair
+> contro fair: il prezzo del segnale è sempre grezzo e non ne esiste una versione
+> depurata a registro (lo spiega la «Premessa corretta» in §2.1). La pipeline ora
+> scrive le nuove osservazioni sulla base allineata `raw_consensus`
+> (`getClosingReference`); la chiusura fair resta a registro come qualità della
+> linea. Lo storico resta da ribasare con `npm run clv:rebase` — passaggio umano.
+
 **Aggiornamento su D2, dopo la domanda «non abbiamo già messo un'API
 gratuita?».** Sì, e la mia risposta precedente era imprecisa. Nel codice ci sono
 **due cose diverse** con lo stesso nome, in stati opposti — verificate con una

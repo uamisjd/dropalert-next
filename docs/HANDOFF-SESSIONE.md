@@ -76,8 +76,14 @@ bookmaker disponibili.» il deploy di `main` non è ancora aggiornato).
    volutamente non-matching le abbreviazioni («Man Utd» ↔ «Manchester United») e i
    qualificatori diversi («Vitoria Guimaraes» ↔ «Vitoria SC»). Ogni nuovo caso costa
    1 credito ma si spiega gratis con la diagnosi `/events`.
-4. **Decisioni aperte dell'utente** già scritte in `docs/DECISIONI-APERTE.md`
-   (in particolare la base mista del CLV): sono scelte, non guasti.
+4. **Decisioni aperte dell'utente** già scritte in `docs/DECISIONI-APERTE.md`.
+   ✅ **Base del CLV — decisa e allineata il 10/09/2026 (codice):** la coppia
+   corretta è **grezzo contro grezzo** (`closingBasis = "raw_consensus"`); la
+   pipeline di chiusura ora scrive le nuove osservazioni sulla base allineata
+   (`getClosingReference`, `src/lib/pipeline/closing.ts`) e la chiusura fair
+   resta a registro solo come qualità della linea. Resta il passaggio umano:
+   ribasare lo storico con `npm run clv:rebase -- --apply` (o il pulsante
+   manuale «Ribasatura CLV (manuale)»), che richiede il `DATABASE_URL`.
 
 ### 0.4 Contesto della fonte (verificato il 10/09/2026 — non riscoprirlo)
 

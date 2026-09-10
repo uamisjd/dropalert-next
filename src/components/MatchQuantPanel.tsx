@@ -29,7 +29,7 @@ const signedPp = (v: number): string =>
  * Cosa fa qui dentro, in ordine di affidabilità:
  *  1. il **divario** fra l'ultima quota osservata e la linea senza margine
  *     (no-vig) della stessa fonte sullo stesso mercato — stessa formula dello
- *     scanner `/value-bets` e della chiusura fair del CLV (`value-gap.ts`);
+ *     scanner `/value-bets` (`value-gap.ts`);
  *  2. l'**escursione** del prezzo (apertura → ora) in tick: è storia del movimento,
  *     non una simulazione e non un'operazione eseguibile;
  *  3. le **quote sintetiche** derivate dalla terna: aritmetica della linea, non
@@ -178,7 +178,7 @@ export function MatchQuantPanel({ signal, series, allSeries }: Props) {
               <p className="mt-3 text-[11px] leading-relaxed text-slate-500">
                 Margine rimosso dalla linea: <strong>{gap.marginPct.toFixed(2)}%</strong> su{" "}
                 {gap.selectionsUsed} selezioni · metodo no-vig proporzionale, lo stesso della
-                chiusura fair del CLV.
+                pagina del divario.
                 {gap.maxSkewMinutes !== null && gap.maxSkewMinutes > 0
                   ? ` Le letture della terna distano fra loro fino a ${gap.maxSkewMinutes} minuti: finché la fonte non espone una fotografia simultanea, il divario è indicativo.`
                   : ""}

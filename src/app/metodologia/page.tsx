@@ -96,17 +96,21 @@ export default function MetodologiaPage() {
         </p>
         <p className="mt-2 text-sm leading-relaxed text-slate-700">
           E una cautela che vale più delle soglie: <strong>le due metà del CLV
-          non stanno sempre sulla stessa base</strong>. Il prezzo del segnale è
-          sempre grezzo, margine del bookmaker incluso; la chiusura invece è
-          fair no-vig dove il mercato era completo e grezza dove non lo era.
-          Confrontare un prezzo con margine contro una probabilità senza
-          margine deprime il CLV di un importo meccanico che non ha nulla a che
-          vedere con la bravura: sull&apos;archivio congelato di questo progetto
+          devono stare sulla stessa base</strong>. Il prezzo del segnale è
+          sempre grezzo, margine del bookmaker incluso; per questo il CLV
+          confronta il segnale con la <strong>chiusura grezza</strong> di
+          consenso — grezzo contro grezzo, le due metà sullo stesso piano.
+          Confrontare invece il prezzo grezzo con la chiusura senza margine
+          deprime il CLV di un importo meccanico che non ha nulla a che vedere
+          con la bravura: sull&apos;archivio congelato di questo progetto
           quell&apos;importo misura <strong>−1,86 punti percentuali</strong> di
           media, con il 20,6% delle osservazioni che cambierebbe verso
           (<code className="rounded bg-slate-100 px-1">docs/STUDIO-PARTITE-FINITE.md</code>,
-          §1.1). La base usata per ogni osservazione è registrata e oggi è
-          dichiarata in{" "}
+          §1.1). Le osservazioni nuove nascono già sulla base allineata; quelle
+          storiche scritte sulla base mista vengono ribasate con lo strumento
+          dedicato (<code className="rounded bg-slate-100 px-1">npm run clv:rebase</code>),
+          un passaggio che richiede il database di produzione. La base usata
+          per ogni osservazione è registrata e dichiarata in{" "}
           <Link href="/performance" className="font-semibold text-cyan-700 hover:underline">
             /performance
           </Link>{" "}
@@ -120,12 +124,13 @@ export default function MetodologiaPage() {
           La quota fair senza margine, e dove si ferma
         </h2>
         <p className="text-sm leading-relaxed text-slate-700">
-          Una quota pubblicata contiene il margine di chi la espone. Per
-          confrontare due prezzi della stessa natura — la nostra rilevazione e
-          la chiusura — il margine va tolto: le probabilità implicite delle
-          selezioni di un mercato vengono divise per la loro somma. È il metodo
-          proporzionale, il più trasparente fra quelli che richiedono solo i
-          dati che abbiamo; la scelta è nel codice
+          Una quota pubblicata contiene il margine di chi la espone. Quando
+          serve una probabilità depurata — la linea senza margine contro cui si
+          misura il divario, o la qualità della chiusura a registro — il
+          margine va tolto: le probabilità implicite delle selezioni di un
+          mercato vengono divise per la loro somma. È il metodo proporzionale,
+          il più trasparente fra quelli che richiedono solo i dati che abbiamo;
+          la scelta è nel codice
           (<code className="rounded bg-slate-100 px-1">src/lib/drop/novig.ts</code>),
           non nei marketing.
         </p>

@@ -443,8 +443,11 @@ export const clvRecords = pgTable(
     beatClose: boolean("beat_close").notNull(),
     /**
      * Base di confronto effettivamente usata:
-     *   fair_novig     → chiusura depurata dal margine (preferita)
-     *   raw_consensus  → chiusura grezza, unico dato disponibile
+     *   raw_consensus  → chiusura grezza come il segnale (base allineata:
+     *                    è ciò che il ciclo scrive per le nuove osservazioni)
+     *   fair_novig     → chiusura depurata dal margine contro un segnale
+     *                    grezzo: basi NON allineate, presente solo nelle righe
+     *                    storiche in attesa di ribasatura
      * Il campo esiste perché le due basi non sono confrontabili fra loro e
      * un aggregato che le mescolasse senza dirlo sarebbe fuorviante.
      */

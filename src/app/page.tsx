@@ -203,7 +203,7 @@ export default async function Home({
             Monitoraggio dei flussi di mercato in tempo reale: apertura, picco e ultima
             lettura di ogni quota, {" "}
             <strong className="text-emerald-400">divario contro la linea senza margine</strong>{" "}
-            (no-vig proporzionale, lo stesso della chiusura usata per il CLV) e{" "}
+            (no-vig proporzionale) e{" "}
             <strong>escursione in tick</strong> dei movimenti. Sono misure, con i loro buchi
             dichiarati, per informare le tue giocate: nessuna vincita garantita,
             gioca responsabilmente.
