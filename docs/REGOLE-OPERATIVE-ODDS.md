@@ -75,6 +75,7 @@ Rollback: togliere i due flag su Vercel + redeploy.
 | Sonda lega fuori mappa | `odds:find --sonda <key>` · `which=smoke-odds`+`sport_key` | 0 | trova l'id per una lega reale non mappata |
 | Smoke test | `smoke:odds-api -- --match-id N [--sport-key K]` · `which=smoke-odds`+`match_id` | 1 | chiamata+matching+persistenza+freshness |
 | Lettura di controllo | `odds:control` · `which=control` (+`sport_key` facoltativo) | 0 o 1 | percorso di produzione su lega coperta; archivio vuoto → ripiego dalla fonte (§13 SMOKE) |
+| **Smoke cablaggio** | `smoke:odds-wire` (elenco candidati) · `smoke:odds-wire -- --read <id>` (1 credito) | 0 o 1 | verifica della fase per-bookmaker nel ciclo: quale partita leggerebbe, e lettura reale con la STESSA persistenza del ciclo |
 
 Tutto quanto sopra è **mergiato su `main`** con PR #21 e #22: la workflow
 *Verifica dati reali (manuale)* si lancia da `main`. Il ramo di sessione serve
@@ -144,4 +145,47 @@ Poi aprire/mergiare la PR di attivazione solo con «Verifica» verde.
 - [ ] Valutare dopo qualche giorno `COLLECT_HORIZON_HOURS=168` (variabile
   GitHub): serve perché l'archivio veda il turno corrente.
 
+### Attivazione del cablaggio per-bookmaker (fase «1b» del ciclo)
+
+Il codice è pronto (`odds-collect-wire.ts`, fase «1b» di `scheduler.ts`), ma la
+fase è **SPENTA finché non si accendono INSIEME** due flag su Vercel. Procedura
+(verificabile senza terminale, come per l'attivazione del 06/09):
+
+**Dove si esegue lo smoke** (aggiornato 10/09/2026): la workflow manuale
+**`Verifica dati reali (manuale)`** ha ora la modalità `which=smoke-wire`
+(aggiunta su `audit.yml`, ramo della sessione, PR #29): elenco candidati a 0
+crediti senza `match_id`, lettura reale a 1 credito con `match_id=<id>`. In
+locale restano validi `npm run smoke:odds-wire` e
+`npm run smoke:odds-wire -- --read <id>`, che richiedono `DATABASE_URL` e la
+chiave.
+
+1. **Elenco candidati (0 crediti)**: `which=smoke-wire` (o
+   `npm run smoke:odds-wire`) — stampa lo stato dei flag, il numero di
+   **segnali attivi in archivio** (e quanti superano l'indice ≥ 45) e le
+   partite che il ciclo leggerebbe oggi (segnali attivi, indice ≥ 45,
+   competizioni coperte) con i motivi di scarto. Se l'elenco è vuoto o pieno
+   di scarti inattesi, NON attivare: si risolve prima la mappa o il matching.
+   Con «0 candidati» il contatore dei segnali attivi dice se aspettare un
+   segnale nuovo (totale 0) o uno più forte (totale > 0 ma nessuno ≥ 45).
+2. **Lettura reale (1 credito)**: `which=smoke-wire` con `match_id=<id>` (o
+   `npm run smoke:odds-wire -- --read <id>`) su una partita candidata. Verde =
+   il percorso di lettura+persistenza del ciclo scrive davvero linee
+   per-bookmaker (sorgente `the-odds-api-wire-smoke`, separata dai dati reali).
+3. **Confronto prima/dopo**: accendere SOLO `DROP_EXCLUDE_CONSENSUS_BOOKS=true`
+   non cambia nulla da solo (la fase resta spenta senza `ODDS_WIRE_COLLECT`);
+   il confronto si fa a flag acceso su un sottoinsieme controllato e leggendo
+   `/api/health` → `wire.enabled` e la scomposizione dei segnali.
+4. **Attivazione**: su Vercel impostare **entrambi**
+   `ODDS_WIRE_COLLECT=true` e `DROP_EXCLUDE_CONSENSUS_BOOKS=true` + redeploy.
+   Verifica: `/api/health` → `wire.enabled = true` e `capabilities.note`
+   «Cablaggio per-bookmaker ATTIVO». Il budget resta quello condiviso
+   (`/api/health` → `wire.budget`).
+
 Il rollback resta sempre: togliere i due flag su Vercel + redeploy.
+
+**Primo smoke eseguito il 10/09/2026** (run `34470604421`, `which=smoke-wire`):
+marker `MARKER-SMOKE-WIRE-BRANCH-v1` presente, passo `success`, flag SPENTO col
+motivo corretto, **0 candidati** e **0 crediti**. Infrastruttura del percorso
+verificata contro il DB reale; manca la lettura reale (1 credito), che richiede
+un candidato: rilanciare `which=smoke-wire` quando il giro avrà un segnale
+`active` con indice ≥ 45 su competizione coperta.

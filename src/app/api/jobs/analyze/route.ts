@@ -99,6 +99,7 @@ export async function POST(request: Request) {
         gate: report.gate,
       },
       collect: report.collect,
+      wire: report.wire,
       detection: report.detection,
       closing: body.closing ? report.closing : null,
       pendingClosings: {

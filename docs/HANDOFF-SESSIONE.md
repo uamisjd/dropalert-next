@@ -55,16 +55,63 @@ bookmaker disponibili.» il deploy di `main` non è ancora aggiornato).
    (`src/lib/repo/odds.ts:26`, **default `false`**) e serve a marcare il consenso
    perché il motore lo escluda. Sequenza corretta: cablaggio **dietro flag** +
    smoke test live + contatori di budget, poi eventuale accensione.
+   ✅ **Fatto il 10/09/2026 (codice):** la fase esiste in
+   `src/lib/providers/optional/odds-collect-wire.ts`, è inserita nel ciclo
+   (`scheduler.ts`, fase «1b», solo modalità `full`, mai `collect_only` né
+   `--no-collect`) e si accende **solo con entrambi** `ODDS_WIRE_COLLECT=true`
+   e `DROP_EXCLUDE_CONSENSUS_BOOKS=true` (`wireGate()`). Regole applicate: solo
+   segnali `active` con indice ≥ 45, **solo mercato 1x2** (la lettura h2h non
+   copre `ou_2_5`/`btts`), competizioni coperte, mai demo/non giocabili/
+   kickoff passato, 1 lettura/partita/giorno (marcatore + cache sharp), budget
+   via `decide()` come unico gate di rete; credito contato alla lettura anche
+   se la scrittura fallisce (`persistenceError`). Test puri: `npm run test:odds-wire`
+   (26 asserzioni). **Restano i passi umani**: smoke test live del cablaggio +
+   confronto prima/dopo sui punteggi in modalità mista, poi accensione dei due
+   flag su Vercel (il token dell'agente non tocca Vercel).
+   ✅ **Smoke live ESEGUITO (10/09/2026, run `34470604421` su GitHub Actions,
+   `which=smoke-wire`):** l'umano ha aggiunto la modalità `smoke-wire` a
+   `audit.yml` (3 commit: `ad58423`, `e46b7a1`, `181b03d`; l'ultimo ha
+   corretto l'indentazione del passo). Esito: marker
+   `MARKER-SMOKE-WIRE-BRANCH-v1` presente, passo **success**, flag **SPENTO**
+   col motivo corretto, **0 candidati** («oggi nessun segnale attivo su
+   competizione coperta»), **0 crediti**. L'infrastruttura del percorso è
+   verificata contro il DB reale; manca solo la **lettura reale** (1 credito),
+   che richiede un candidato: rilanciare `which=smoke-wire` quando il giro
+   avrà segnali `active` con indice ≥ 45 su competizione coperta, poi
+   `-f match_id=<id>`. Lo smoke stampa ora anche i contatori dei segnali
+   attivi (`listWireSignalStats`: totale attivi e quanti ≥ 45), così «0
+   candidati» distingue «nessun segnale» da «segnali sotto soglia». Nota
+   minore: con `which=smoke-wire` il passo «Sguardo sui dati (read-only)»
+   esegue comunque i due audit (innocuo, read-only): eventuale pulizia
+   futura della condizione `if` del passo.
 2. **Ampliare la "base di cattura"** (`src/lib/providers/optional/odds-capture-league.ts`,
    `CAPTURABLE`) e/o permettere all'utente di **seguire leghe servite** (Serie A,
    Premier, Liga, Bundesliga, Ligue 1), così le partite che il sito mostra sono
    partite che hanno davvero un prezzo individuale.
+   ✅ **Fatto il 10/09/2026 (codice):** la base è ora **derivata dal catalogo
+   reale** (39 competizioni attive, meno le esclusioni dichiarate con motivo:
+   MLS non servita dal piano, World Cup senza round-trip «Paese: Lega»). Niente
+   più lista a mano di sole 6 leghe: anche Argentina, Brasile, Eredivisie,
+   Primeira Liga, coppe UEFA ecc. sono catturabili. Invariante di round-trip
+   testata: ogni titolo «Paese: Lega» risolve indietro alla stessa `sportKey`
+   (`test:odds-sports`).
 3. **Audit del matching dei nomi** (punto 2 del vecchio "ordine di lavoro"): restano
    volutamente non-matching le abbreviazioni («Man Utd» ↔ «Manchester United») e i
-   qualificatori diversi («Vitoria Guimaraes» ↔ «Vitoria SC»). Ogni nuovo caso costa
-   1 credito ma si spiega gratis con la diagnosi `/events`.
-4. **Decisioni aperte dell'utente** già scritte in `docs/DECISIONI-APERTE.md`
-   (in particolare la base mista del CLV): sono scelte, non guasti.
+   qualificatori diversi («Vitoria Guimaraes» ↔ «Vitoria SC»). La parte di codice è
+   già coperta da test (`odds-match-resolver.test.ts`): la diagnosi `/events` è
+   gratuita e avviene **prima** di spendere il credito, il caso particella «de»
+   passa per token, «Inter»⊂«Internazionale» per sottostringa. Resta solo la parte
+   operativa: passare in rassegna i casi reali e, dove la grafia interna è sbagliata
+   in modo sistematico, correggere l'**anagrafica** delle squadre — non aggiungere
+   eccezioni al matcher.
+4. **Decisioni aperte dell'utente** già scritte in `docs/DECISIONI-APERTE.md`.
+   ✅ **Base del CLV — decisa e allineata il 10/09/2026 (codice):** la coppia
+   corretta è **grezzo contro grezzo** (`closingBasis = "raw_consensus"`); la
+   pipeline di chiusura ora scrive le nuove osservazioni sulla base allineata
+   (`getClosingReference`, `src/lib/pipeline/closing.ts`) e la chiusura fair
+   resta a registro solo come qualità della linea. Resta il passaggio umano:
+   ribasare lo storico con `npm run clv:rebase -- --apply` (o il pulsante
+   manuale «Ribasatura CLV (manuale)»), che richiede il `DATABASE_URL`.
 
 ### 0.4 Contesto della fonte (verificato il 10/09/2026 — non riscoprirlo)
 
@@ -88,7 +135,7 @@ bookmaker disponibili.» il deploy di `main` non è ancora aggiornato).
 | `src/lib/providers/optional/sport-catalog.ts` | catalogo reale (39 leghe attive) + `resolveSportKeyFromCatalog` (vincolo di paese, collision-safe) |
 | `src/lib/providers/optional/sport-keys.ts` | `MAP` curata (1ª passata) + fallback catalogo; `COVERED_SPORT_KEYS`, `isCoveredBySportKey` |
 | `src/lib/providers/optional/odds-coverage.ts` | classifica copertura (`mapped`/`near`/`uncovered`/`unknown`); `near` **mai** usato come certezza |
-| `src/lib/providers/optional/odds-capture-league.ts` | base esplicita delle leghe catturabili (`CAPTURABLE`) |
+| `src/lib/providers/optional/odds-capture-league.ts` | base di cattura derivata dal catalogo (39 attive meno esclusioni; `captureExclusionReason`) |
 | `src/lib/providers/optional/ingest-odds-event.ts` | scrive evento della fonte in `leagues`/`teams`/`matches` (riusa le chiavi anagrafiche) |
 | `src/app/api/jobs/capture-odds/route.ts` | rotta protetta GET/POST per portare in archivio una partita servita (0 crediti) |
 | `src/lib/providers/optional/odds-match-resolver.ts` | matching partita↔evento; nota override corretta (non dice più "fuori mappa" per leghe coperte) |

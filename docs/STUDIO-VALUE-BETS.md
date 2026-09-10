@@ -261,8 +261,10 @@ osserva — lo scarto è il doppio.
   stesso bookmaker, non un +EV. Con questi dati la lista sarà quasi sempre corta e negativa — è il
   risultato atteso, non un guasto. Rimuovere il limite significa R2/R3 del backlog, cioè la seconda
   fonte di quote.
-- **il CLV è ancora a basi miste** (`closing.ts:477-480`, studio partite finite §2/patch A): la
-  patch P3 qui sopra usa la stessa `fairMarket`, quindi *avvicina* le due scale, non le unifica.
+- **il CLV non è più a basi miste** (aggiornamento 10/09/2026): la pipeline di chiusura scrive le
+  nuove osservazioni sulla base allineata grezzo-contro-grezzo (`getClosingReference`); lo storico
+  precedente si ribasa con `npm run clv:rebase` (vedi `docs/DECISIONI-APERTE.md` §1). La patch P3
+  qui sopra usa la stessa `fairMarket`, quindi avvicina le due scale del divario, non le unifica.
 - `minutesBeforeKickoff` continua a non essere letto da nessun calcolo; l'età della riga ora è
   esposta (`lineAgeMinutes`), ma non è ancora un filtro sulla qualità della lettura.
 - `/trading` è stato rinominato nella sostanza (due prezzi di consenso, green-up **a ritroso**,

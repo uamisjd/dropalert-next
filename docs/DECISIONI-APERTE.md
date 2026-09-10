@@ -8,11 +8,23 @@
 
 ---
 
-## 1. Il CLV è misurato su due scale diverse («basi miste»)
+## 1. Il CLV è misurato su due scale diverse («basi miste») — DECISO E ALLINEATO
+
+> **Stato (aggiornato 10/09/2026).** La convenzione è stata scelta e il codice è
+> allineato. La coppia corretta è **grezzo contro grezzo** (`closingBasis =
+> "raw_consensus"`): il prezzo del segnale è sempre un prezzo grezzo di mercato, margine
+> incluso, e nel registro non esiste una sua versione depurata. Depurare il margine solo
+> sulla chiusura alza il prezzo, abbassa la probabilità implicita e deprime il CLV di un
+> importo meccanico misurato in **−1,86 pp** (media su 37 362 osservazioni, 20,6% dei casi
+> che cambierebbe verso: `docs/STUDIO-PARTITE-FINITE.md` §1.1). La pipeline di chiusura
+> ora scrive ogni **nuova** osservazione sulla base allineata (`getClosingReference`,
+> `src/lib/pipeline/closing.ts`). La chiusura fair resta calcolata e salvata come
+> informazione di qualità della linea, ma non è più la base del CLV. Resta **solo il
+> passaggio umano**: ribasare le righe storiche già scritte sulla base mista.
 
 **Cos'è.** Il CLV è la differenza fra la quota che avevamo sotto occhio e la *linea di
-chiusura*: è l'unico numero del sito che può dire se il metodo funziona. Ma oggi le due
-metà del numero non sono dello stesso tipo. Lo provano due casi letti su dati reali:
+chiusura*: è l'unico numero del sito che può dire se il metodo funziona. Le due metà
+devono stare sulla stessa scala. Lo provano due casi letti su dati reali:
 
 | caso | quota del segnale | chiusura | CLV dichiarato |
 | --- | --- | --- | --- |
@@ -20,24 +32,14 @@ metà del numero non sono dello stesso tipo. Lo provano due casi letti su dati r
 | media ultima settimana | idem | idem | **−3,77 pp**, 8% sopra la chiusura |
 
 Confrontare un prezzo con vigore con una linea senza vigore è come pesare la spesa con la
-busta: il «vantaggio» parte da −5/−10 pp e non c'entra nulla con la bravura. È per questo
-che lo studio sulle partite finite ha proposto la *patch A*: allineare le due metà
-(de-vigare il prezzo del segnale, o usare per entrambi la stessa linea).
+busta: il «vantaggio» parte da −5/−10 pp e non c'entra nulla con la bravura.
 
-**Perché non l'ho fatta.** Tocca `src/lib/pipeline/closing.ts:477-480`, cioè il calcolo
-che scrive in tabella: i valori già pubblicati in `/performance` e `/api/health`
-cambierebbero tutti, e nessuno dei due numeri è «quello giusto» finché non lo scegli tu.
-Una migrazione che riscrive il passato non si fa di straforo in una PR di correzioni.
-
-**Cosa cambierebbe.** Il CLV medio diventerebbe confrontabile (attesa: meno negativo, e
-soprattutto *paragonabile fra leghe*). I grafici storici si sposterebbero.
-
-**Che fare, in ordine.**
-1. decidere la convenzione: `devig del segnale` contro `chiusura no-vig` (coerente) oppure
-   `grezzo` contro `grezzo` (serve però la chiusura grezza, che oggi non è conservata);
-2. `git checkout -b clv-same-base`, modifica, script di ricalcolo sulle righe esistenti;
-3. se voglio farlo io: dimmi quale delle due convenzioni e preparo branch + script, **ma
-   il ricalcolo va lanciato con il tuo `DATABASE_URL`** (vedi §4).
+**Che cosa resta da fare (solo umano, con il `DATABASE_URL`).**
+1. ribasare lo storico: `npm run clv:rebase` stampa in sola lettura cosa cambierebbe;
+   `npm run clv:rebase -- --apply` scrive, oppure il pulsante manuale «Ribasatura CLV
+   (manuale)» in GitHub Actions (il `DATABASE_URL` resta nei secrets);
+2. dopo la ribasatura, `/performance` smette di dichiarare «basi miste» e il CLV medio
+   pubblicato torna confrontabile.
 
 ---
 

@@ -82,10 +82,10 @@ export default async function PerformancePage() {
         {DISCLAIMER}
       </p>
 
-      {/* La serie qui sotto somma osservazioni misurate su basi diverse:
-          chiusura fair no-vig dove il mercato era completo, chiusura grezza
-          dove non lo era. Il grafico non può dirlo da solo, quindi lo dice
-          questa riga — prima del numero, non dopo. */}
+      {/* Le nuove osservazioni nascono sulla base allineata (grezzo contro
+          grezzo); lo storico scritto con chiusura fair no-vig resta a basi
+          miste finché non viene ribasato. Il grafico non può dirlo da solo,
+          quindi lo dice questa riga — prima del numero, non dopo. */}
       {view !== null && (
         <p
           className={`mt-3 rounded border px-3 py-2 text-xs leading-relaxed ${

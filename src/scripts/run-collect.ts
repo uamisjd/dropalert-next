@@ -107,6 +107,24 @@ async function fullCycle(): Promise<void> {
   console.log(`  di cui fair no-vig   ${report.closing.fairLinesCaptured}`);
   console.log(`  record CLV           ${report.closing.clvComputed}`);
 
+  /* Cablaggio per-bookmaker: fase parallela dietro flag. Spenta va detto
+     con il motivo, accesa dice cosa ha letto e quanto ha speso. */
+  console.log("\nCablaggio per-bookmaker (The Odds API)");
+  if (!report.wire.enabled) {
+    console.log(`  spento               ${report.wire.reason ?? "nessun motivo dichiarato"}`);
+  } else {
+    console.log(`  segnali attivi       ${report.wire.candidates}`);
+    console.log(`  partite lette        ${report.wire.read}`);
+    console.log(`  snapshot scritti     ${report.wire.quotesWritten}`);
+    console.log(`  crediti spesi        ${report.wire.creditsSpent} (oggi ${report.wire.usedToday}, mese ${report.wire.usedThisMonth})`);
+    for (const s of report.wire.skipped.slice(0, 6)) {
+      console.log(`  - scartata ${s.matchId}: ${s.reason}`);
+    }
+    for (const d of report.wire.budgetDenied.slice(0, 6)) {
+      console.log(`  - budget ${d.matchId}: ${d.reason}`);
+    }
+  }
+
   /* Le notifiche sono una fase del giro, non un pensiero: se non partono il
      perché deve essere scritto qui, non scoperto da chi aspetta un avviso. */
   console.log("\nNotifiche");

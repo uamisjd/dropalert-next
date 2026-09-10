@@ -358,9 +358,11 @@ export default function GuidaPage() {
             ed è testata; non ha un chiamante perché la fonte non c&apos;è.
           </li>
           <li>
-            <strong>Il CLV sulla stessa base.</strong> Oggi la composizione è
-            dichiarata in pagina; la soluzione piena è confrontare fair contro
-            fair anche sullo storico.
+            <strong>Il CLV sulla stessa base.</strong> Il prezzo del segnale è
+            sempre grezzo, quindi il confronto allineato è grezzo contro grezzo:
+            le nuove osservazioni nascono già così, e lo storico scritto sulla
+            base mista si ribasa con uno strumento dedicato (passaggio che
+            richiede il database di produzione).
           </li>
           <li>
             <strong>Cadenza di raccolta.</strong> Se il valore sta

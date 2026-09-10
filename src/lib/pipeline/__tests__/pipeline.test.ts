@@ -748,14 +748,17 @@ async function main(): Promise<void> {
     assert((num(rows[0].margin) ?? 0) > 0, "margine non registrato");
   });
 
-  await test("il riferimento di chiusura preferisce la base fair", async () => {
+  await test("il riferimento di chiusura usa la base allineata (grezza)", async () => {
+    /* Il segnale è sempre un prezzo grezzo: il riferimento deve stare sulla
+       stessa base (grezzo contro grezzo), non sulla chiusura fair. */
     const ref = await getClosingReference(fullMkt.matchId, "1x2", "home");
     assert(ref !== null, "riferimento assente");
-    assertEqual(ref!.basis, "fair_novig");
-    assert(ref!.margin !== null && ref!.margin > 0, "margine mediano non dichiarato");
+    assertEqual(ref!.basis, "raw_consensus");
+    assertEqual(ref!.margin, null);
+    assert(ref!.price > 1, `prezzo grezzo fuori range: ${ref!.price}`);
   });
 
-  await test("il CLV registra la base usata e il punteggio del segnale", async () => {
+  await test("il CLV registra la base allineata e il punteggio del segnale", async () => {
     await detectForMatch(
       fullMkt.matchId,
       fullKickoff,
@@ -765,14 +768,18 @@ async function main(): Promise<void> {
     assert(signal !== null, "segnale assente sulla fixture a mercato completo");
     const clv = await computeClvForSignal(signal!.id);
     assertEqual(clv.action, "computed");
-    assertEqual(clv.basis, "fair_novig");
+    assertEqual(clv.basis, "raw_consensus");
 
     const [row] = await db
       .select()
       .from(clvRecords)
       .where(eq(clvRecords.signalId, signal!.id));
-    assertEqual(row.closingBasis, "fair_novig");
-    assert(num(row.marketMargin) !== null, "margine non propagato al record CLV");
+    assertEqual(row.closingBasis, "raw_consensus");
+    assertEqual(
+      num(row.marketMargin),
+      null,
+      "la base grezza non rimuove margine: il record non deve portarlo",
+    );
     assert(num(row.signalScore) !== null, "punteggio del segnale non propagato");
   });
 

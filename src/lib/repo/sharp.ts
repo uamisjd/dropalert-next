@@ -23,6 +23,7 @@ import {
   matchKey,
   monthKey,
   readOddsApiKey,
+  wireMatchKey,
   type BudgetDecision,
 } from "@/lib/providers/optional/odds-api-budget";
 import {
@@ -65,6 +66,23 @@ async function addCredits(key: string, add: number, now: Date): Promise<void> {
     .insert(systemState)
     .values({ key, value, updatedAt: now })
     .onConflictDoUpdate({ target: systemState.key, set: { value, updatedAt: now } });
+}
+
+/**
+ * La partita è già stata letta oggi dal cablaggio del ciclo?
+ *
+ * La scheda partita deve saperlo: se il cablaggio ha già speso il credito
+ * della giornata per questa partita, la linea sharp non lo ri-spende. La
+ * regola vale in entrambi i sensi (il cablaggio controlla già la cache
+ * sharp): il tetto «una lettura per partita al giorno» è del sistema.
+ */
+async function wireReadToday(matchId: number, now: Date): Promise<boolean> {
+  const [row] = await db
+    .select({ value: systemState.value })
+    .from(systemState)
+    .where(eq(systemState.key, wireMatchKey(matchId, now)))
+    .limit(1);
+  return row !== undefined;
 }
 
 async function readSnapshot(
@@ -163,11 +181,17 @@ export async function getSharpLine(
     };
   }
 
+  /* «già letta oggi» va verificato su ENTRAMBI i percorsi che spendono
+     crediti: la cache di questa funzione e il marcatore del cablaggio.
+     Se il cablaggio ha letto la partita oggi, rileggerla qui spenderebbe
+     un secondo credito per lo stesso (partita, giorno). */
+  const wireRead = await wireReadToday(params.matchId, now).catch(() => false);
+
   const decision: BudgetDecision = decide(
     {
       usedThisMonth: budget.usedThisMonth,
       usedToday: budget.usedToday,
-      matchAlreadyRead: false,
+      matchAlreadyRead: cached !== null || wireRead,
       signalActive: params.signalActive,
     },
     now,

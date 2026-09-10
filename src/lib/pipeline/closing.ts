@@ -8,11 +8,15 @@
  * Regole:
  *  - si registra l'ultima osservazione per ogni bookmaker prima del kickoff;
  *  - quando il mercato è COMPLETO per un bookmaker si calcola anche la
- *    chiusura fair senza margine (no-vig, metodo proporzionale): è la base
- *    di confronto preferita per il CLV, perché confronta stima con stima e
- *    non stima con margine;
- *  - se il mercato è incompleto la chiusura fair resta NULL e il CLV usa la
- *    chiusura grezza DICHIARANDOLO nel campo `closingBasis`;
+ *    chiusura fair senza margine (no-vig, metodo proporzionale): resta a
+ *    registro come informazione di qualità della linea, ma NON è la base
+ *    del CLV (vedi la regola sotto);
+ *  - il CLV confronta il prezzo del segnale con la chiusura GREZZA di
+ *    consenso: il prezzo del segnale è sempre grezzo (margine incluso) e nel
+ *    registro non ne esiste una versione depurata, quindi la coppia allineata
+ *    è grezzo-contro-grezzo (`closingBasis = "raw_consensus"`). Confrontare
+ *    il segnale grezzo con la chiusura fair deprime il CLV di un importo
+ *    meccanico, misurato in −1,86 pp (`docs/STUDIO-PARTITE-FINITE.md` §1.1);
  *  - la cattura NON dipende dall'esistenza di un segnale: ogni partita
  *    monitorata che supera il kickoff lascia la sua chiusura a registro;
  *  - se non ci sono prezzi prima del kickoff si registra un data gap e NON
@@ -35,7 +39,6 @@ import { computeClv } from "@/lib/drop/clv";
 import { median, num, round } from "@/lib/drop/math";
 import {
   MARKET_SELECTIONS,
-  NOVIG_METHOD,
   SCORE_BUCKETS,
   fairMarket,
   scoreBucketOf,
@@ -316,7 +319,7 @@ export async function getClosingConsensus(
 export interface ClosingReference {
   price: number;
   basis: ClosingBasis;
-  /** margine mediano rimosso, presente solo con base fair */
+  /** sempre null sulla base allineata: la chiusura grezza non rimuove margine */
   margin: number | null;
   booksUsed: number;
 }
@@ -324,9 +327,17 @@ export interface ClosingReference {
 /**
  * Riferimento di chiusura da usare per il CLV.
  *
- * Preferisce la chiusura fair senza margine. Se nessun bookmaker aveva il
- * mercato completo ripiega sulla chiusura grezza e lo dichiara, invece di
- * restituire un numero di provenienza ambigua.
+ * Il prezzo del segnale (`dropSignals.detectedPrice`) è sempre un prezzo
+ * grezzo, margine incluso: nel registro non esiste una sua versione depurata.
+ * Il CLV confronta quindi quel prezzo con la chiusura GREZZA di consenso
+ * (mediana delle chiusure grezze per bookmaker), così le due metà stanno
+ * sulla stessa base. La chiusura fair resta calcolata e salvata in
+ * `closing_lines` come informazione di qualità della linea, ma non è la base
+ * del CLV: mescolare le due basi deprime il numero di un importo meccanico
+ * (misurato in −1,86 pp, `docs/STUDIO-PARTITE-FINITE.md` §1.1).
+ *
+ * Lo storico precedente, scritto con base `fair_novig`, si riallinea con
+ * `npm run clv:rebase` (`src/scripts/rebase-clv.ts`), passaggio umano.
  */
 export async function getClosingReference(
   matchId: number,
@@ -334,11 +345,7 @@ export async function getClosingReference(
   selection: SelectionCode,
 ): Promise<ClosingReference | null> {
   const rows = await db
-    .select({
-      closingPrice: closingLines.closingPrice,
-      fairClosingPrice: closingLines.fairClosingPrice,
-      marketMargin: closingLines.marketMargin,
-    })
+    .select({ closingPrice: closingLines.closingPrice })
     .from(closingLines)
     .where(
       and(
@@ -350,29 +357,10 @@ export async function getClosingReference(
 
   if (rows.length === 0) return null;
 
-  const fair = rows
-    .map((r) => num(r.fairClosingPrice))
-    .filter((v): v is number => v !== null);
-
-  if (fair.length > 0) {
-    const margins = rows
-      .map((r) => num(r.marketMargin))
-      .filter((v): v is number => v !== null);
-    const price = median(fair);
-    if (price !== null) {
-      return {
-        price,
-        basis: "fair_novig",
-        margin: median(margins),
-        booksUsed: fair.length,
-      };
-    }
-  }
-
-  const rawPrice = median(rows.map((r) => num(r.closingPrice)));
-  if (rawPrice === null) return null;
+  const price = median(rows.map((r) => num(r.closingPrice)));
+  if (price === null) return null;
   return {
-    price: rawPrice,
+    price,
     basis: "raw_consensus",
     margin: null,
     booksUsed: rows.length,
@@ -506,10 +494,7 @@ export async function computeClvForSignal(signalId: number): Promise<ClvOutcome>
     signalScore: signal.confidenceScore,
   });
 
-  const basisLabel =
-    reference.basis === "fair_novig"
-      ? `chiusura fair senza margine (${NOVIG_METHOD})`
-      : "chiusura grezza di consenso (margine non rimovibile)";
+  const basisLabel = "chiusura grezza di consenso (base allineata al segnale grezzo)";
 
   await db.insert(signalEvents).values({
     signalId,

@@ -288,9 +288,11 @@ Regole:
   credito) resta lo step esplicito dello smoke (§5).
 - **L'adapter resta OFF** (`ADAPTER_IMPLEMENTED=false`): è un inserimento
   manuale di verifica, non un'attivazione.
-- Le leghe catturabili sono dichiarate in `odds-capture-league.ts` (base
-  esplicita e verificata: Serie A/B, Premier, Liga, Bundesliga, Ligue 1).
-  Una chiave fuori base → la rotta risponde `null` e non inventa un titolo.
+- Le leghe catturabili sono derivate dal catalogo reale della fonte in
+  `odds-capture-league.ts` (le 39 competizioni attive, meno le esclusioni
+  dichiarate: MLS non servita dal piano, World Cup senza round-trip). Una
+  chiave fuori base → la rotta risponde `null` con il motivo e non inventa
+  un titolo.
 
 ## 11. Esito del primo smoke test live (06/09/2026)
 

@@ -145,6 +145,36 @@ function stripAliasPrefix(league: string): string {
 }
 
 /**
+ * Separa il titolo del catalogo in (paese, lega) PRESERVANDO la grafia
+ * originale, al contrario di `splitTitle` che restituisce forme canonicalizzate.
+ *
+ * Serve alla base di cattura: il titolo «Paese: Lega» che scriviamo in
+ * `leagues.name` deve essere leggibile (accenti e maiuscole giusti), non una
+ * forma normalizzata. Il riconoscimento del paese usa lo stesso elenco di
+ * `splitTitle`, quindi i due restano coerenti: se `splitTitle` vede un paese,
+ * anche questo lo vede — e viceversa.
+ *
+ * `country` è `null` quando il titolo non inizia con un paese riconosciuto
+ * («EPL», «UEFA Champions League», «MLS», «World Cup»…): in quel caso la
+ * base di cattura deve fornire il paese con un override esplicito, oppure
+ * rinunciare (fallire chiuso).
+ */
+export function catalogTitleParts(
+  title: string,
+): { country: string | null; league: string } {
+  const trimmed = title.trim();
+  const words = trimmed.split(/\s+/);
+  for (let len = Math.min(2, words.length); len >= 1; len--) {
+    const prefix = words.slice(0, len).join(" ");
+    const canonical = normalizeCountry(norm(prefix));
+    if (COUNTRY_SET.has(canonical)) {
+      return { country: prefix, league: words.slice(len).join(" ") };
+    }
+  }
+  return { country: null, league: trimmed };
+}
+
+/**
  * Forme alternative del nome di una lega che la fonte può usare in modo
  * diverso dall'archivio (es. «EFL Championship» ≈ «Championship»).
  */

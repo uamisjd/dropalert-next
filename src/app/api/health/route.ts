@@ -23,6 +23,8 @@ import {
   initProviders,
   perBookmakerOddsUnavailable,
 } from "@/lib/providers";
+import { wireGate } from "@/lib/providers/optional/odds-collect-wire";
+import { getSharpBudget } from "@/lib/repo/sharp";
 
 export const dynamic = "force-dynamic";
 
@@ -74,6 +76,12 @@ export async function GET() {
     const degraded = sources.filter((s) => s.status === "degraded");
     const totalOpenGaps = openGaps.reduce((a, g) => a + g.n, 0);
     const lastRun = runs[0] ?? null;
+
+    /* Stato del cablaggio per-bookmaker: è una fase del ciclo, non una fonte.
+       Si accende solo con entrambi i flag; qui si dichiara lo stato reale e,
+       quando è acceso, anche il budget condiviso con la linea sharp. */
+    const wire = wireGate(process.env);
+    const wireBudget = wire.enabled ? await getSharpBudget() : null;
 
     /* Lo stato complessivo è pessimistico per scelta: preferiamo dichiarare
        dati parziali piuttosto che presentare un quadro incompleto. */
@@ -128,7 +136,14 @@ export async function GET() {
         perBookmakerOdds: !perBookmakerOddsUnavailable(),
         note: perBookmakerOddsUnavailable()
           ? "Nessuna fonte attiva espone quote per singolo bookmaker: coordinazione fra book e conferma della linea sharp NON sono calcolabili e restano dichiarate come non disponibili."
-          : "Almeno una fonte può leggere quote per singolo bookmaker, ma il ciclo di raccolta non la usa: i segnali pubblicati restano su consenso e il buco bookmaker_missing è ancora aperto.",
+          : wire.enabled
+            ? "Cablaggio per-bookmaker ATTIVO nel ciclo di raccolta: le linee per singolo bookmaker alimentano coordinazione e conferma sharp sui segnali attivi coperti."
+            : "Almeno una fonte può leggere quote per singolo bookmaker e il cablaggio nel ciclo è pronto ma SPENTO (servono ODDS_WIRE_COLLECT=true e DROP_EXCLUDE_CONSENSUS_BOOKS=true): i segnali pubblicati restano su consenso finché non viene acceso.",
+      },
+      wire: {
+        enabled: wire.enabled,
+        reason: wire.reason,
+        budget: wireBudget,
       },
       dataGaps: {
         open: totalOpenGaps,

@@ -5,11 +5,11 @@
  * `(probChiusura − probSegnale) × 100`, ma le due probabilità non stanno
  * sempre sulla stessa base. La colonna `closing_basis` registra quale:
  *
- *  - `fair_novig`    → chiusura depurata dal margine (confronto corretto);
- *  - `raw_consensus` → chiusura grezza, margine incluso: il segnale (prezzo
- *                      grezzo) viene confrontato con un numero di natura
- *                      diversa, e il CLV esce depresso di un importo
- *                      meccanico.
+ *  - `fair_novig`    → chiusura depurata dal margine contro un segnale che è
+ *                      SEMPRE grezzo: le due metà NON stanno sulla stessa base
+ *                      e il CLV esce depresso di un importo meccanico;
+ *  - `raw_consensus` → chiusura grezza come il segnale: grezzo contro grezzo,
+ *                      le due metà stanno sullo stesso piano.
  *
  * Lo studio sulle partite finite quantifica quell'importo: **−1,86 pp di CLV
  * bruciati dal solo errore di base**, media su 37 362 osservazioni, con il

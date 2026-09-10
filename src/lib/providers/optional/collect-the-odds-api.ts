@@ -12,11 +12,25 @@ export interface CollectTheOddsApiParams {
   awayTeam: string;
   kickoffAt: Date;
   runId?: number | null;
+  /**
+   * Sorgente scritta su `odds_snapshots`. Default: la sorgente di produzione
+   * dell'adapter. Lo smoke test la cambia (`the-odds-api-wire-smoke`) per non
+   * mescolare una verifica ai dati reali, come già fa `smoke:odds-api`.
+   */
+  source?: string;
 }
 
 export interface CollectTheOddsApiResult {
   result: ProviderResult<OddsQuoteDTO[]>;
   persistence: ProviderSnapshotWriteReport | null;
+  /**
+   * Errore di persistenza, quando la lettura è riuscita ma la scrittura in
+   * `odds_snapshots` è fallita. La lettura è un fatto avvenuto (il credito
+   * è stato addebitato dalla fonte) e va contato comunque: separare la
+   * scrittura dalla lettura evita di perdere la contabilità del budget
+   * quando il database è momentaneamente non raggiungibile.
+   */
+  persistenceError: string | null;
 }
 
 /**
@@ -42,14 +56,22 @@ export async function collectAndPersistTheOddsApiOdds(
   });
 
   if (!result.ok || result.data.length === 0) {
-    return { result, persistence: null };
+    return { result, persistence: null, persistenceError: null };
   }
 
-  const persistence = await writeProviderSnapshots(
-    params.matchId,
-    result.data,
-    params.runId ?? null,
-    THE_ODDS_API_SNAPSHOT_SOURCE,
-  );
-  return { result, persistence };
+  try {
+    const persistence = await writeProviderSnapshots(
+      params.matchId,
+      result.data,
+      params.runId ?? null,
+      params.source ?? THE_ODDS_API_SNAPSHOT_SOURCE,
+    );
+    return { result, persistence, persistenceError: null };
+  } catch (err) {
+    return {
+      result,
+      persistence: null,
+      persistenceError: err instanceof Error ? err.message : String(err),
+    };
+  }
 }

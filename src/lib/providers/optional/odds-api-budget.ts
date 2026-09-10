@@ -54,6 +54,26 @@ export function matchKey(matchId: number, now: Date): string {
   return `odds-api:match:${romeParts.format(now)}:${matchId}`;
 }
 
+/** Marcatore «la partita è già stata letta oggi dal cablaggio del ciclo». */
+export function wireMatchKey(matchId: number, now: Date): string {
+  return `odds-api:wire:match:${romeParts.format(now)}:${matchId}`;
+}
+
+/**
+ * Un solo lettura per partita al giorno, attraverso TUTTI i percorsi che
+ * spendono crediti: la linea sharp della scheda partita e il cablaggio nel
+ * ciclo. Se uno dei due ha già letto oggi, la partita non è rileggibile
+ * nemmeno dall'altro: il tetto è del sistema, non del singolo percorso.
+ * Senza questa regola il cablaggio e la scheda partita potrebbero spendere
+ * due crediti sulla stessa partita nella stessa giornata.
+ */
+export function alreadyReadToday(
+  sharpCacheHit: boolean,
+  wireMarkerHit: boolean,
+): boolean {
+  return sharpCacheHit || wireMarkerHit;
+}
+
 /** Giorni residui nel mese italiano, oggi compreso. */
 export function daysLeftInMonth(now: Date): number {
   const iso = romeParts.format(now);

@@ -365,6 +365,31 @@ Dichiarata nel registry ma disattivata: il piano gratuito non regge un
 polling frequente. Richiede `ODDS_API_ENABLED=true` e `ODDS_API_KEY`.
 Il sistema funziona senza di essa e senza alcuna chiave API.
 
+### Cablaggio per-bookmaker nel ciclo di raccolta (fase parallela, dietro flag)
+
+La fase porta nel giro le quote per singolo bookmaker di The Odds API,
+perché il motore possa misurare coordinazione e conferma sharp sui segnali.
+È **spenta di default** e governata dal budget di `odds-api-budget.ts`
+(490 crediti/mese, 14/giorno, 1 lettura/partita/giorno): legge solo segnali
+`active` con indice di fiducia ≥ 45 su competizioni coperte, scrive le linee
+per-book in `odds_snapshots` e non tocca il flusso BetExplorer.
+
+Accenderla richiede **due flag insieme** — mai uno solo:
+
+- `ODDS_WIRE_COLLECT=true` — attiva la fase;
+- `DROP_EXCLUDE_CONSENSUS_BOOKS=true` — marca la riga di consenso perché il
+  motore la escluda da mediana e coordinazione. Senza di esso, le linee
+  per-book **inquinerebbero** il consenso di BetExplorer (che oggi è corretto
+  proprio perché in `odds_snapshots` c'è una sola riga) e falserebbero la
+  misura dei segnali esistenti.
+
+L'accensione resta un passo deliberato, da fare solo dopo uno smoke test live
+del cablaggio e un confronto prima/dopo sui punteggi in modalità mista:
+dettagli in `docs/STUDIO-CABLAGGIO-ODDS.md` §4.7 e procedura in
+`docs/REGOLE-OPERATIVE-ODDS.md`. Lo smoke test è pronto e a costo zero per
+l'elenco candidati (`npm run smoke:odds-wire`), con lettura reale opzionale da
+1 credito (`npm run smoke:odds-wire -- --read <id>`).
+
 ### Variabili d'ambiente delle fonti
 
 | Variabile | Default | Effetto |
@@ -374,6 +399,8 @@ Il sistema funziona senza di essa e senza alcuna chiave API.
 | `BETEXPLORER_MIN_INTERVAL_MS` | `4000` | intervallo minimo fra richieste |
 | `BETEXPLORER_LISTING_TTL_MS` | `30000` | validità della cache dell'elenco |
 | `ODDS_API_ENABLED` | `false` | accende the-odds-api (serve la chiave) |
+| `ODDS_WIRE_COLLECT` | `false` | attiva la fase per-bookmaker nel ciclo di raccolta |
+| `DROP_EXCLUDE_CONSENSUS_BOOKS` | `false` | esclude la riga di consenso da mediana e coordinazione (necessario insieme al precedente) |
 
 ### Variabili d'ambiente del Contesto 360°
 
