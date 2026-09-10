@@ -1,19 +1,126 @@
 # Handoff — DropAlert: stato lavori, infrastruttura live, cosa continuare
 
-> Documento di continuità fra sessioni di lavoro. Ultimo aggiornamento: 2026-09-06.
-> PR #11 (ramo `arena/01a0707a-dropalert-next` → `main`): MERGIATA.
-> PR #12 (ramo `arena/01a07101-dropalert-next` → `main`): MERGIATA su richiesta
-> dell'utente in questa sessione — è il primo fix descritto in §8.
-> PR #13 (ramo `arena/01a0717b-dropalert-next` → `main`): merge autorizzato
-> dall'utente il 05.09; contiene profilo collect-only, diagnostica health,
-> separazione dei due heartbeat e scansione concorrente descritti in §8–§9.
-> Stato canonico: `https://github.com/uamisjd/dropalert-next/pull/13`.
-> Gli orari di questo
-> documento sono in UTC quando hanno la `Z`; le pagine del sito li mostrano in
-> ora italiana (estate = UTC+2) — non confondere i due, il «giro delle 10:22»
-> è le 12:22 a Napoli.
+> Documento di continuità fra sessioni di lavoro. Ultimo aggiornamento: **2026-09-10**.
+> **Leggi prima §0** (ripartenza di oggi): dice dove siamo, cosa è acceso e
+> cosa fare adesso. Da `## Stato decisionale — aggiornamento 2026-09-06` in poi
+> il testo è **storico** (PR #11–#22): utile come contesto, non come stato corrente.
+> Gli orari di questo documento sono in UTC quando hanno la `Z`; le pagine del
+> sito li mostrano in ora italiana (estate = UTC+2) — non confondere i due.
 
-## Stato decisionale — aggiornamento 2026-09-06
+---
+
+## 0. RIPARTENZA — aggiornamento 2026-09-10
+
+### 0.1 Dove siamo (verificato, non a memoria)
+
+- **PR #26 MERGIATA su `main`** (ramo `arena/01a086f3-dropalert-next`,
+  `https://github.com/uamisjd/dropalert-next/pull/26`). Conteneva: onestà
+  fonte/verdetto (`/arbitrage`, `/api/health`, motore `drop`), copertura The Odds
+  API **guidata dal catalogo reale**, cattura senza terminale, `SMOKE OK` live.
+  Per l'hash esatto: `git log --oneline -1 main` (dopo il merge il primo commit è
+  il merge di #26).
+- **Obiettivo dell'utente raggiunto**: `SMOKE OK` su dati reali **senza terminale**
+  (match #788 Venezia—Fiorentina, 72 quote da 24 bookmaker, freshness a 0 min).
+  Dettagli in `docs/SMOKE-THE-ODDS-API.md` §17.
+- **Regola d'oro dell'utente (vincolante)**: NON deve esistere una distinzione fra
+  leghe "minori" e "maggiori" — il sistema deve individuare la partita giusta da
+  giocare ovunque la fonte abbia davvero i dati. La copertura è quindi guidata dal
+  catalogo reale (`sport-catalog.ts`), non da una lista a monte.
+
+### 0.2 Cosa è ACCESO e cosa è SPENTO (attenzione: qui è facile confondersi)
+
+| Cosa | Stato | Nota |
+|---|---|---|
+| Flag adapter su **Vercel Production** | **ACCESO** (`perBookmakerOdds: true`, health "Attiva") | attivazione del 06/09, env su Vercel |
+| Default nel **codice** | `ADAPTER_IMPLEMENTED = envFlag("ODDS_ADAPTER_IMPLEMENTED", false)` | test/dev spenti senza env |
+| Cablaggio nel **ciclo di raccolta** | **NON fatto** | i segnali restano su **consenso** BetExplorer; `bookmaker_missing` ~987 aperto |
+| Effetto pratico | l'adapter **legge** se interrogato (scheda partita, script), ma **non alimenta** il monitor | per questo il sito non può ancora calcolare coordinazione cross-book e conferma sharp sui segnali |
+
+Dopo il merge di #26 anche `/api/health` lo dichiara con parole oneste
+(«può leggere… NON entra di default nel ciclo di raccolta»). **Verifica
+post-merge consigliata**: aprire `https://dropalert-next.vercel.app/api/health` e
+controllare che la nota sia quella nuova (se dice ancora «Quote per singolo
+bookmaker disponibili.» il deploy di `main` non è ancora aggiornato).
+
+### 0.3 Il lavoro vero che resta (in ordine di priorità)
+
+1. **Cablaggio dell'adapter per-bookmaker nel ciclo di raccolta** — è IL passo che
+   cambia la sostanza: finché non entra, coordinazione e conferma sharp restano non
+   calcolabili e il buco `bookmaker_missing` non si chiude.
+   ⚠️ **Leggere prima `docs/STUDIO-CABLAGGIO-ODDS.md` §4.7**: il cablaggio
+   "ingenuo" **inquina il consenso** (una linea per-bookmaker sommata alla linea di
+   consenso falsa la mediana). Il flag `DROP_EXCLUDE_CONSENSUS_BOOKS` esiste già
+   (`src/lib/repo/odds.ts:26`, **default `false`**) e serve a marcare il consenso
+   perché il motore lo escluda. Sequenza corretta: cablaggio **dietro flag** +
+   smoke test live + contatori di budget, poi eventuale accensione.
+2. **Ampliare la "base di cattura"** (`src/lib/providers/optional/odds-capture-league.ts`,
+   `CAPTURABLE`) e/o permettere all'utente di **seguire leghe servite** (Serie A,
+   Premier, Liga, Bundesliga, Ligue 1), così le partite che il sito mostra sono
+   partite che hanno davvero un prezzo individuale.
+3. **Audit del matching dei nomi** (punto 2 del vecchio "ordine di lavoro"): restano
+   volutamente non-matching le abbreviazioni («Man Utd» ↔ «Manchester United») e i
+   qualificatori diversi («Vitoria Guimaraes» ↔ «Vitoria SC»). Ogni nuovo caso costa
+   1 credito ma si spiega gratis con la diagnosi `/events`.
+4. **Decisioni aperte dell'utente** già scritte in `docs/DECISIONI-APERTE.md`
+   (in particolare la base mista del CLV): sono scelte, non guasti.
+
+### 0.4 Contesto della fonte (verificato il 10/09/2026 — non riscoprirlo)
+
+- `GET /v4/sports` è **gratuito** (0 crediti) e dà il catalogo: 44 sport, 41 calcio,
+  **39 attivi**. `soccer_mls` è nel catalogo ma la fonte risponde **HTTP 404** sulle
+  sue partite → **non servito dal piano gratuito**. The Odds API usa 404 (non 403)
+  **apposta** per "sport non disponibile sul tuo tier".
+- `soccer_italy_serie_a` funziona: **20 eventi**, 0 crediti; la lettura vera costa
+  **1 credito** (72 quote, 24 bookmaker, incluso Pinnacle).
+- Quindi: le leghe dell'archivio BetExplorer (Algeria, Egitto, Georgia, Colombia,
+  Brasile Serie B, Canada, Copa, Youth…) **non hanno prezzi** su questa fonte.
+  Non è un bug della mappa: è il perimetro del piano.
+- Budget mensile **490 crediti**; i contatori e l'hard-stop stanno in
+  `src/lib/providers/optional/odds-api-budget.ts`. `decide()` resta **l'unico
+  gate di rete**.
+
+### 0.5 Mappa dei file toccati dal lavoro "Odds" (per orientarsi in fretta)
+
+| File | Ruolo |
+|---|---|
+| `src/lib/providers/optional/sport-catalog.ts` | catalogo reale (39 leghe attive) + `resolveSportKeyFromCatalog` (vincolo di paese, collision-safe) |
+| `src/lib/providers/optional/sport-keys.ts` | `MAP` curata (1ª passata) + fallback catalogo; `COVERED_SPORT_KEYS`, `isCoveredBySportKey` |
+| `src/lib/providers/optional/odds-coverage.ts` | classifica copertura (`mapped`/`near`/`uncovered`/`unknown`); `near` **mai** usato come certezza |
+| `src/lib/providers/optional/odds-capture-league.ts` | base esplicita delle leghe catturabili (`CAPTURABLE`) |
+| `src/lib/providers/optional/ingest-odds-event.ts` | scrive evento della fonte in `leagues`/`teams`/`matches` (riusa le chiavi anagrafiche) |
+| `src/app/api/jobs/capture-odds/route.ts` | rotta protetta GET/POST per portare in archivio una partita servita (0 crediti) |
+| `src/lib/providers/optional/odds-match-resolver.ts` | matching partita↔evento; nota override corretta (non dice più "fuori mappa" per leghe coperte) |
+| `docs/SMOKE-THE-ODDS-API.md` | procedura + §10-bis cattura + §17 esito `SMOKE OK` |
+
+### 0.6 Come si verifica (senza terminale, come vuole l'utente)
+
+1. **Cattura** (0 crediti) — aprire nel browser:
+   `https://<deploy>/api/jobs/capture-odds?token=<JOBS_TOKEN>&sportKey=soccer_italy_serie_a`
+   → risponde JSON con `matchId`.
+2. **Smoke** (1 credito) — GitHub → Actions → **`Verifica dati reali (manuale)`** →
+   Run workflow con `which=smoke-odds`, `match_id=<id>`, `sport_key=soccer_italy_serie_a`,
+   `ore` vuoto, **branch = ramo della sessione**.
+   ⚠️ se il passo `Smoke The Odds API` esce **⊘ (saltato)** il motivo è `which` rimasto
+   su `both`, non un guasto.
+3. **Comandi locali** (se serve): `npm ci --include=dev` (la sandbox perde
+   `node_modules` fra una sessione e l'altra), poi `npm run typecheck`,
+   `npm run test:odds-sports`, `npm run test:odds-resolver`, `npm run build`.
+
+### 0.7 Trappole già incontrate (non ripeterle)
+
+- **`node_modules` sparisce** fra le sessioni: rilanciare `npm ci --include=dev`.
+- **Il checkout può essere riclonato** (reflog con solo `clone`): confrontare con
+  `git ls-remote origin <ramo>` prima di committare, per non perdere storia.
+- **`gh pr edit` può fallire** con errore GraphQL (Projects classic): usare
+  `gh api -X PATCH repos/<owner>/<repo>/pulls/<n> -F title=... -F body=@file`.
+- **Mai toccare `.github/workflows/`** via push (il token non ha scope `workflow`).
+- **Mai cambiare ramo**: lavoro e push solo sul ramo della sessione; PR verso `main`.
+- **Il 404 di The Odds API** su una lega = limite del piano, non un bug nostro.
+- Un `near` (somiglianza) **non è** copertura: non promuoverlo a certezza.
+
+---
+
+## Stato decisionale — aggiornamento 2026-09-06 (STORICO)
 
 Il progetto è in trasformazione da monitor dei drop a supporto decisionale quantitativo,
 ma **non esiste ancora una giocata operativa verificata**. La specifica vincolante è
