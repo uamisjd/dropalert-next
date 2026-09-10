@@ -97,8 +97,13 @@ bookmaker disponibili.» il deploy di `main` non è ancora aggiornato).
    (`test:odds-sports`).
 3. **Audit del matching dei nomi** (punto 2 del vecchio "ordine di lavoro"): restano
    volutamente non-matching le abbreviazioni («Man Utd» ↔ «Manchester United») e i
-   qualificatori diversi («Vitoria Guimaraes» ↔ «Vitoria SC»). Ogni nuovo caso costa
-   1 credito ma si spiega gratis con la diagnosi `/events`.
+   qualificatori diversi («Vitoria Guimaraes» ↔ «Vitoria SC»). La parte di codice è
+   già coperta da test (`odds-match-resolver.test.ts`): la diagnosi `/events` è
+   gratuita e avviene **prima** di spendere il credito, il caso particella «de»
+   passa per token, «Inter»⊂«Internazionale» per sottostringa. Resta solo la parte
+   operativa: passare in rassegna i casi reali e, dove la grafia interna è sbagliata
+   in modo sistematico, correggere l'**anagrafica** delle squadre — non aggiungere
+   eccezioni al matcher.
 4. **Decisioni aperte dell'utente** già scritte in `docs/DECISIONI-APERTE.md`.
    ✅ **Base del CLV — decisa e allineata il 10/09/2026 (codice):** la coppia
    corretta è **grezzo contro grezzo** (`closingBasis = "raw_consensus"`); la
