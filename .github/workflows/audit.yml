@@ -116,21 +116,23 @@ jobs:
           else
             npm run odds:find -- --ore ${{ inputs.ore }} 2>&1 | sed -E "$MASK"
           fi
-           # Smoke test del cablaggio per-bookmaker (fase «1b» del ciclo)
-    - name: Smoke cablaggio per-bookmaker
-      if: inputs.which == 'smoke-wire'
-      run: |
-        echo "MARKER-SMOKE-WIRE-BRANCH-v1"
-        if [ -z "$THE_ODDS_API_KEY" ]; then
-          echo "::error::Chiave The Odds API assente fra i secrets (THE_ODDS_API_KEY / ODDS_API_KEY / theoddsapiKey)."
-          exit 1
-        fi
-        MASK='s#(postgres(ql)?://)[^[:space:]"'"'"']*#\1<redacted>#g'
-        if [ -n "${{ inputs.match_id }}" ]; then
-          npm run smoke:odds-wire -- --read ${{ inputs.match_id }} 2>&1 | sed -E "$MASK"
-        else
-          npm run smoke:odds-wire 2>&1 | sed -E "$MASK"
-        fi
+             # Smoke test del cablaggio per-bookmaker (fase «1b» del ciclo): elenco
+   # candidati (0 crediti) e lettura reale (1 credito) con la stessa
+   # persistenza del ciclo. Vedi docs/REGOLE-OPERATIVE-ODDS.md.
+   - name: Smoke cablaggio per-bookmaker
+     if: inputs.which == 'smoke-wire'
+     run: |
+       echo "MARKER-SMOKE-WIRE-BRANCH-v1"
+       if [ -z "$THE_ODDS_API_KEY" ]; then
+         echo "::error::Chiave The Odds API assente fra i secrets (THE_ODDS_API_KEY / ODDS_API_KEY / theoddsapiKey)."
+         exit 1
+       fi
+       MASK='s#(postgres(ql)?://)[^[:space:]"'"'"']*#\1<redacted>#g'
+       if [ -n "${{ inputs.match_id }}" ]; then
+         npm run smoke:odds-wire -- --read ${{ inputs.match_id }} 2>&1 | sed -E "$MASK"
+       else
+         npm run smoke:odds-wire 2>&1 | sed -E "$MASK"
+       fi
 
       # Lettura di controllo sul PERCORSO DI PRODUZIONE (getSharpLine) per un
       # campionato coperto: budget → mappa → decisione → lettura reale →
