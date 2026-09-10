@@ -68,16 +68,19 @@ bookmaker disponibili.» il deploy di `main` non è ancora aggiornato).
    (26 asserzioni). **Restano i passi umani**: smoke test live del cablaggio +
    confronto prima/dopo sui punteggi in modalità mista, poi accensione dei due
    flag su Vercel (il token dell'agente non tocca Vercel).
-   ⚠️ **Stato smoke live (10/09/2026)**: `smoke:odds-wire` è pronto e testato
-   (gate «SPENTO» stampato correttamente), ma in sandbox non c'è `DATABASE_URL`
-   né la chiave, e l'egress non raggiunge Neon → l'esecuzione è possibile **solo
-   su GitHub Actions**, dove però manca una modalità `smoke-wire` nella workflow
-   manuale. L'agente non può aggiungerla (push di `.github/workflows` rifiutato)
-   né lanciare workflow (`gh workflow run` → 403). Patch pronta e verificata
-   (`git apply --check` ok, YAML valido) in `/home/user/smoke-wire-mode.patch`:
-   aggiunge `which=smoke-wire` a `audit.yml` (elenco candidati 0 crediti,
-   `--read <id>` 1 credito). Da applicare sul branch e lanciare con `-f
-   which=smoke-wire` (+ `-f match_id=<id>` per la lettura).
+   ✅ **Smoke live ESEGUITO (10/09/2026, run `34470604421` su GitHub Actions,
+   `which=smoke-wire`):** l'umano ha aggiunto la modalità `smoke-wire` a
+   `audit.yml` (3 commit: `ad58423`, `e46b7a1`, `181b03d`; l'ultimo ha
+   corretto l'indentazione del passo). Esito: marker
+   `MARKER-SMOKE-WIRE-BRANCH-v1` presente, passo **success**, flag **SPENTO**
+   col motivo corretto, **0 candidati** («oggi nessun segnale attivo su
+   competizione coperta»), **0 crediti**. L'infrastruttura del percorso è
+   verificata contro il DB reale; manca solo la **lettura reale** (1 credito),
+   che richiede un candidato: rilanciare `which=smoke-wire` quando il giro
+   avrà segnali `active` con indice ≥ 45 su competizione coperta, poi
+   `-f match_id=<id>`. Nota minore: con `which=smoke-wire` il passo
+   «Sguardo sui dati (read-only)» esegue comunque i due audit (innocuo,
+   read-only): eventuale pulizia futura della condizione `if` del passo.
 2. **Ampliare la "base di cattura"** (`src/lib/providers/optional/odds-capture-league.ts`,
    `CAPTURABLE`) e/o permettere all'utente di **seguire leghe servite** (Serie A,
    Premier, Liga, Bundesliga, Ligue 1), così le partite che il sito mostra sono
