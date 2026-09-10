@@ -12,12 +12,22 @@ export interface PricePoint {
   isStale?: boolean;
 }
 
-/** Serie completa di un bookmaker su una selezione. */
+/**
+ * Serie completa di un bookmaker su una selezione.
+ *
+ * `isConsensus` distingue una linea di consenso (aggregato di più operatori,
+ * es. `betexplorer-consensus`) da un bookmaker reale: il motore NON deve
+ * contare un aggregato come se fosse un operatore, né lasciarlo inquinare la
+ * mediana di consenso. Quando non valorizzato (undefined) la serie è trattata
+ * come un bookmaker reale: così il comportamento attuale resta invariato finché
+ * la sorgente non popola il flag.
+ */
 export interface BookmakerSeries {
   bookmakerId: number;
   bookmakerKey: string;
   bookmakerName: string;
   isSharp: boolean;
+  isConsensus?: boolean;
   weight: number;
   points: PricePoint[];
 }

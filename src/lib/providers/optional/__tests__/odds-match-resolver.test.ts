@@ -279,19 +279,53 @@ test("stato inatteso parte lo stesso ma lo dichiara", () => {
 });
 
 test("lega fuori mappa: rifiutata senza override, leggibile con chiave esplicita", () => {
-  const scotland = { ...row, leagueName: "Scotland: Premiership" };
-  const senza = resolveSmokeMatch(scotland, new Date("2026-09-10T12:00:00.000Z"));
+  // Algeria Ligue 1 NON è nel catalogo reale della fonte: resta fuori copertura.
+  const algeria = { ...row, leagueName: "Algeria: Ligue 1" };
+  const senza = resolveSmokeMatch(algeria, new Date("2026-09-10T12:00:00.000Z"));
   assert(!senza.ok, "senza override la mappa di produzione rifiuta");
 
   const con = resolveSmokeMatch(
-    scotland,
+    algeria,
     new Date("2026-09-10T12:00:00.000Z"),
-    "soccer_spl",
+    "soccer_france_ligue_one",
   );
   assert(con.ok, "con override esplicito è leggibile");
   if (con.ok) {
-    assert(con.params.sportKey === "soccer_spl", "chiave esplicita usata");
+    assert(con.params.sportKey === "soccer_france_ligue_one", "chiave esplicita usata");
     assert(con.notes.some((n) => n.includes("fuori dalla mappa")), "l'override è dichiarato");
+  }
+});
+
+test("lega del catalogo reale (Scotland Premiership) ora è coperta, non rifiutata", () => {
+  // Dal 06/09/2026 la copertura segue il catalogo: la Scozia è attiva nella
+  // fonte e non deve più essere trattata come "fuori mappa".
+  const scotland = { ...row, leagueName: "Scotland: Premiership" };
+  const resolution = resolveSmokeMatch(scotland, new Date("2026-09-10T12:00:00.000Z"));
+  assert(resolution.ok, "Scotland Premiership è coperta dalla mappa di produzione");
+  if (resolution.ok) {
+    assert(resolution.params.sportKey === "soccer_scotland_premiership", "chiave corretta");
+  }
+});
+
+test("override su lega GIÀ coperta: la nota non dichiara «fuori mappa»", () => {
+  // Serie A è nella mappa di budget. Passare --sport-key a mano non la rende
+  // «fuori mappa»: la nota deve dirlo (era il messaggio fuorviante del 10/09).
+  const resolution = resolveSmokeMatch(
+    row,
+    new Date("2026-09-10T12:00:00.000Z"),
+    "soccer_italy_serie_a",
+  );
+  assert(resolution.ok, "con override su lega coperta è leggibile");
+  if (resolution.ok) {
+    assert(resolution.params.sportKey === "soccer_italy_serie_a", "chiave esplicita usata");
+    assert(
+      resolution.notes.some((n) => n.includes("coperta dalla mappa")),
+      "la nota dichiara che la lega è coperta",
+    );
+    assert(
+      !resolution.notes.some((n) => n.includes("fuori dalla mappa")),
+      "non deve dire «fuori mappa» per una lega coperta",
+    );
   }
 });
 

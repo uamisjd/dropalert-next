@@ -1,11 +1,20 @@
 /**
  * Mappa competizione → chiave sport di The Odds API (Sprint G).
  *
- * Deliberatamente CORTA. Ogni lettura costa un credito su un budget mensile
- * di 490: si spende solo dove la fonte copre davvero il campionato, cioè sui
- * tornei maggiori. Per tutto il resto la risposta è «competizione non
- * mappata sulla fonte» e non parte alcuna richiesta — è la prima difesa del
- * budget, prima ancora dei contatori.
+ * La copertura è OGGI guidata dal catalogo reale della fonte, non da una
+ * scelta a monte di «sole leghe grandi»: per richiesta dell'utente non deve
+ * esistere una distinzione tra leghe minori e maggiori, ma si individua la
+ * partita giusta ovunque la fonte abbia davvero i dati.
+ *
+ * Due passate, in quest'ordine:
+ *  - `MAP` CURATA (prima passata): gestisce in modo affidabile le
+ *    abbreviazioni e la grafia che l'archivio usa per i tornei più comuni
+ *    («England: Premier League» → `soccer_epl», «Italy: Serie A» → …). È
+ *    anche la garanzia per i nomi ambigui tra più paesi (il paese è
+ *    vincolato, vedi sotto).
+ *  - `resolveSportKeyFromCatalog` (fallback): per qualunque altro campionato
+ *    la copertura dipende da ciò che la fonte offre nel catalogo `/v4/sports`
+ *    (endpoint gratuito, 0 crediti) — MLS, Argentina, Brasile, Belgio, ecc.
  *
  * Il confronto è vincolato al PAESE, non alla sola grafia della lega: il nome
  * in archivio arriva dalla fonte come «Paese: Lega» (es. «Italy: Serie A»,
@@ -17,7 +26,16 @@
  * «Ecuador: Serie B» e della «Northern Ireland: NIFL Championship». Da qui
  * la regola: paese e lega devono combaciare ENTRAMBI, e un nome senza paese
  * non decide nulla (fallire chiuso non costa crediti).
+ *
+ * Ogni lettura costa un credito su un budget mensile di 490: `null` significa
+ * «non spendere», quindi la copertura dichiarata non è mai più ampia di ciò
+ * che la fonte espone davvero.
  */
+
+import {
+  resolveSportKeyFromCatalog,
+  activeCatalogKeys,
+} from "./sport-catalog";
 
 const MAP: Array<{ country: RegExp; league: RegExp; sportKey: string }> = [
   { country: /^italy$/i, league: /^serie a$/i, sportKey: "soccer_italy_serie_a" },
@@ -95,15 +113,74 @@ export function sportKeyFor(league: string | null): string | null {
     if (COPPA_TRAVESTITA.test(leagueName)) continue;
     return row.sportKey;
   }
-  return null;
+
+  // Fallback guidato dal catalogo reale. La `MAP` curata copre le leghe
+  // maggiori e ne gestisce le abbreviazioni (EPL, Serie A, …). Per tutto il
+  // resto la copertura dipende da ciò che la fonte offre davvero (MLS,
+  // Argentina, Brasile, Belgio, …): qui non esiste più una distinzione tra
+  // leghe minori e maggiori — si risolve qualunque campionato che la fonte
+  // espone nel catalogo, a patto che il paese collima (collision-safe).
+  const catalogResolved = resolveSportKeyFromCatalog(country, leagueName);
+  return catalogResolved === null ? null : catalogResolved;
 }
 
-/** Competizioni coperte, per il pannello: si dichiara dove si spende. */
-export const COVERED_LABEL =
-  "Serie A e B, Premier League e Championship, Liga, Bundesliga, Ligue 1, Eredivisie, Primeira Liga e coppe UEFA maschili";
+/**
+ * Risolve la sportKey della fonte per-bookmaker a partire da paese e nome
+ * della competizione SEPARATI (com'è nell'archivio: `leagues.country` e
+ * `leagues.name` sono campi distinti).
+ *
+ * `sportKeyFor` si aspetta il formato «Paese: Lega»: se il paese manca la
+ * chiave è illeggibile. Qui componiamo la stringa in un modo onesto:
+ *  - se manca il paese o il nome → `null` (competizione non leggibile, non si
+ *    indovina);
+ *  - altrimenti si compone «Paese: Lega» e si delega a `sportKeyFor`.
+ *
+ * È la funzione che la scheda partita userà (o un suo equivalente) per dire
+ * se la conferma sharp è leggibile, evitando il bug di passare un nome senza
+ * paese (che renderebbe `sportKeyFor` sempre `null`).
+ */
+export function resolveSportKey(country: string | null, name: string | null): string | null {
+  const c = (country ?? "").trim();
+  const n = (name ?? "").trim();
+  if (c === "" || n === "") return null;
+  return sportKeyFor(`${c}: ${n}`);
+}
 
-/** Chiavi sport coperte, nello stesso ordine della mappa (Serie A prima).
- *  Serve al ripiego «dalla fonte» della lettura di controllo: interrogare
- *  l'endpoint gratuito `/events` solo sui tornei dove una lettura costa un
- *  credito sensato. */
-export const COVERED_SPORT_KEYS: readonly string[] = MAP.map((row) => row.sportKey);
+/**
+ * Dice se una competizione (paese + nome) è CERTAMENTE coperta dalla fonte
+ * per-bookmaker, senza bisogno del catalogo a runtime.
+ *
+ * Usa la chiave risolta (`resolveSportKey`) e la confronta con le chiavi
+ * coperte dichiarate (`COVERED_SPORT_KEYS`). Regole di onestà:
+ *  - un nome o paese non leggibile → `false` (non si indovina: la copertura
+ *    non è verificabile, quindi non si dichiara);
+ *  - un nome simile ma NON in mappa → `false` (una somiglianza non è
+ *    copertura: verrebbe da `findNearKey` che qui non usiamo per non mentire);
+ *  - solo una chiave esatta nella mappa coperte → `true`.
+ *
+ * È il test che la scheda partita può fare a costo zero (senza caricare il
+ * catalogo) per dire se la conferma sharp è attendibile o se la competizione
+ * è fuori copertura.
+ */
+export function isCoveredBySportKey(
+  country: string | null,
+  name: string | null,
+): boolean {
+  const key = resolveSportKey(country, name);
+  if (key === null) return false;
+  return COVERED_SPORT_KEYS.includes(key);
+}
+
+/** Competizioni coperte, per il pannello: si dichiara dove si spende.
+ *  Oggi la copertura segue il catalogo reale della fonte, non una scelta di
+ *  «sole leghe grandi»: qualunque campionato che la fonte offre è leggibile
+ *  (in vigore la regola dell'utente: nessuna distinzione minori/maggiori). */
+export const COVERED_LABEL =
+  "tutti i campionati di calcio offerti dalla fonte (39 leghe attive): Serie A/B, Premier e Championship e le divisioni inglesi, Liga, Bundesliga, Ligue 1/2, Eredivisie, Primeira Liga, MLS, Brasile, Argentina, Belgio, coppe UEFA, ecc.";
+
+/** Chiavi sport coperte: l'unione delle chiavi della `MAP` (prima passata,
+ *  gestisce le abbreviazioni) e di tutte le leghe attive del catalogo reale.
+ *  Restano deterministiche (la `MAP` prima). */
+export const COVERED_SPORT_KEYS: readonly string[] = Array.from(
+  new Set([...MAP.map((row) => row.sportKey), ...activeCatalogKeys()]),
+);

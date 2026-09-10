@@ -76,11 +76,11 @@ export default async function ArbitragePage() {
             Arbitrage Scanner
           </h1>
           <p className="mt-3 text-sm leading-relaxed text-purple-100 sm:text-base">
-            Opportunità di surebet cross-bookmaker con profitto garantito ≥ 0.5%.
-            Lo scanner confronta le quote migliori disponibili per ogni selezione
-            e calcola il profitto matematico se tutte le quote sono eseguibili
-            simultaneamente. Nessuna garanzia: le quote cambiano in secondi e i
-            bookmaker limitano.
+            Opportunità di surebet cross-bookmaker con profitto matematico
+            teorico ≥ 0.5%. Lo scanner confronta le quote migliori disponibili
+            per ogni selezione — purché arrivino da operatori distinti — e
+            calcola il margine teorico. Non è una promessa di profitto: le quote
+            cambiano in secondi e i bookmaker limitano.
           </p>
 
           <div className="mt-6 flex flex-wrap gap-3 text-xs">
@@ -117,8 +117,9 @@ export default async function ArbitragePage() {
           </div>
 
           <p className="mt-3 text-[11px] leading-relaxed text-purple-200">
-            Soglia: profitto ≥ 0.5% · Finestra: {result.windowHours}h · Riga
-            generata alle {fmtDateTime(result.scannedAt)}.
+            Soglia: profitto ≥ 0.5% · Finestra: {result.windowHours}h · Operatori
+            distinti letti: {result.bookmakersInWindow} · Riga generata alle{" "}
+            {fmtDateTime(result.scannedAt)}.
           </p>
         </div>
       </header>
@@ -135,17 +136,29 @@ export default async function ArbitragePage() {
       {result.opportunities.length === 0 && result.error === null && (
         <div className="mb-4 rounded-2xl border border-amber-200 bg-amber-50 p-6 text-center">
           <p className="text-sm font-semibold text-amber-900">
-            Nessuna opportunità di arbitraggio disponibile
+            {result.sourceNote !== ""
+              ? "Nessuna opportunità di arbitraggio osservabile"
+              : "Nessuna opportunità di arbitraggio disponibile"}
           </p>
-          <p className="mx-auto mt-2 max-w-xl text-xs leading-relaxed text-amber-800">
-            Al momento non ci sono surebet con profitto ≥ 0.5%. Questo è normale:
-            le opportunità di arbitraggio sono rare e durano pochi secondi.
-            Controlla più tardi o abbassa la soglia (modifica il codice in{" "}
-            <code className="rounded bg-amber-100 px-1 py-0.5 text-[10px]">
-              src/lib/quant/arbitrage.ts
-            </code>
-            ).
-          </p>
+          {result.sourceNote !== "" ? (
+            <p className="mx-auto mt-2 max-w-xl text-xs leading-relaxed text-amber-800">
+              {result.sourceNote} Non è un verdetto sul mercato: è un limite
+              dichiarato della fonte, non un dato inventato al suo posto.
+            </p>
+          ) : (
+            <>
+              <p className="mx-auto mt-2 max-w-xl text-xs leading-relaxed text-amber-800">
+                Al momento non ci sono surebet con profitto ≥ 0.5% tra operatori
+                distinti. Questo è normale: le opportunità di arbitraggio sono
+                rare e durano pochi secondi. Controlla più tardi o abbassa la
+                soglia (modifica il codice in{" "}
+                <code className="rounded bg-amber-100 px-1 py-0.5 text-[10px]">
+                  src/lib/quant/arbitrage.ts
+                </code>
+                ).
+              </p>
+            </>
+          )}
           <p className="mt-3 text-xs text-amber-700">
             Partite scansionate: {result.matchesScanned} · Mercati scansionati:{" "}
             {result.marketsScanned}

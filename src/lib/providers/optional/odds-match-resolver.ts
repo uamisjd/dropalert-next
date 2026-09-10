@@ -286,9 +286,19 @@ export function resolveSmokeMatch(
     notes.push(`stato partita "${row.status}" (atteso "scheduled"): la lettura parte lo stesso.`);
   }
   if (overrideSportKey !== null) {
-    notes.push(
-      `chiave sport "${overrideSportKey}" fornita manualmente: competizione fuori dalla mappa di budget (solo verifica).`,
-    );
+    /* L'override è pensato per verificare una competizione FUORI mappa. Ma la
+       lega può essere già coperta dalla mappa (es. «Italy: Serie A» passata a
+       mano): in quel caso la nota deve dirlo, non dichiararla «fuori mappa». */
+    const mappedKey = sportKeyFor(row.leagueName);
+    if (mappedKey !== null) {
+      notes.push(
+        `chiave sport "${overrideSportKey}" fornita manualmente: la lega è comunque coperta dalla mappa (${mappedKey}), l'override è solo conferma.`,
+      );
+    } else {
+      notes.push(
+        `chiave sport "${overrideSportKey}" fornita manualmente: competizione fuori dalla mappa di budget (solo verifica).`,
+      );
+    }
   }
 
   return {

@@ -80,13 +80,14 @@ const mins = (m: number) => new Date(T0.getTime() + m * 60000);
 function series(
   key: string,
   prices: Array<[number, number]>, // [minutiDaT0, quota]
-  opts: { sharp?: boolean; weight?: number; id?: number } = {},
+  opts: { sharp?: boolean; weight?: number; id?: number; consensus?: boolean } = {},
 ): BookmakerSeries {
   return {
     bookmakerId: opts.id ?? key.length,
     bookmakerKey: key,
     bookmakerName: key,
     isSharp: opts.sharp ?? false,
+    isConsensus: opts.consensus ?? false,
     weight: opts.weight ?? 1,
     points: prices.map(([m, price]) => ({ price, at: mins(m) })),
   };
@@ -266,6 +267,81 @@ test("book in direzione opposta viene classificato come oppose", () => {
   );
   assertEqual(c.booksConfirming, 1);
   assertEqual(c.booksOpposing, 1);
+});
+
+/* ------------------------------------------------------------------ */
+/* 4b. Il consenso non è un bookmaker (correzione §4.7)                */
+/* ------------------------------------------------------------------ */
+
+console.log("\n[4b] Il consenso non è un bookmaker");
+
+test("la mediana esclude la linea di consenso quando esistono book reali", () => {
+  const s = [
+    series("pinnacle", [[0, 2.0], [60, 1.9]]),
+    series("bet365", [[0, 2.1], [60, 2.0]]),
+    // consenso che si muove da solo: non deve spostare la mediana
+    series("betexplorer-consensus", [[0, 2.4], [60, 1.6]], { consensus: true }),
+  ];
+  // mediana dei SOLI book reali: (2.0, 2.1) = 2.05 a t=0; (1.9, 2.0) = 1.95 a t=60
+  assertClose(consensusAt(s, mins(0))!, 2.05, 1e-9);
+  assertClose(consensusAt(s, mins(60))!, 1.95, 1e-9);
+});
+
+test("senza book reali la mediana usa la linea di consenso (fallback)", () => {
+  const s = [series("betexplorer-consensus", [[0, 2.0], [60, 1.7]], { consensus: true })];
+  // nessun book reale: fallback sul consenso, così l'ampiezza resta calcolabile
+  assertClose(consensusAt(s, mins(0))!, 2.0, 1e-9);
+  assertClose(consensusAt(s, mins(60))!, 1.7, 1e-9);
+});
+
+test("la coordinazione non conta il consenso come book, quando ci sono book reali", () => {
+  const mixed = computeCoordination(
+    [
+      series("pinnacle", [[0, 2.0], [120, 1.8]]),
+      series("bet365", [[0, 2.02], [120, 1.82]]),
+      series("betexplorer-consensus", [[0, 2.0], [120, 1.78]], { consensus: true }),
+    ],
+    5.5,
+  );
+  // solo i due book reali contano; il consenso è escluso da conteggi e dettaglio
+  assertEqual(mixed.booksTotal, 2);
+  assertEqual(mixed.booksConfirming, 2);
+  assert(
+    mixed.perBook.every((b) => b.bookmakerKey !== "betexplorer-consensus"),
+    "il consenso non deve comparire nel dettaglio per-book",
+  );
+});
+
+test("con il SOLO consenso la coordinazione è non osservabile (booksTotal 0)", () => {
+  const c = computeCoordination(
+    [series("betexplorer-consensus", [[0, 2.0], [120, 1.7]], { consensus: true })],
+    8,
+  );
+  assertEqual(c.booksTotal, 0);
+  assertEqual(c.booksConfirming, 0);
+  assertEqual(c.coordinationScore, 0);
+  assertEqual(c.perBook.length, 0);
+});
+
+test("i bookmaker reali mantengono il comportamento invariato (non-regressione)", () => {
+  // il flag di consenso assente/falsy non cambia il conteggio dei book reali
+  const a = computeCoordination(
+    [
+      series("a", [[0, 2.0], [120, 1.8]]),
+      series("b", [[0, 2.0], [120, 1.82]]),
+    ],
+    5.5,
+  );
+  const b = computeCoordination(
+    [
+      series("a", [[0, 2.0], [120, 1.8]], { consensus: false }),
+      series("b", [[0, 2.0], [120, 1.82]], { consensus: false }),
+    ],
+    5.5,
+  );
+  assertEqual(a.booksTotal, 2);
+  assertEqual(b.booksTotal, 2);
+  assertEqual(a.booksConfirming, b.booksConfirming);
 });
 
 /* ------------------------------------------------------------------ */

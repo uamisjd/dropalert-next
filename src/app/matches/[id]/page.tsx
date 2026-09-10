@@ -29,7 +29,7 @@ import { getNewsForMatch } from "@/lib/repo/news";
 import { getContextForMatch } from "@/lib/repo/context";
 import { DATA_REVALIDATE_SECONDS, cachedRead } from "@/lib/repo/cached";
 import { getSharpLine } from "@/lib/repo/sharp";
-import { sportKeyFor } from "@/lib/providers/optional/sport-keys";
+import { isCoveredBySportKey, resolveSportKey } from "@/lib/providers/optional/sport-keys";
 import { isLowInformationCompetition } from "@/lib/context/pure";
 import { SharpLineBlock } from "@/components/SharpLineBlock";
 import { DecisionStatusBlock } from "@/components/DecisionStatusBlock";
@@ -562,6 +562,12 @@ export default async function MatchDetailPage({
      guasto. È una dichiarazione, mai un dato inventato. */
   const lowInformation = isLowInformationCompetition(detail.match.league);
 
+  /* La fonte per-bookmaker copre solo le competizioni nella mappa dichiarata.
+     Se il campionato non è in mappa, la conferma sharp non è disponibile per
+     costruzione (non per un guasto): lo dichiariamo in header, senza fingere
+     un valore dove la fonte non ha dati. `isCovered=false` non è una smentita. */
+  const isCovered = isCoveredBySportKey(detail.match.country, detail.match.league);
+
   /* Linea sharp (The Odds API): solo segnali attivi, solo competizioni
      coperte, una lettura al giorno per partita e budget con hard-stop.
      Se una qualunque di queste condizioni non regge, non parte richiesta. */
@@ -570,7 +576,7 @@ export default async function MatchDetailPage({
       ? await getSharpLine(
           {
             matchId,
-            sportKey: sportKeyFor(detail.match.league),
+            sportKey: resolveSportKey(detail.match.country, detail.match.league),
             homeTeam: detail.match.homeTeam,
             awayTeam: detail.match.awayTeam,
             kickoffAt: new Date(detail.match.kickoffAt),
@@ -736,6 +742,14 @@ export default async function MatchDetailPage({
             </span>
             {match.country ? (
               <span className="text-xs text-slate-400">· {match.country}</span>
+            ) : null}
+            {!isCovered ? (
+              <span
+                className="rounded-full border border-slate-700 bg-slate-900 px-2 py-0.5 text-[11px] font-medium text-slate-400"
+                title="La fonte per-bookmaker non copre questo campionato: la conferma sharp resta non osservabile (non è una smentita)."
+              >
+                fonte non copre il campionato
+              </span>
             ) : null}
             <span className="ml-auto flex flex-wrap gap-1.5">
               <FreshnessBadge

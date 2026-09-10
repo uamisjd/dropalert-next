@@ -257,6 +257,41 @@ Allargare l'orizzonte aumenta le righe lette da BetExplorer in **un solo giro**;
 non cambia il budget di The Odds API, che resta governato da
 `odds-api-budget.ts` (lo smoke test costa 1 credito in tutto).
 
+## 10-bis. Cattura senza terminale: porta una partita SERVITA in archivio
+
+Quando le partite in archivio sono di leghe che The Odds API (piano gratuito)
+**non** espone, il passo 1 non trova nulla («leggibili: 0»). Non è un guasto:
+è il limite della fonte — come verificato il 10/09/2026, `soccer_mls` risponde
+**HTTP 404** (non servito dal piano) mentre `soccer_italy_serie_a` restituisce
+**20 eventi, 0 crediti**.
+
+Per chiudere il vero `SMOKE OK` serve una partita in archivio di una lega
+servita. La rotta protetta **`POST /api/jobs/capture-odds`** legge gli eventi
+reali della fonte (0 crediti) e scrive in archivio la **prossima partita** di
+una lega della base (default `soccer_italy_serie_a`), restituendo il
+`match_id` da usare nel passo 2.
+
+La rotta si può chiamare in due modi, entrambi **senza terminale**:
+
+- **GET (comodo da aprire nel browser):**
+  `https://<tuo-deploy>/api/jobs/capture-odds?token=<JOBS_TOKEN>&sportKey=soccer_italy_serie_a`
+  → il browser mostra il JSON.
+- **POST (per un cron/scheduler esterno):**
+  header `x-jobs-token: <JOBS_TOKEN>`, body `{"sportKey":"soccer_italy_serie_a"}`.
+
+Risposta (201): `{ ok, matchId, homeTeam, awayTeam, kickoffAt, ... }`. Poi:
+
+- `which = smoke-odds`, `match_id = <matchId>`, `sport_key = soccer_italy_serie_a`.
+
+Regole:
+- **0 crediti**: l'endpoint `/events` è fuori quota; la lettura vera (1
+  credito) resta lo step esplicito dello smoke (§5).
+- **L'adapter resta OFF** (`ADAPTER_IMPLEMENTED=false`): è un inserimento
+  manuale di verifica, non un'attivazione.
+- Le leghe catturabili sono dichiarate in `odds-capture-league.ts` (base
+  esplicita e verificata: Serie A/B, Premier, Liga, Bundesliga, Ligue 1).
+  Una chiave fuori base → la rotta risponde `null` e non inventa un titolo.
+
 ## 11. Esito del primo smoke test live (06/09/2026)
 
 Eseguito su GitHub Actions (run `34036327654`) contro una partita **vera** già
@@ -467,3 +502,47 @@ United») e i qualificatori diversi («Vitoria Guimaraes» ↔ «Vitoria SC»)
 restano volutamente non-matching — l'audit completo del matching è già al
 punto 2 del «prossimo ordine di lavoro» dell'handoff. Ogni nuovo caso costa
 ora 1 credito ma si spiega gratis.
+
+## 17. Smoke test riuscito senza terminale (10/09/2026) — `SMOKE OK` della Serie A
+
+Obiettivo dell'utente: nessuna distinzione tra «leghe minori e maggiori», e un
+modo per fare tutta la verifica **senza terminale**. Il percorso finale è:
+
+1. **Mappa guidata dal catalogo reale** (`sport-catalog.ts` + fallback in
+   `sport-keys.ts`): non si bloccano più le leghe minori a priori; si copre
+   qualunque campionato che la fonte offre davvero.
+2. **Cattura senza terminale** (`/api/jobs/capture-odds`, 0 crediti): porta in
+   archivio la prossima partita di una lega servita, restituendo il `match_id`.
+3. **Smoke** (`which=smoke-odds`, `match_id=<id>`, 1 credito) su GitHub Actions.
+
+### La partita catturata
+`POST/GET /api/jobs/capture-odds?sportKey=soccer_italy_serie_a` → match **#788**,
+**Venezia — Fiorentina**, kickoff `2026-09-11T18:45:00Z`, 0 crediti, 20 eventi
+dalla fonte, `creditsRemaining: 493`.
+
+### L'esito dello smoke (`run` con `which=smoke-odds`, `match_id=788`)
+```
+SMOKE OK — gate superati su dati reali. Il provider resta comunque SPENTO:
+l'attivazione è un passo separato e controllato, non una conseguenza di questo script.
+
+1/4 pre-check di matching (0 crediti)  → evento unico: Venezia — Fiorentina
+2/4 lettura quote individuali (1 credito) → 72 quote da 24 bookmaker
+3/4 scrittura in odds_snapshots → snapshot 72, duplicati 0, anagrafiche 24
+4/4 freshness e prezzo eseguibile (soglia 90 min) → PREZZO ESEGUIBILE 1x2
+    home 3.10 / draw 3.30 / away 2.30 (tipico_de, età 0 min)
+
+Esito: chiamata reale riuscita · matching verificato · quote individuali
+salvate · freshness verificata su 72 selezioni.
+```
+
+### Punti onesti
+- **L'adapter resta OFF** (`ADAPTER_IMPLEMENTED=false`): lo smoke prova il
+  percorso (mappa → matching → lettura → snapshot → freshness), non attiva il
+  provider nel flusso che genera le giocate.
+- **Prezzi esecutibili individuali** (da `tipico_de`, un singolo book, età 0
+  min): rispettano la dottrina «NO BET senza prezzo individuale fresco».
+- **Nota corretta**: prima, passando `--sport-key` a mano, il log stampava
+  «competizione fuori dalla mappa di budget» anche per una lega coperta (Serie
+  A). Ora il resolver distingue: se la lega è coperta, la nota dice
+  «la lega è comunque coperta dalla mappa»; «fuori mappa» resta solo per le
+  leghe davvero scoperte (fix in `odds-match-resolver.ts`).

@@ -1,0 +1,113 @@
+{
+  "fixtureId": "id1300010963301407",
+  "sportId": 10,
+  "participant1Name": "Inter",
+  "participant2Name": "Juventus",
+  "startTime": "2026-09-12T19:00:00Z",
+  "bookmakerOdds": {
+    "pinnacle": {
+      "bookmakerIsActive": true,
+      "markets": {
+        "101": {
+          "marketActive": true,
+          "outcomes": {
+            "101": { "players": { "0": { "active": true, "price": 2.1 } } },
+            "102": { "players": { "0": { "active": true, "price": 3.4 } } },
+            "103": { "players": { "0": { "active": true, "price": 3.75 } } }
+          }
+        },
+        "1010": {
+          "marketActive": true,
+          "outcomes": {
+            "1010": { "players": { "0": { "active": true, "price": 1.95 } } },
+            "1011": { "players": { "0": { "active": true, "price": 1.95 } } }
+          }
+        }
+      }
+    },
+    "singbet": {
+      "bookmakerIsActive": true,
+      "markets": {
+        "101": {
+          "marketActive": true,
+          "outcomes": {
+            "101": { "players": { "0": { "active": true, "price": 2.12 } } },
+            "102": { "players": { "0": { "active": true, "price": 3.38 } } },
+            "103": { "players": { "0": { "active": true, "price": 3.7 } } }
+          }
+        }
+      }
+    },
+    "bet365": {
+      "bookmakerIsActive": true,
+      "markets": {
+        "101": {
+          "marketActive": true,
+          "outcomes": {
+            "101": { "players": { "0": { "active": true, "price": 2.4 } } },
+            "102": { "players": { "0": { "active": true, "price": 3.5 } } },
+            "103": { "players": { "0": { "active": true, "price": 3.0 } } }
+          }
+        },
+        "1010": {
+          "marketActive": true,
+          "outcomes": {
+            "1010": { "players": { "0": { "active": true, "price": 1.8 } } },
+            "1011": { "players": { "0": { "active": true, "price": 2.05 } } }
+          }
+        }
+      }
+    },
+    "betfair-exchange": {
+      "bookmakerIsActive": true,
+      "markets": {
+        "101": {
+          "marketActive": true,
+          "outcomes": {
+            "101": { "players": { "0": { "active": true, "price": 2.05 } } },
+            "102": { "players": { "0": { "active": true, "price": 3.45 } } },
+            "103": { "players": { "0": { "active": true, "price": 3.85 } } }
+          }
+        }
+      }
+    },
+    "draftkings": {
+      "bookmakerIsActive": true,
+      "markets": {
+        "101": {
+          "marketActive": true,
+          "outcomes": {
+            "101": { "players": { "0": { "active": true, "price": 2.45 } } },
+            "102": { "players": { "0": { "active": true, "price": 3.6 } } },
+            "103": { "players": { "0": { "active": true, "price": 2.95 } } }
+          }
+        }
+      }
+    },
+    "betano": {
+      "bookmakerIsActive": true,
+      "markets": {
+        "1010": {
+          "marketActive": true,
+          "outcomes": {
+            "1010": { "players": { "0": { "active": true, "price": 1.9 } } },
+            "1011": { "players": { "0": { "active": true, "price": 1.92 } } }
+          }
+        }
+      }
+    },
+    "outdatedbook": {
+      "bookmakerIsActive": false,
+      "markets": {
+        "101": {
+          "marketActive": true,
+          "outcomes": {
+            "101": { "players": { "0": { "active": true, "price": 2.2 } } },
+            "102": { "players": { "0": { "active": true, "price": 3.4 } } },
+            "103": { "players": { "0": { "active": true, "price": 3.6 } } }
+          }
+        }
+      }
+    }
+  }
+}

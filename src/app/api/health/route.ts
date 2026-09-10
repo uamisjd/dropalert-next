@@ -128,7 +128,7 @@ export async function GET() {
         perBookmakerOdds: !perBookmakerOddsUnavailable(),
         note: perBookmakerOddsUnavailable()
           ? "Nessuna fonte attiva espone quote per singolo bookmaker: coordinazione fra book e conferma della linea sharp NON sono calcolabili e restano dichiarate come non disponibili."
-          : "Quote per singolo bookmaker disponibili.",
+          : "Almeno una fonte può leggere quote per singolo bookmaker, ma il ciclo di raccolta non la usa: i segnali pubblicati restano su consenso e il buco bookmaker_missing è ancora aperto.",
       },
       dataGaps: {
         open: totalOpenGaps,
