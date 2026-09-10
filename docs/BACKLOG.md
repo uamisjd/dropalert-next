@@ -93,6 +93,16 @@ Candidati già valutati e da riconsiderare solo con chiave gratuita esplicita:
 `football-data.org` (richiede chiave, oggi spento), `the-odds-api` (adapter
 opzionale, disattivato di default, mai fonte principale).
 
+**Avanzamento 10/09/2026:** esiste ora la fase di cablaggio di The Odds API nel
+ciclo (`src/lib/providers/optional/odds-collect-wire.ts`), dietro i flag
+`ODDS_WIRE_COLLECT` + `DROP_EXCLUDE_CONSENSUS_BOOKS` (accensione deliberata solo
+dopo smoke test live: `docs/STUDIO-CABLAGGIO-ODDS.md` §4.7). Copre però SOLO i
+campionati serviti dal piano gratuito della fonte (le leghe maggiori/media): i
+tornei minori — dove nascono i drop più ricchi — restano scoperti e dichiarati.
+Per quelli serve una **seconda fonte** (SportsGameOdds o OddsPapi, Pinnacle
+diretto), come da decisione «due fasi» in STUDIO-CABLAGGIO-ODDS §6. Questo punto
+resta quindi aperto per la parte minori.
+
 **Vincolo:** nessun valore per-book inventato o ripartito dalla media. Finché la
 fonte non esiste, il gap resta aperto e dichiarato.
 

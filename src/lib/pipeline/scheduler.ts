@@ -28,6 +28,10 @@ import type { CycleMode } from "./cycle-mode";
 import { dispatchNotifications, pushConfigured } from "@/lib/repo/push";
 import { readLiveValues } from "@/lib/push/live";
 import type { RunTrigger } from "@/lib/cov/instrument";
+import {
+  runPerBookmakerWire,
+  type WireReport,
+} from "@/lib/providers/optional/odds-collect-wire";
 import { detectAll } from "./detect";
 import { runClosingJob, pendingClosings } from "./closing";
 import { finishRun, startRun } from "./runs";
@@ -572,6 +576,12 @@ export interface CycleReport {
   };
   /** avvisi inviati a chi segue una partita che ha superato la soglia */
   notifications: NotificationsReport;
+  /**
+   * Cablaggio per-bookmaker (The Odds API): fase parallela dietro flag,
+   * governata dal budget. Spenta o fallita non tocca il giro e resta
+   * dichiarata qui invece di scomparire in un silenzio.
+   */
+  wire: WireReport;
   /** partite monitorate che devono ancora superare il kickoff */
   pending: Array<{ key: string; kickoffAt: string }>;
   errors: string[];
@@ -696,6 +706,19 @@ export async function runCycle(options: CycleOptions = {}): Promise<CycleReport>
       skipped: 0,
       removed: 0,
     },
+    wire: {
+      enabled: false,
+      reason: null,
+      candidates: 0,
+      read: 0,
+      quotesWritten: 0,
+      creditsSpent: 0,
+      usedToday: 0,
+      usedThisMonth: 0,
+      skipped: [],
+      budgetDenied: [],
+      errors: [],
+    },
     pending: [],
     errors: [],
   };
@@ -796,6 +819,35 @@ export async function runCycle(options: CycleOptions = {}): Promise<CycleReport>
       return report;
     }
 
+    /* --- 1b. cablaggio per-bookmaker (The Odds API) -------------------- */
+    /* Fase parallela, dietro flag (ODDS_WIRE_COLLECT + DROP_EXCLUDE_
+       CONSENSUS_BOOKS): scrive in odds_snapshots le linee per-bookmaker dei
+       segnali attivi su competizioni coperte, così il motore può misurare
+       coordinazione e conferma sharp. Non tocca il flusso BetExplorer e non
+       spende senza il permesso del budget (odds-api-budget.ts). Spenta o
+       fallita non ferma il giro: resta dichiarata nel report. */
+    if (!options.skipCollect) {
+      try {
+        report.wire = await runPerBookmakerWire(now, handle.id);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        report.wire = {
+          enabled: false,
+          reason: null,
+          candidates: 0,
+          read: 0,
+          quotesWritten: 0,
+          creditsSpent: 0,
+          usedToday: 0,
+          usedThisMonth: 0,
+          skipped: [],
+          budgetDenied: [],
+          errors: [message],
+        };
+        errors.push(`cablaggio per-bookmaker: ${message}`);
+      }
+    }
+
     /* --- 2. analisi -------------------------------------------------- */
     const detection = await detectAll(now, { matchIds: options.matchIds });
     report.detection = {
@@ -856,6 +908,9 @@ export async function runCycle(options: CycleOptions = {}): Promise<CycleReport>
         analysisExecuted: report.detection.executed,
         closingExecuted: report.closing.executed,
         gate: gate.reason,
+        wireExecuted: report.wire.enabled,
+        wireRead: report.wire.read,
+        wireCreditsSpent: report.wire.creditsSpent,
         closingLinesCaptured: closing.linesCaptured,
         fairLinesCaptured: closing.fairLinesCaptured,
         clvComputed: closing.clvComputed,

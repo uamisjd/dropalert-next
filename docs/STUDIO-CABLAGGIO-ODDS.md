@@ -375,9 +375,21 @@ comportamento dei dati attuali:
   `betexplorer-consensus`) viene marcata `isConsensus` e il motore la esclude
   davvero dai dati di produzione. **Default `false`**: finché il flag è spento,
   il comportamento dei segnali esistenti resta identico a oggi;
-- attivarlo **solo dopo** uno smoke test live riuscito del cablaggio per-bookmaker,
-  e verificare con un test di confronto prima/dopo che il punteggio dei segnali
-  in modalità mista (consenso + per-book) non regredisca.
+- **Aggiornamento 2026-09-10: la fase di cablaggio è ora implementata** in
+  `src/lib/providers/optional/odds-collect-wire.ts` e inserita nel ciclo
+  (`src/lib/pipeline/scheduler.ts`, fase «1b», solo modalità `full`, mai
+  `collect_only` e mai con `--no-collect`). È governata da `wireGate()`: si
+  accende **solo con entrambi** `ODDS_WIRE_COLLECT=true` e
+  `DROP_EXCLUDE_CONSENSUS_BOOKS=true`, altrimenti resta spenta dichiarando
+  il motivo. Regole applicate (tutte con motivo in italiano): solo segnali
+  `active` con indice ≥ 45, mai partite demo o non giocabili, mai kickoff
+  passato, mai competizioni fuori copertura, una lettura per partita al
+  giorno (marcatore dedicato + cache della linea sharp), budget via
+  `decide()` come unico gate di rete, credito contato quando la richiesta
+  esce davvero. Test puri: `npm run test:odds-wire` (20 asserzioni).
+  Restano quindi, come da dottrina, **solo** i passi umani: smoke test live
+  del cablaggio e confronto prima/dopo sui punteggi in modalità mista
+  (consenso + per-book) prima di accendere i due flag su Vercel.
 
 ---
 
