@@ -2,9 +2,13 @@
  * Scopre la COPERTURA REALE di The Odds API rispetto ai campionati del monitor.
  *
  *   npm run odds:scopri                      # chiave + DB (misura reale)
- *   npm run odds:scopri -- --senza-fonte     # solo archivio, nessuna chiamata
  *   npm run odds:scopri -- --catalogo cat.json --leagues leghe.json
  *                                            # offline: nessuna rete, nessun DB
+ *
+ * Non esiste una modalità «solo archivio senza catalogo»: senza il catalogo
+ * non c'è nulla con cui confrontare i campionati, quindi una simile modalità
+ * non potrebbe dire niente di vero. L'offline si fa passando il catalogo da
+ * file (`--catalogo`), che è l'unico modo onesto di non chiamare la rete.
  *
  * COSTO: zero crediti. Il catalogo arriva da `GET /v4/sports`, che la fonte
  * dichiara fuori quota; qui NON si leggono quote. Serve a rispondere — con
@@ -36,8 +40,6 @@ import {
   type CoverageLeague,
   type CoverageSport,
 } from "@/lib/providers/optional/odds-coverage";
-
-const WITHOUT_SOURCE = process.argv.includes("--senza-fonte");
 
 function argument(name: string): string | null {
   const index = process.argv.indexOf(name);
