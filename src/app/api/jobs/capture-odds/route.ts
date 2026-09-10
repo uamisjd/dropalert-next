@@ -29,7 +29,10 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { readOddsApiKey } from "@/lib/providers/optional/odds-api-budget";
 import { fetchOddsApiEvents } from "@/lib/providers/optional/the-odds-api-events";
-import { captureLeagueFor } from "@/lib/providers/optional/odds-capture-league";
+import {
+  captureExclusionReason,
+  captureLeagueFor,
+} from "@/lib/providers/optional/odds-capture-league";
 import { ingestOddsEvent } from "@/lib/providers/optional/ingest-odds-event";
 
 export const dynamic = "force-dynamic";
@@ -100,11 +103,14 @@ async function runCapture(sportKey: string): Promise<Response> {
 
   const league = captureLeagueFor(sportKey);
   if (league === null) {
+    const exclusion = captureExclusionReason(sportKey);
+    const detail = exclusion
+      ? `Esclusa dalla base di cattura: ${exclusion}. 0 crediti spesi.`
+      : "La lega non è nel catalogo della fonte (o non è un campionato di calcio). 0 crediti spesi.";
     return NextResponse.json(
       {
         error: `Cattura non dichiarata possibile per "${sportKey}"`,
-        detail:
-          "La lega non è nella base di cattura (o non è servita dal piano). Aggiungila a CAPTURABLE solo con dati verificati. 0 crediti spesi.",
+        detail,
       },
       { status: 400 },
     );

@@ -72,6 +72,13 @@ bookmaker disponibili.» il deploy di `main` non è ancora aggiornato).
    `CAPTURABLE`) e/o permettere all'utente di **seguire leghe servite** (Serie A,
    Premier, Liga, Bundesliga, Ligue 1), così le partite che il sito mostra sono
    partite che hanno davvero un prezzo individuale.
+   ✅ **Fatto il 10/09/2026 (codice):** la base è ora **derivata dal catalogo
+   reale** (39 competizioni attive, meno le esclusioni dichiarate con motivo:
+   MLS non servita dal piano, World Cup senza round-trip «Paese: Lega»). Niente
+   più lista a mano di sole 6 leghe: anche Argentina, Brasile, Eredivisie,
+   Primeira Liga, coppe UEFA ecc. sono catturabili. Invariante di round-trip
+   testata: ogni titolo «Paese: Lega» risolve indietro alla stessa `sportKey`
+   (`test:odds-sports`).
 3. **Audit del matching dei nomi** (punto 2 del vecchio "ordine di lavoro"): restano
    volutamente non-matching le abbreviazioni («Man Utd» ↔ «Manchester United») e i
    qualificatori diversi («Vitoria Guimaraes» ↔ «Vitoria SC»). Ogni nuovo caso costa
@@ -107,7 +114,7 @@ bookmaker disponibili.» il deploy di `main` non è ancora aggiornato).
 | `src/lib/providers/optional/sport-catalog.ts` | catalogo reale (39 leghe attive) + `resolveSportKeyFromCatalog` (vincolo di paese, collision-safe) |
 | `src/lib/providers/optional/sport-keys.ts` | `MAP` curata (1ª passata) + fallback catalogo; `COVERED_SPORT_KEYS`, `isCoveredBySportKey` |
 | `src/lib/providers/optional/odds-coverage.ts` | classifica copertura (`mapped`/`near`/`uncovered`/`unknown`); `near` **mai** usato come certezza |
-| `src/lib/providers/optional/odds-capture-league.ts` | base esplicita delle leghe catturabili (`CAPTURABLE`) |
+| `src/lib/providers/optional/odds-capture-league.ts` | base di cattura derivata dal catalogo (39 attive meno esclusioni; `captureExclusionReason`) |
 | `src/lib/providers/optional/ingest-odds-event.ts` | scrive evento della fonte in `leagues`/`teams`/`matches` (riusa le chiavi anagrafiche) |
 | `src/app/api/jobs/capture-odds/route.ts` | rotta protetta GET/POST per portare in archivio una partita servita (0 crediti) |
 | `src/lib/providers/optional/odds-match-resolver.ts` | matching partita↔evento; nota override corretta (non dice più "fuori mappa" per leghe coperte) |
