@@ -29,8 +29,10 @@ import { leagues, matches, teams } from "@/db/schema";
 import {
   creditsSpentFor,
   listWireSignalRows,
+  listWireSignalStats,
   pickWireCandidates,
   wireGate,
+  WIRE_MIN_CONFIDENCE,
 } from "@/lib/providers/optional/odds-collect-wire";
 import { resolveSmokeMatch, type DbMatchRow } from "@/lib/providers/optional/odds-match-resolver";
 import { collectAndPersistTheOddsApiOdds } from "@/lib/providers/optional/collect-the-odds-api";
@@ -90,6 +92,11 @@ async function listCandidates(): Promise<void> {
     }`,
   );
 
+  const stats = await listWireSignalStats();
+  console.log(
+    `segnali attivi in DB   : ${stats.activeTotal} (di cui ${stats.activeEligible} con indice ≥ ${WIRE_MIN_CONFIDENCE}, la soglia del cablaggio)`,
+  );
+
   const rows = await listWireSignalRows();
   const { candidates, skipped } = pickWireCandidates(rows, new Date());
 
@@ -100,7 +107,9 @@ async function listCandidates(): Promise<void> {
     );
   }
   if (candidates.length === 0) {
-    console.log("  nessuno: oggi nessun segnale attivo su competizione coperta.");
+    console.log(
+      "  nessuno in questo istante: guarda i segnali attivi qui sopra e gli scartati qui sotto per capire il perché.",
+    );
   }
 
   if (skipped.length > 0) {

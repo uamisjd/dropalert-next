@@ -35,7 +35,7 @@
  * mista (consenso + per-book). L'accensione dei due flag su Vercel resta un
  * passo umano deliberato, non un effetto collaterale del merge.
  */
-import { and, desc, eq, gte, inArray } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, sql as raw } from "drizzle-orm";
 import { db } from "@/db/client";
 import {
   dropSignals,
@@ -373,6 +373,36 @@ export async function listWireSignalRows(): Promise<WireSignalRow[]> {
     homeTeam: teamName.get(r.homeTeamId) ?? null,
     awayTeam: teamName.get(r.awayTeamId) ?? null,
   }));
+}
+
+/**
+ * Contatori dei segnali attivi, per lo smoke test dell'attivazione.
+ *
+ * `listWireSignalRows` restituisce SOLO i segnali già sopra la soglia: con
+ * zero candidati lo smoke non saprebbe dire se in archivio non ci sono
+ * segnali attivi, oppure ci sono ma nessuno abbastanza forte. Questi due
+ * contatori sciolgono l'ambiguità, così l'umano davanti a «0 candidati» sa
+ * se aspettare un segnale nuovo (totale 0) o uno più forte (totale > 0 ma
+ * eleggibili 0). Il ciclo non li usa: legge solo ciò che supera la soglia.
+ */
+export async function listWireSignalStats(): Promise<{
+  activeTotal: number;
+  activeEligible: number;
+}> {
+  const [total] = await db
+    .select({ n: raw<number>`count(*)::int` })
+    .from(dropSignals)
+    .where(eq(dropSignals.status, "active" satisfies SignalStatus));
+  const [eligible] = await db
+    .select({ n: raw<number>`count(*)::int` })
+    .from(dropSignals)
+    .where(
+      and(
+        eq(dropSignals.status, "active" satisfies SignalStatus),
+        gte(dropSignals.confidenceScore, String(WIRE_MIN_CONFIDENCE)),
+      ),
+    );
+  return { activeTotal: total?.n ?? 0, activeEligible: eligible?.n ?? 0 };
 }
 
 /* ------------------------------------------------------------------ */

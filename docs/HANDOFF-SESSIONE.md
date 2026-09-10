@@ -78,9 +78,12 @@ bookmaker disponibili.» il deploy di `main` non è ancora aggiornato).
    verificata contro il DB reale; manca solo la **lettura reale** (1 credito),
    che richiede un candidato: rilanciare `which=smoke-wire` quando il giro
    avrà segnali `active` con indice ≥ 45 su competizione coperta, poi
-   `-f match_id=<id>`. Nota minore: con `which=smoke-wire` il passo
-   «Sguardo sui dati (read-only)» esegue comunque i due audit (innocuo,
-   read-only): eventuale pulizia futura della condizione `if` del passo.
+   `-f match_id=<id>`. Lo smoke stampa ora anche i contatori dei segnali
+   attivi (`listWireSignalStats`: totale attivi e quanti ≥ 45), così «0
+   candidati» distingue «nessun segnale» da «segnali sotto soglia». Nota
+   minore: con `which=smoke-wire` il passo «Sguardo sui dati (read-only)»
+   esegue comunque i due audit (innocuo, read-only): eventuale pulizia
+   futura della condizione `if` del passo.
 2. **Ampliare la "base di cattura"** (`src/lib/providers/optional/odds-capture-league.ts`,
    `CAPTURABLE`) e/o permettere all'utente di **seguire leghe servite** (Serie A,
    Premier, Liga, Bundesliga, Ligue 1), così le partite che il sito mostra sono

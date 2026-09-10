@@ -151,15 +151,26 @@ Il codice è pronto (`odds-collect-wire.ts`, fase «1b» di `scheduler.ts`), ma 
 fase è **SPENTA finché non si accendono INSIEME** due flag su Vercel. Procedura
 (verificabile senza terminale, come per l'attivazione del 06/09):
 
-1. **Elenco candidati (0 crediti)**: `npm run smoke:odds-wire` — stampa lo
-   stato dei flag e le partite che il ciclo leggerebbe oggi (segnali attivi,
-   indice ≥ 45, competizioni coperte) con i motivi di scarto. Se l'elenco è
-   vuoto o pieno di scarti inattesi, NON attivare: si risolve prima la mappa
-   o il matching.
-2. **Lettura reale (1 credito)**: `npm run smoke:odds-wire -- --read <id>` su
-   una partita candidata. Verde = il percorso di lettura+persistenza del ciclo
-   scrive davvero linee per-bookmaker (sorgente `the-odds-api-wire-smoke`,
-   separata dai dati reali).
+**Dove si esegue lo smoke** (aggiornato 10/09/2026): la workflow manuale
+**`Verifica dati reali (manuale)`** ha ora la modalità `which=smoke-wire`
+(aggiunta su `audit.yml`, ramo della sessione, PR #29): elenco candidati a 0
+crediti senza `match_id`, lettura reale a 1 credito con `match_id=<id>`. In
+locale restano validi `npm run smoke:odds-wire` e
+`npm run smoke:odds-wire -- --read <id>`, che richiedono `DATABASE_URL` e la
+chiave.
+
+1. **Elenco candidati (0 crediti)**: `which=smoke-wire` (o
+   `npm run smoke:odds-wire`) — stampa lo stato dei flag, il numero di
+   **segnali attivi in archivio** (e quanti superano l'indice ≥ 45) e le
+   partite che il ciclo leggerebbe oggi (segnali attivi, indice ≥ 45,
+   competizioni coperte) con i motivi di scarto. Se l'elenco è vuoto o pieno
+   di scarti inattesi, NON attivare: si risolve prima la mappa o il matching.
+   Con «0 candidati» il contatore dei segnali attivi dice se aspettare un
+   segnale nuovo (totale 0) o uno più forte (totale > 0 ma nessuno ≥ 45).
+2. **Lettura reale (1 credito)**: `which=smoke-wire` con `match_id=<id>` (o
+   `npm run smoke:odds-wire -- --read <id>`) su una partita candidata. Verde =
+   il percorso di lettura+persistenza del ciclo scrive davvero linee
+   per-bookmaker (sorgente `the-odds-api-wire-smoke`, separata dai dati reali).
 3. **Confronto prima/dopo**: accendere SOLO `DROP_EXCLUDE_CONSENSUS_BOOKS=true`
    non cambia nulla da solo (la fase resta spenta senza `ODDS_WIRE_COLLECT`);
    il confronto si fa a flag acceso su un sottoinsieme controllato e leggendo
@@ -171,3 +182,10 @@ fase è **SPENTA finché non si accendono INSIEME** due flag su Vercel. Procedur
    (`/api/health` → `wire.budget`).
 
 Il rollback resta sempre: togliere i due flag su Vercel + redeploy.
+
+**Primo smoke eseguito il 10/09/2026** (run `34470604421`, `which=smoke-wire`):
+marker `MARKER-SMOKE-WIRE-BRANCH-v1` presente, passo `success`, flag SPENTO col
+motivo corretto, **0 candidati** e **0 crediti**. Infrastruttura del percorso
+verificata contro il DB reale; manca la lettura reale (1 credito), che richiede
+un candidato: rilanciare `which=smoke-wire` quando il giro avrà un segnale
+`active` con indice ≥ 45 su competizione coperta.
