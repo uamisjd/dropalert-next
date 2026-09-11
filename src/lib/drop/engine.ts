@@ -798,7 +798,16 @@ export function analyzeDrop(
     );
   }
 
-  const persistence = computePersistence(usable, input.now);
+  /* La tenuta non può scorrere oltre il calcio d'inizio: a mercato chiuso
+     nessun livello è più «mantenuto». Senza questo tetto, i segnali delle
+     partite già giocate continuavano a crescere a ogni ricalcolo (trovato
+     l'11/09/2026: una partita del 22/08 mostrava «mantenuto da 496 ore»).
+     durationScore è già clampato a 1, quindi i punteggi non cambiano; a
+     correggersi sono la misura pubblicata e il testo che la descrive. */
+  const levelClock =
+    input.kickoffAt.getTime() < input.now.getTime() ? input.kickoffAt : input.now;
+  const persistence = computePersistence(usable, levelClock);
+
   if (!persistence) {
     return emptyAnalysis(
       input,

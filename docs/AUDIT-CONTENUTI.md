@@ -478,3 +478,44 @@ assente nella sandbox) · `test:clv-basis` 31/31 · `test:score-ceiling` 29/29 �
 `test:odds-adapter` 76/76 · `test:clv-rebasis` 36/36 ·
 `test:clv-basis` 35/35 · `test:providers` 52/52 ·
 `test:simulator` 9/9 · `test:quant` 60/60 · `test` 61/61.
+
+---
+
+## Aggiunta — verifica del 11/09/2026: la «tenuta» scorreva oltre il kickoff
+
+**Domanda posta.** Il sito è in piedi a verifica esterna completa: tutte le
+sezioni live, tutti i calcoli pubblicati, tutte le fonti e i collegamenti.
+
+**Verdetto.** Tutte le pagine rispondono (23 rotte, redirect `/watchlist →
+/preferite` e `/smart-bets → /value-bets` attivi, `robots.txt`, `sitemap.xml`,
+`manifest`, feed RSS/JSON, API `/api/health`, `/api/cron/status`, `/api/coverage`,
+`/api/signals` inclusi). 49 suite di test verdi, di cui 4 con PostgreSQL locale
+avviato per l'occasione (`test:odds-expected` 8/8, `test:pipeline` 47/47,
+`test:scheduler` 30/30, `test:repo-analysis` 8/8). Arite meticolosa a campione
+sui numeri live: overround 1.72/4.00/4.80 → 103,97% ✓, surebet 247/253 @ 2.10
+e 2.05 → +18,65 € (3,73% ROI) ✓, escursione 2.12→1.54 con commissione 4,5% →
+(2.12/1.54−1)·0.955 → +35,97 € ✓, indice scomposto 22.5+13.65+8.5 = 44.65/55
+su base misurabile ✓, fascia «alta da 78» coerente col tetto 53,5 grezzo ✓.
+Link interni tutti presenti nel codice, link esterni dalle pagine live:
+giocatorianonimi.org ✓, garanteprivacy.it ✓, transfermarkt (fonte del contesto)
+raggiungibile ma con verifica anti-bot dai datacenter — comportamento atteso,
+non un guasto.
+
+**Difetto trovato e corretto.** La tenuta del movimento era calcolata da
+`firstMoveAt` a `now` senza tetto: dopo il calcio d'inizio il mercato è chiuso,
+ma ogni ricalcolo del ciclo allungava la misura. Una partita del 22/08 non
+ancora verificata mostrava «Il nuovo livello è mantenuto da 496 ore» (valore
+vero: 11,4 h fino al kickoff); il numero cresce di un'ora a ogni giro per ogni
+partita con risultato non pubblicato. Punteggi non intaccati (`durationScore`
+già clampato a 1), ma la misura pubblicata e la lingua piana sì.
+
+| File | Correzione |
+| --- | --- |
+| `src/lib/drop/engine.ts` | `analyzeDrop` conta la tenuta fino a `min(now, kickoffAt)` |
+| `src/lib/pipeline/detect.ts` | `upsertSignal/detectForMatch/detectAll` accettano `forceWrite` per ribasare i segnali a registro senza variazioni materiali né nuovi eventi di storia |
+| `src/scripts/run-analyze.ts` | `--force`: `npm run job:analyze -- --force` ribasa le righe persistite dopo il deploy |
+| `src/lib/drop/__tests__/engine.test.ts` | 2 regressioni: tenuta ferma al kickoff, segnale vivo ancora crescente |
+| `src/lib/pipeline/__tests__/pipeline.test.ts` | 2 regressioni: tetto a registro, `forceWrite` senza eventi |
+
+**Verifica dopo il fix.** `test` 68/68 · `test:pipeline` 47/47 ·
+`test:scheduler` 30/30 · typecheck e lint puliti · build verde.

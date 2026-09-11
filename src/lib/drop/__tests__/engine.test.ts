@@ -468,6 +468,53 @@ test("fiducia superiore per movimento sostenuto rispetto al flash", () => {
   );
 });
 
+test("la tenuta di una partita già giocata si ferma al kickoff", () => {
+  /* Regola: a calcio d'inizio passato il mercato è chiuso, nessun livello
+     è più «mantenuto». Il ricalcolo di un segnale concluso non deve far
+     crescere la tenuta: prima del fix, una partita del 22/08 mostrava
+     «mantenuto da 496 ore» perché sustained scorreva fino a now. */
+  const s = [
+    series("a", [[0, 2.0], [60, 1.8], [240, 1.78]]),
+    series("b", [[0, 2.0], [60, 1.81], [240, 1.79]]),
+  ];
+  const kickoffMin = 280;
+  const base: Omit<DropAnalysisInput, "now"> = {
+    matchId: 1,
+    market: "1x2",
+    selection: "home",
+    kickoffAt: mins(kickoffMin),
+    series: s,
+    expectedBookmakers: 4,
+  };
+  const pocoDopo = analyzeDrop({ ...base, now: mins(300) });
+  const giorniDopo = analyzeDrop({ ...base, now: mins(30_000) });
+  assert(
+    pocoDopo.persistence.sustainedMinutes ===
+      giorniDopo.persistence.sustainedMinutes,
+    `la tenuta non deve cambiare col passare del tempo: ${pocoDopo.persistence.sustainedMinutes} vs ${giorniDopo.persistence.sustainedMinutes}`,
+  );
+  assert(
+    giorniDopo.persistence.sustainedMinutes <= kickoffMin - 60,
+    `tenuta oltre il tetto del kickoff: ${giorniDopo.persistence.sustainedMinutes} > ${kickoffMin - 60}`,
+  );
+});
+
+test("il segnale vivo conta la tenuta fino a now, non fino al kickoff", () => {
+  /* Il tetto vale solo oltre il kickoff: finché la partita non è iniziata,
+     «da quanto regge il nuovo livello» si misura sull'istante corrente. */
+  const s = [
+    series("a", [[0, 2.0], [60, 1.8]]),
+    series("b", [[0, 2.0], [60, 1.81]]),
+  ];
+  const presto = analyzeDrop(input(s, 120));
+  const tardi = analyzeDrop(input(s, 240));
+  assert(
+    tardi.persistence.sustainedMinutes > presto.persistence.sustainedMinutes,
+    "un segnale attivo deve crescere fra un ricalcolo e il successivo",
+  );
+});
+
+
 /* ------------------------------------------------------------------ */
 /* 7. Analisi completa                                                 */
 /* ------------------------------------------------------------------ */

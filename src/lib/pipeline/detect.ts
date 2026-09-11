@@ -251,11 +251,18 @@ function changed(a: number | null, b: number, tol = 0.01): boolean {
 /**
  * Scrive o aggiorna un segnale.
  * Il prezzo di rilevamento viene fissato alla creazione e mai più toccato.
+ *
+ * `forceWrite` riscrive anche senza variazioni materiali: serve agli strumenti
+ * di ribasatura (es. `npm run job:analyze -- --force`), quando una correzione
+ * del motore deve raggiungere i segnali già a registro il cui quadro non è
+ * più cambiato. Non genera eventi di storia: gli eventi restano legati alle
+ * transizioni reali di punteggio o stato.
  */
 export async function upsertSignal(
   analysis: DropAnalysis,
   kickoffAt: Date,
   now: Date,
+  opts: { forceWrite?: boolean } = {},
 ): Promise<DetectionOutcome> {
   const base: DetectionOutcome = {
     matchId: analysis.matchId,
@@ -363,6 +370,7 @@ export async function upsertSignal(
   const prevScore = num(existing.confidenceScore) ?? 0;
   const prevDelta = num(existing.deltaPp) ?? 0;
   const isMaterial =
+    opts.forceWrite === true ||
     changed(prevScore, analysis.confidenceScore, 0.5) ||
     changed(prevDelta, analysis.magnitude.deltaPp, 0.05) ||
     existing.status !== status;
@@ -422,6 +430,7 @@ export async function detectForMatch(
   matchId: number,
   kickoffAt: Date,
   now: Date = new Date(),
+  opts: { forceWrite?: boolean } = {},
 ): Promise<{ outcomes: DetectionOutcome[]; gapsRecorded: number }> {
   const grouped = await getSeriesForMatch(matchId);
   const outcomes: DetectionOutcome[] = [];
@@ -473,7 +482,7 @@ export async function detectForMatch(
       algorithm,
     );
 
-    outcomes.push(await upsertSignal(analysis, kickoffAt, now));
+    outcomes.push(await upsertSignal(analysis, kickoffAt, now, opts));
 
     const gaps = gapsFromAnalysis(analysis);
     for (const g of gaps) {
@@ -504,7 +513,7 @@ export async function detectForMatch(
  */
 export async function detectAll(
   now: Date = new Date(),
-  opts: { matchIds?: number[] } = {},
+  opts: { matchIds?: number[]; forceWrite?: boolean } = {},
 ): Promise<DetectionSummary> {
   const rows = opts.matchIds
     ? await db
@@ -544,7 +553,9 @@ export async function detectAll(
     DETECTION_CONCURRENCY,
     async (match): Promise<WorkResult> => {
       try {
-        const detected = await detectForMatch(match.id, match.kickoffAt, now);
+        const detected = await detectForMatch(match.id, match.kickoffAt, now, {
+          forceWrite: opts.forceWrite,
+        });
         return { ok: true, ...detected };
       } catch (err) {
         return {

@@ -585,6 +585,75 @@ async function main(): Promise<void> {
     );
   });
 
+  await test("la tenuta a registro non supera mai il calcio d'inizio", async () => {
+    /* Regola dell'11/09/2026: a kickoff passato il mercato è chiuso, la
+       tenuta si ferma lì. Un ricalcolo tardivo non deve far crescere la
+       misura pubblicata (una partita del 22/08 arrivava a mostrare
+       «mantenuto da 496 ore» perché il conteggio scorreva fino a now). */
+    const fixture = await makeFixture({
+      key: "tetto",
+      hoursFromNow: -3,
+      from: 2.5,
+      to: 2.0,
+      bookCount: 5,
+      spanMinutes: 360,
+    });
+    const kickoff = new Date(Date.now() - 3 * 3600_000);
+    await detectForMatch(fixture.matchId, kickoff, new Date());
+    const row = await getSignalRow(fixture.matchId, "1x2", "home");
+    assert(row !== null, "segnale della fixture assente");
+    const firstMove = new Date(row!.firstMoveAt).getTime();
+    const maxSustained = Math.max(
+      0,
+      Math.round((kickoff.getTime() - firstMove) / 60_000) + 1,
+    );
+    assert(
+      row!.sustainedMinutes <= maxSustained,
+      `tenuta ${row!.sustainedMinutes} minuti oltre il tetto del kickoff (${maxSustained})`,
+    );
+  });
+
+  await test("forceWrite riscrive senza variazioni materiali, senza nuovi eventi", async () => {
+    /* Strumento di ribasatura: un segnale fermo può essere riscritto per
+       allinearlo a una correzione del motore che non muove il punteggio.
+       Gli eventi di storia restano legati alle transizioni vere. */
+    const before = await getSignalRow(fx.matchId, "1x2", "home");
+    assert(before !== null, "segnale della fixture assente");
+    const eventsBefore = await db
+      .select({ id: signalEvents.id })
+      .from(signalEvents)
+      .where(eq(signalEvents.signalId, before!.id));
+
+    const quiet = await detectForMatch(
+      fx.matchId,
+      new Date(Date.now() + 4 * 3600_000),
+    );
+    assert(
+      quiet.outcomes.every((o) => o.action !== "updated"),
+      "un riesame senza variazioni non dovrebbe essere materiale",
+    );
+
+    const forced = await detectForMatch(
+      fx.matchId,
+      new Date(Date.now() + 4 * 3600_000),
+      new Date(),
+      { forceWrite: true },
+    );
+    assert(
+      forced.outcomes.some((o) => o.action === "updated"),
+      "forceWrite non ha riscritto il segnale",
+    );
+    const eventsAfter = await db
+      .select({ id: signalEvents.id })
+      .from(signalEvents)
+      .where(eq(signalEvents.signalId, before!.id));
+    assertEqual(
+      eventsAfter.length,
+      eventsBefore.length,
+      "forceWrite non deve generare eventi di storia",
+    );
+  });
+
   group("Buchi dati");
 
   await test("recordGap è idempotente sullo stesso motivo aperto", async () => {
