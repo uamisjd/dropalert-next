@@ -37,7 +37,6 @@ import {
   CONFIDENCE_WEIGHTS,
   COVERAGE_WEIGHTS,
   MIN_BOOKS_FOR_COORDINATION,
-  MIN_BOOKS_FOR_FULL_PICTURE,
   SUSPICION_MULTIPLIER,
 } from "@/lib/drop/constants";
 
@@ -172,5 +171,3 @@ export function describeCeiling(ceiling: ScoreCeiling): string {
   );
 }
 
-/** Soglie usate dal motore per la copertura completa, esposte per la UI. */
-export const FULL_PICTURE_BOOKS = MIN_BOOKS_FOR_FULL_PICTURE;
