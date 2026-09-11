@@ -277,10 +277,10 @@ export default function GuidaPage() {
           <li>
             <strong>Il tetto dell&apos;indice.</strong> Con la fonte attuale —
             una sola linea di consenso, nessun libro sharp — 45 punti su 100 non
-            sono misurabili e l&apos;indice grezzo si ferma a{" "}
-            <Number>50,13</Number>. Una fascia vuota sopra quel valore non
-            significa «nessun segnale abbastanza buono»: significa che non ci
-            può cadere nulla.
+            sono misurabili: il tetto strutturale è <Number>55</Number>, quello
+            misurato sul motore si ferma a <Number>50,13</Number>. Una fascia
+            vuota sopra quel valore non significa «nessun segnale abbastanza
+            buono»: significa che non ci può cadere nulla.
           </li>
           <li>
             <strong>La scomposizione, non il totale.</strong> Nella pagina della
