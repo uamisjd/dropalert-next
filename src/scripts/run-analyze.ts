@@ -2,7 +2,11 @@
  * Esecuzione della pipeline da riga di comando, senza passare dalle API.
  * Utile per cron e diagnostica.
  *
- *   npx tsx --env-file=.env src/scripts/run-analyze.ts [--no-closing] [--match <id>]
+ *   npx tsx --env-file=.env src/scripts/run-analyze.ts [--no-closing] [--match <id>] [--force]
+ *
+ * `--force` riscrive anche i segnali senza variazioni materiali: serve a
+ * ribasare le misure persistite quando una correzione del motore non cambia
+ * il punteggio (es. il tetto della tenuta al kickoff dell'11/09/2026).
  *
  * Ogni esecuzione lascia una riga in `collector_runs`, come la rotta HTTP.
  */
@@ -27,7 +31,8 @@ async function main(): Promise<void> {
   console.log("═".repeat(64));
 
   try {
-    const detection = await detectAll(now, { matchIds });
+    const force = process.argv.slice(2).includes("--force");
+    const detection = await detectAll(now, { matchIds, forceWrite: force });
 
     console.log("\nRilevamento");
     console.log(`  partite analizzate     ${detection.matchesProcessed}`);
