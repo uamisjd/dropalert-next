@@ -278,7 +278,7 @@ export default function GuidaPage() {
             <strong>Il tetto dell&apos;indice.</strong> Con la fonte attuale —
             una sola linea di consenso, nessun libro sharp — 45 punti su 100 non
             sono misurabili: il tetto strutturale è <Number>55</Number>, quello
-            misurato sul motore si ferma a <Number>50,13</Number>. Una fascia
+            misurato sul motore si ferma a <Number>53,5</Number>. Una fascia
             vuota sopra quel valore non significa «nessun segnale abbastanza
             buono»: significa che non ci può cadere nulla.
           </li>

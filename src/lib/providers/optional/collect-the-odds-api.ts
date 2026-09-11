@@ -1,8 +1,9 @@
 import { createTheOddsApiProvider } from "./the-odds-api";
 import { writeProviderSnapshots, type ProviderSnapshotWriteReport } from "../ingest-snapshots";
 import type { ProviderResult, OddsQuoteDTO } from "../types";
+import { THE_ODDS_API_SNAPSHOT_SOURCE as PRODUCTION_SOURCE } from "../snapshot-sources";
 
-export const THE_ODDS_API_SNAPSHOT_SOURCE = "the-odds-api";
+export const THE_ODDS_API_SNAPSHOT_SOURCE = PRODUCTION_SOURCE;
 
 export interface CollectTheOddsApiParams {
   matchId: number;

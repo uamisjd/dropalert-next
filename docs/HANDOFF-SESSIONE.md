@@ -1,6 +1,6 @@
 # Handoff — DropAlert: stato lavori, infrastruttura live, cosa continuare
 
-> Documento di continuità fra sessioni di lavoro. Ultimo aggiornamento: **2026-09-10**.
+> Documento di continuità fra sessioni di lavoro. Ultimo aggiornamento: **2026-09-11**.
 > **Leggi prima §0** (ripartenza di oggi): dice dove siamo, cosa è acceso e
 > cosa fare adesso. Da `## Stato decisionale — aggiornamento 2026-09-06` in poi
 > il testo è **storico** (PR #11–#22): utile come contesto, non come stato corrente.
@@ -20,7 +20,15 @@
 - **PR #27 MERGIATA subito dopo** — merge commit **`0dcb581`**: rimuoveva il flag
   fantasma `--senza-fonte` da `odds:scopri` (era documentato ma non implementato:
   i doc ora indicano il percorso offline reale `--catalogo` + `--leagues`).
-  Questi due hash sono fissi e restano validi anche quando `main` avanza.
+   Questi due hash sono fissi e restano validi anche quando `main` avanza.
+- **PR #29 MERGIATA il 10/09/2026** — merge commit **`71c59ef`**: cablaggio
+  per-bookmaker nel ciclo (dietro doppio flag default OFF), CLV su base
+  allineata raw-vs-raw, base di cattura derivata dal catalogo, modalità
+  `which=smoke-wire` in `audit.yml` + primo smoke live. «Verifica» su `main`
+  verde post-merge (run `34475105406`). Restano i soli passi umani: ribasatura
+  CLV storico (`clv:rebase` con `DATABASE_URL`), lettura reale del cablaggio
+  (1 credito, serve un segnale `active` ≥ 45 su competizione coperta),
+  eventuale accensione dei due flag su Vercel dopo il confronto prima/dopo.
 - **Obiettivo dell'utente raggiunto**: `SMOKE OK` su dati reali **senza terminale**
   (match #788 Venezia—Fiorentina, 72 quote da 24 bookmaker, freshness a 0 min).
   Dettagli in `docs/SMOKE-THE-ODDS-API.md` §17.
@@ -166,6 +174,51 @@ bookmaker disponibili.» il deploy di `main` non è ancora aggiornato).
 - **Mai cambiare ramo**: lavoro e push solo sul ramo della sessione; PR verso `main`.
 - **Il 404 di The Odds API** su una lega = limite del piano, non un bug nostro.
 - Un `near` (somiglianza) **non è** copertura: non promuoverlo a certezza.
+
+### 0.8 Verifica completa e fix del denominatore (11/09/2026, ramo `arena/01a09108-dropalert-next`)
+
+**Verifica di produzione (sola lettura, tutto confermato).** `/api/health`:
+`partial_data`, DB raggiungibile, BetExplorer `ok`, wire dichiarato SPENTO con
+motivo corretto, budget 9/490 mese e 0/14 oggi (nessun credito speso dal
+06/09); `rate_limited` a 116 ma fonte `ok`, quindi nessuna azione sul ritmo
+(il gate richiede fonte degradata E contatore > 95). `/api/cron/status`: gate
+sano, ultimo full Actions 14:18–14:25 UTC in `success` (415 s, sotto i 10 min).
+Run schedulati in `success`, uno solo `cancelled` per timeout 18 ore fa
+(isolato, il giro dopo è verde). Home, `/performance`, `/value-bets`
+renderizzate senza errori. PR #30 (fix copia `/guida`) con «Verifica» verde.
+
+**Bug trovato: denominatore di copertura inquinato dagli smoke test.**
+`getExpectedBookmakerCount` contava i bookmaker distinti su TUTTE le righe di
+`odds_snapshots`, incluse quelle degli smoke (`the-odds-api-smoke`): il
+denominatore 1x2 di produzione era salito a **25** (verificato per aritmetica
+sui dati live: copertura 0,418 = 0,45/25 + 0,30 + 0,10 esatti), deprimendo
+copertura e punteggi di tutti i segnali (~−4 punti). In più il tetto
+pubblicato (**50,13**, da un 4 scritto a mano + registro delle fonti, che tra
+l'altro non è inizializzato nella rotta della home) non coincideva con il
+massimo reale del motore (**53,5** con denominatore 1; 53,12 osservato il
+02/09): la home diceva «l'indice si ferma a 50,13, fasce sopra irraggiungibili»
+mentre la fascia 50–74 conteneva un'osservazione.
+
+**Fix (codice, flag sempre spenti).** Il denominatore conta solo le righe di
+produzione (`PRODUCTION_SNAPSHOT_SOURCES`, nuovo modulo foglia
+`src/lib/providers/snapshot-sources.ts`, unica fonte dei nomi); il tetto
+pubblicato usa lo stesso denominatore del motore, tarato sul mercato 1x2 che
+è il massimo globale (il cablaggio legge solo quello). Nuovo tetto misurato:
+**53,5** (40,13 con il moltiplicatore); strutturale 55 invariato; fascia
+vuota per costruzione solo la 75–100. Effetto atteso al deploy: punteggi 1x2
+a fonte singola +~4 punti (misura onesta, non gonfiata: torna il livello
+pre-smoke), più candidati oltre la soglia wire ≥ 45 nel tempo. Test: caso
+produzione in `test:score-ceiling` (puri, verdi in locale) + nuova suite DB
+`test:odds-expected` (gira in CI con PostgreSQL). PR #30 allargata al fix e
+rintitolata; merge resta decisione umana. Pulizia facoltativa (DB
+produzione, non necessaria dopo il fix): cancellare le righe
+`WHERE source IN ('the-odds-api-smoke','the-odds-api-wire-smoke')`.
+
+**Segnali attivi oggi (3, tutti sotto soglia wire):** Birzebbuga—Hamrun 35,65,
+Bodø/Glimt W—Aalesund W 23,03, Babrungas—Atmosfera 13,23. Nessun candidato
+`active` ≥ 45: la lettura reale del cablaggio resta in attesa. Nota: lo
+smoke-wire da `main` non è ancora mai stato lanciato (quello del 10/09 girava
+dal vecchio ramo); il prossimo giro utile lo verificherà.
 
 ---
 

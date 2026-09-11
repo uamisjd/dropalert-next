@@ -9,7 +9,7 @@
  * La distinzione importante per chi legge è:
  * - "NON AZIONABILE" — la fonte espone consenso, non un prezzo eseguibile;
  * - "OSSERVAZIONE" — dati presenti ma manca fair indipendente;
- * - le fasce alte non sono attualmente raggiungibili (tetto 50/100).
+ * - le fasce alte non sono attualmente raggiungibili (tetto 53,5/100).
  *
  * Questo badge NON sostituisce il DecisionStatusBlock del dettaglio partita:
  * è un indicatore rapido, non un'analisi completa.

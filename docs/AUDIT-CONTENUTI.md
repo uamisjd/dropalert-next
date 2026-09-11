@@ -28,7 +28,7 @@ può ancora dirti quale partita scegliere**, per tre motivi strutturali misurati
 qui sotto: legge una sola linea di prezzo (45 punti su 100 dell'indice sono
 non misurabili), la sua unica metrica di qualità mescola due basi di misura
 senza dichiararlo in pagina, e il suo indice — misurato sul motore reale — non
-può superare **50,13** su 100 nemmeno nel caso migliore possibile. Le correzioni
+può superare **50,13** su 100 — sonda con denominatore 4; aggiornamento 11/09/2026 in §2.2: **53,5** con gli input di produzione — nemmeno nel caso migliore possibile. Le correzioni
 che potevo fare senza decisioni tue sono applicate in questo branch; le tre
 scelte che servono per il salto di qualità sono in §5.
 
@@ -142,6 +142,23 @@ attuale. La domanda che R2 lasciava aperta («un indice più alto dà un CLV
 migliore?») non è senza risposta per mancanza di dati: è **impossibile da
 porre** finché l'indice grezzo si ferma a 50. Ogni conclusione tratta da quella
 tabella oggi è priva di fondamento, e la pagina non lo dice.
+
+> **Aggiornamento (11/09/2026).** La sonda qui sopra usava il denominatore 4
+> (il default del motore quando non riceve `expectedBookmakers`), mentre in
+> produzione il motore riceve il denominatore dal database
+> (`getExpectedBookmakerCount`), che con una sola linea di consenso vale 1:
+> il tetto misurato sul motore con gli input di produzione è quindi **53,5**
+> (copertura 8,5/10, banda `low`; 40,13 con il moltiplicatore), non 50,13 —
+> e i dati reali lo confermano (punteggio 53,12 osservato in produzione il
+> 02/09). In più, le righe scritte dagli smoke test (`the-odds-api-smoke`)
+> avevano gonfiato il denominatore di produzione fino a 25, deprimendo
+> copertura (0,418 invece di 0,85) e punteggi di tutti i segnali 1x2.
+> Corretto: il denominatore conta solo le righe di produzione
+> (`PRODUCTION_SNAPSHOT_SOURCES`, `src/lib/providers/snapshot-sources.ts`) e
+> il tetto pubblicato usa lo stesso denominatore del motore
+> (`currentScoreCeiling` in `src/lib/repo/dashboard.ts`), invece di un 4
+> scritto a mano e del registro delle fonti. La fascia strutturalmente vuota
+> resta solo la «75–100»; la «50–74» è raggiungibile fino a 53,5.
 
 ### 2.3 `/simulator` pubblicava «EV» senza dire lo stato del modello — CORRETTO
 
