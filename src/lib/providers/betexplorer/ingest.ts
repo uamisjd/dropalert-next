@@ -29,9 +29,10 @@ import { recordGap } from "@/lib/pipeline/detect";
 import { CONSENSUS_BOOKMAKER_KEY } from "./index";
 import { leagueKeyFor, slugify, teamKeyFor } from "./parse";
 import type { FixtureDTO, OddsQuoteDTO, ResultDTO } from "../types";
+import { BETEXPLORER_SNAPSHOT_SOURCE } from "../snapshot-sources";
 
 /** Sorgente scritta in `odds_snapshots.source`: tracciabilità del dato. */
-export const SNAPSHOT_SOURCE = "betexplorer-dropping-odds";
+export const SNAPSHOT_SOURCE = BETEXPLORER_SNAPSHOT_SOURCE;
 
 /* ------------------------------------------------------------------ */
 /* Anagrafiche                                                         */

@@ -36,8 +36,9 @@ import {
 } from "@/lib/providers/optional/odds-collect-wire";
 import { resolveSmokeMatch, type DbMatchRow } from "@/lib/providers/optional/odds-match-resolver";
 import { collectAndPersistTheOddsApiOdds } from "@/lib/providers/optional/collect-the-odds-api";
+import { THE_ODDS_API_WIRE_SMOKE_SOURCE } from "@/lib/providers/snapshot-sources";
 
-const SMOKE_SOURCE = "the-odds-api-wire-smoke";
+const SMOKE_SOURCE = THE_ODDS_API_WIRE_SMOKE_SOURCE;
 
 function arg(name: string): string | null {
   const index = process.argv.indexOf(name);

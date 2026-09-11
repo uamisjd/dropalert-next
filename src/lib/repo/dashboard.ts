@@ -12,7 +12,6 @@
 import { and, asc, desc, eq, gte, inArray, sql as raw } from "drizzle-orm";
 import { db } from "@/db/client";
 import {
-  bookmakers,
   clvRecords,
   collectorRuns,
   dataGaps,
@@ -57,11 +56,13 @@ import {
 import {
   bandReachability,
   describeCeiling,
-  FULL_PICTURE_BOOKS,
   scoreCeiling,
   type ScoreCeiling,
 } from "@/lib/view/score-ceiling";
-import { perBookmakerOddsUnavailable } from "@/lib/providers/registry";
+import {
+  getExpectedBookmakerCount,
+  hasSharpProductionBook,
+} from "@/lib/repo/odds";
 
 /* ------------------------------------------------------------------ */
 /* Soglie di lettura                                                   */
@@ -80,12 +81,13 @@ export const CLV_MATURITY_NOTE =
 
 /**
  * Tetto dell'indice nel caso in cui non si riesca a leggere la configurazione:
- * si dichiara il caso più prudente (fonte singola) invece di una copertura
- * non verificata.
+ * si dichiara il caso più prudente (fonte singola: una sola linea di consenso
+ * con denominatore 1, lo stesso che il motore legge in produzione) invece di
+ * una copertura non verificata.
  */
 export const SINGLE_SOURCE_CEILING = scoreCeiling({
   booksObserved: 1,
-  booksExpected: FULL_PICTURE_BOOKS,
+  booksExpected: 1,
   sharpAvailable: false,
   hasOpeningLine: true,
 });
@@ -380,8 +382,8 @@ export interface ClvMaturity {
    *
    * Serve alla tabella qui sotto: una fascia sopra il tetto non è «poco
    * popolata», è irraggiungibile per costruzione, e leggerla come un risultato
-   * sarebbe un errore. Misurato sul motore: 50,13 con una sola linea di
-   * consenso, 37,60 con il moltiplicatore di iper-reazione.
+   * sarebbe un errore. Misurato sul motore: 53,5 con una sola linea di
+   * consenso, 40,13 con il moltiplicatore di iper-reazione.
    */
   ceiling: ScoreCeiling;
   ceilingNote: string;
@@ -994,50 +996,39 @@ export async function getClvMaturity(now = new Date()): Promise<ClvMaturity> {
 }
 
 /**
- * Configurazione con cui il motore sta lavorando adesso, letta dai dati.
+ * Configurazione con cui il motore sta lavorando adesso, letta dagli stessi
+ * dati che legge il motore.
  *
- * Il tetto dell'indice dipende da quanti bookmaker il sistema riesce a vedere:
- * con una fonte che espone solo il consenso è per forza una linea sola. Se una
- * fonte per singolo bookmaker diventa attiva, il tetto sale da solo e le fasce
- * alte della tabella CLV smettono di essere marcate irraggiungibili — senza
- * che nessuno debba ricordarsi di aggiornare una costante.
+ * Il tetto usa LO STESSO denominatore del motore (`getExpectedBookmakerCount`)
+ * e la stessa definizione di linea sharp di produzione: in passato il tetto
+ * usava un 4 scritto a mano e il registro delle fonti (che non è nemmeno
+ * inizializzato in tutte le rotte), mentre il motore leggeva il denominatore
+ * dal database, e i due numeri hanno divergito senza che nessun test se ne
+ * accorgesse (trovato 11/09/2026).
+ *
+ * Il tetto è tarato sul mercato 1x2 perché è il massimo globale: il cablaggio
+ * per-bookmaker legge solo quel mercato, quindi il suo denominatore è sempre
+ * maggiore o uguale a quello degli altri mercati. Se una fonte per singolo
+ * bookmaker diventa attiva, il tetto sale da solo e le fasce alte della tabella
+ * CLV smettono di essere marcate irraggiungibili — senza che nessuno debba
+ * ricordarsi di aggiornare una costante.
  */
 async function currentScoreCeiling(): Promise<ScoreCeiling> {
-  if (perBookmakerOddsUnavailable()) {
-    /* la fonte espone una sola linea di consenso, dichiarata non sharp */
-    return scoreCeiling({
-      booksObserved: 1,
-      booksExpected: FULL_PICTURE_BOOKS,
-      sharpAvailable: false,
-      hasOpeningLine: true,
-    });
-  }
-
   try {
-    const [row] = await db
-      .select({
-        books: raw<number>`count(distinct ${oddsSnapshots.bookmakerId})::int`,
-        sharps: raw<number>`count(distinct case when ${bookmakers.isSharp} then ${oddsSnapshots.bookmakerId} end)::int`,
-      })
-      .from(oddsSnapshots)
-      .leftJoin(bookmakers, eq(bookmakers.id, oddsSnapshots.bookmakerId));
-
-    const books = row?.books ?? 0;
+    const expected = await getExpectedBookmakerCount("1x2");
+    const sharpAvailable = await hasSharpProductionBook("1x2");
+    /* il caso massimo per costruzione: una partita con tutti i book attesi,
+       storico pieno e linea di apertura */
     return scoreCeiling({
-      booksObserved: books,
-      booksExpected: FULL_PICTURE_BOOKS,
-      sharpAvailable: (row?.sharps ?? 0) > 0,
+      booksObserved: expected,
+      booksExpected: expected,
+      sharpAvailable,
       hasOpeningLine: true,
     });
   } catch {
     /* lettura non riuscita: si dichiara il caso più prudente, non si inventa
        una copertura che non abbiamo verificato */
-    return scoreCeiling({
-      booksObserved: 1,
-      booksExpected: FULL_PICTURE_BOOKS,
-      sharpAvailable: false,
-      hasOpeningLine: true,
-    });
+    return SINGLE_SOURCE_CEILING;
   }
 }
 

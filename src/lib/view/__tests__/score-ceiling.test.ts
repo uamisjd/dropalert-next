@@ -55,6 +55,23 @@ near("tetto grezzo = 30 + 0 + 0 + 15 + 5,13", single.maxRaw, 50.13);
 near("tetto con moltiplicatore 0,75", single.maxWithSuspicion, 37.6);
 near("punti non misurabili = 25 + 20", single.unreachablePoints, 45);
 
+/* --- il caso di produzione: denominatore 1, come lo legge il motore ---
+   Il motore riceve `expectedBookmakers` da `getExpectedBookmakerCount`, che in
+   produzione con una sola linea di consenso vale 1 (non 4): il tetto
+   pubblicato deve coincidere con questo, non con il caso teorico qui sopra.
+   Trovato 11/09/2026: il sito dichiarava 50,13 mentre il motore arrivava a
+   53,12 su dati reali. */
+const prod = scoreCeiling({
+  booksObserved: 1,
+  booksExpected: 1,
+  sharpAvailable: false,
+  hasOpeningLine: true,
+});
+near("copertura massima di produzione = 0,45 + 0,30 + 0 + 0,10", prod.maxCoverageScore, 0.85);
+near("tetto grezzo di produzione = 30 + 0 + 0 + 15 + 8,5", prod.maxRaw, 53.5);
+near("tetto di produzione con moltiplicatore 0,75", prod.maxWithSuspicion, 40.13);
+near("punti non misurabili di produzione = 25 + 20", prod.unreachablePoints, 45);
+
 /* --- il tetto dichiarato coincide con ciò che il motore produce davvero --- */
 const now = new Date("2026-09-05T18:00:00Z");
 const t = (minAgo: number) => new Date(now.getTime() - minAgo * 60_000);
@@ -91,6 +108,14 @@ near(
   single.maxRaw,
 );
 eq("e la banda grezza resta «low»", best.confidenceBand, "low");
+
+/* --- il motore con il denominatore di produzione si ferma a 53,5 --- */
+const bestProd = analyzeDrop({ ...input, expectedBookmakers: 1 }, "v1");
+near(
+  "il motore con denominatore 1 si ferma al tetto di produzione",
+  bestProd.confidenceScore,
+  prod.maxRaw,
+);
 
 /* v2 sulla trasferta a quota 2,00: nessuna delle due classi di iper-reazione
    scatta (non è casa, e l'apertura non supera 3,0), quindi il moltiplicatore

@@ -3,23 +3,29 @@
  *
  * Il problema che questo modulo rende visibile è misurato, non ipotizzato. Con
  * la fonte attuale — una sola linea di consenso, nessun bookmaker marcato
- * sharp — il punteggio grezzo non può superare un valore preciso, e quel
- * valore sta DENTRO la seconda fascia della tabella CLV:
+ * sharp — il punteggio grezzo non può superare un valore preciso:
  *
  *   magnitude    30/30   (il drop è misurabile)
  *   coordination  0/25   (un solo book: `booksTotal < MIN_BOOKS_FOR_COORDINATION`)
  *   sharp         0/20   (nessun libro sharp osservato)
  *   persistence  15/15   (movimento sostenuto)
- *   coverage    5,13/10  (0,45·¼ + 0,30·1 + 0 + 0,10 = 0,5125)
+ *   coverage     8,5/10  (0,45·1 + 0,30·1 + 0 + 0,10 = 0,85)
  *   ─────────────────
- *   totale      50,13/100        → banda `low`
- *   con il moltiplicatore 0,75 → 37,60
+ *   totale       53,5/100        → banda `low`
+ *   con il moltiplicatore 0,75 → 40,13
  *
  * Verificato chiamando `analyzeDrop` con il miglior caso possibile (drop
- * +11,3 pp sostenuto otto ore). Conseguenza: le fasce «50–74» e «75–100» della
- * tabella CLV non sono poco popolate per sfortuna di campione — sono
- * **strutturalmente vuote**. `docs/BACKTEST-R2.md` lo aveva osservato (n=1 e
- * n=0) senza poterne dire il motivo; il motivo è questo.
+ * +11,3 pp sostenuto otto ore) e il denominatore di produzione
+ * (`expectedBookmakers: 1`, come lo legge il motore). Conseguenza: la fascia
+ * «75–100» della tabella CLV non è poco popolata per sfortuna di campione —
+ * è **strutturalmente vuota**. `docs/BACKTEST-R2.md` lo aveva osservato
+ * (n=1 e n=0) senza poterne dire il motivo; il motivo è questo.
+ *
+ * Nota storica: fino all'11/09/2026 il tetto pubblicato era 50,13, calcolato
+ * con un denominatore 4 scritto a mano mentre il motore ne leggeva uno dal
+ * database — e i due hanno divergito (il motore è arrivato a 53,12 su dati
+ * reali). Da allora il tetto pubblicato usa lo stesso denominatore del motore
+ * (`getExpectedBookmakerCount`) e le righe degli smoke test non lo spostano.
  *
  * Regola applicata: il tetto si calcola dalle costanti del motore, non si
  * scrive a mano, e una fascia sopra il tetto viene marcata come irraggiungibile
@@ -31,7 +37,6 @@ import {
   CONFIDENCE_WEIGHTS,
   COVERAGE_WEIGHTS,
   MIN_BOOKS_FOR_COORDINATION,
-  MIN_BOOKS_FOR_FULL_PICTURE,
   SUSPICION_MULTIPLIER,
 } from "@/lib/drop/constants";
 
@@ -166,5 +171,3 @@ export function describeCeiling(ceiling: ScoreCeiling): string {
   );
 }
 
-/** Soglie usate dal motore per la copertura completa, esposte per la UI. */
-export const FULL_PICTURE_BOOKS = MIN_BOOKS_FOR_FULL_PICTURE;

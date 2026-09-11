@@ -15,6 +15,7 @@ import { STALE_SNAPSHOT_MINUTES } from "@/lib/drop/constants";
 import { num } from "@/lib/drop/math";
 import type { BookmakerSeries } from "@/lib/drop/types";
 import { isConsensusBookmakerKey } from "@/lib/decision/price-evidence";
+import { PRODUCTION_SNAPSHOT_SOURCES } from "@/lib/providers/snapshot-sources";
 
 /**
  * Interruttore: quando `true`, la riga di consenso (es. `betexplorer-consensus`)
@@ -119,8 +120,14 @@ export function marketKey(market: MarketType, selection: SelectionCode): string 
 }
 
 /**
- * Numero di bookmaker attivi che quotano abitualmente un mercato.
+ * Numero di bookmaker che quotano abitualmente un mercato.
  * Serve come denominatore onesto per la copertura dati.
+ *
+ * Conta SOLO le righe di produzione (`PRODUCTION_SNAPSHOT_SOURCES`): le righe
+ * scritte dagli smoke test restano in archivio come prova della verifica, ma
+ * non devono spostare questo denominatore — altrimenti ogni smoke deprimerebbe
+ * copertura e punteggi di tutti i segnali (trovato 11/09/2026: denominatore
+ * 1x2 salito a 25 per le righe degli smoke, copertura a 0,418 invece di 0,85).
  */
 export async function getExpectedBookmakerCount(
   market: MarketType,
@@ -128,15 +135,54 @@ export async function getExpectedBookmakerCount(
   const [row] = await db
     .select({ n: raw<number>`count(distinct ${oddsSnapshots.bookmakerId})::int` })
     .from(oddsSnapshots)
-    .where(eq(oddsSnapshots.market, market));
+    .where(
+      and(
+        eq(oddsSnapshots.market, market),
+        inArray(oddsSnapshots.source, PRODUCTION_SNAPSHOT_SOURCES),
+      ),
+    );
   const observed = row?.n ?? 0;
 
+  /* Book attivi che hanno almeno una riga di produzione sul mercato: un libro
+     creato da uno smoke (attivo ma senza righe di produzione) non conta. */
   const [active] = await db
-    .select({ n: raw<number>`count(*)::int` })
+    .select({ n: raw<number>`count(distinct ${bookmakers.id})::int` })
     .from(bookmakers)
+    .innerJoin(
+      oddsSnapshots,
+      and(
+        eq(oddsSnapshots.bookmakerId, bookmakers.id),
+        eq(oddsSnapshots.market, market),
+        inArray(oddsSnapshots.source, PRODUCTION_SNAPSHOT_SOURCES),
+      ),
+    )
     .where(eq(bookmakers.active, true));
 
   return Math.max(observed, Math.min(active?.n ?? 0, 8), 1);
+}
+
+/**
+ * true se esiste almeno un libro sharp con righe di produzione sul mercato.
+ * Serve al tetto dell'indice: la conferma sharp è misurabile solo se una
+ * linea sharp di produzione esiste davvero (le righe degli smoke non contano).
+ */
+export async function hasSharpProductionBook(
+  market: MarketType,
+): Promise<boolean> {
+  const rows = await db
+    .select({ id: bookmakers.id })
+    .from(bookmakers)
+    .innerJoin(
+      oddsSnapshots,
+      and(
+        eq(oddsSnapshots.bookmakerId, bookmakers.id),
+        eq(oddsSnapshots.market, market),
+        inArray(oddsSnapshots.source, PRODUCTION_SNAPSHOT_SOURCES),
+      ),
+    )
+    .where(and(eq(bookmakers.active, true), eq(bookmakers.isSharp, true)))
+    .limit(1);
+  return rows.length > 0;
 }
 
 /** Ultimo prezzo noto per book su una selezione (per la linea di chiusura). */

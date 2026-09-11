@@ -40,6 +40,7 @@ import {
   type SmokeMatchParams,
 } from "@/lib/providers/optional/odds-match-resolver";
 import { writeProviderSnapshots } from "@/lib/providers/ingest-snapshots";
+import { THE_ODDS_API_SMOKE_SOURCE } from "@/lib/providers/snapshot-sources";
 import { getMatchDetail } from "@/lib/repo/match-detail";
 import { executablePriceFromSeries } from "@/lib/decision/price-evidence";
 import { STALE_SNAPSHOT_MINUTES } from "@/lib/drop/constants";
@@ -329,7 +330,7 @@ async function main(): Promise<number> {
     params.matchId,
     result.data,
     null,
-    "the-odds-api-smoke",
+    THE_ODDS_API_SMOKE_SOURCE,
   );
   console.log(
     `   snapshot scritti: ${persistence.written} — duplicati saltati: ${persistence.skipped} — anagrafiche bookmaker: ${persistence.bookmakersEnsured}`,
@@ -348,7 +349,7 @@ async function main(): Promise<number> {
   }
 
   const smokeSeries = detail.series.filter((serie) =>
-    serie.points.some((point) => point.source === "the-odds-api-smoke"),
+    serie.points.some((point) => point.source === THE_ODDS_API_SMOKE_SOURCE),
   );
   console.log(
     `   serie con punto dello smoke: ${smokeSeries.length} — serie totali sulla partita: ${detail.series.length}`,
