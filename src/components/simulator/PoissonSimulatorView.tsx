@@ -59,7 +59,7 @@ export function PoissonSimulatorView() {
         <h2 className="text-lg font-bold text-slate-950 sm:text-xl">
           Parametri xG / Goal Expectancy (Dixon-Coles)
         </h2>
-        <p className="mt-1 text-xs text-slate-500">
+        <p className="mt-1 text-xs text-slate-600">
           Imposta i gol attesi per squadra (xG) e il fattore di correlazione dei punteggi bassi per calcolare la distribuzione statistica esatta.
         </p>
 
@@ -79,7 +79,7 @@ export function PoissonSimulatorView() {
               min="0.3"
               max="3.5"
               step="0.05"
-              value={lambdaHome}
+              aria-label="xG Squadra Casa (λ)" value={lambdaHome}
               onChange={(e) => setLambdaHome(Number.parseFloat(e.target.value))}
               className="mt-3 w-full accent-cyan-600"
             />
@@ -100,7 +100,7 @@ export function PoissonSimulatorView() {
               min="0.3"
               max="3.5"
               step="0.05"
-              value={muAway}
+              aria-label="xG Squadra Trasferta (μ)" value={muAway}
               onChange={(e) => setMuAway(Number.parseFloat(e.target.value))}
               className="mt-3 w-full accent-cyan-600"
             />
@@ -121,11 +121,11 @@ export function PoissonSimulatorView() {
               min="-0.25"
               max="0.0"
               step="0.01"
-              value={rho}
+              aria-label="Correlazione Dixon-Coles (ρ)" value={rho}
               onChange={(e) => setRho(Number.parseFloat(e.target.value))}
               className="mt-3 w-full accent-slate-600"
             />
-            <p className="mt-1 text-[10px] text-slate-400">
+            <p className="mt-1 text-[10px] text-slate-600">
               Standard Dixon-Coles calcio: -0.12
             </p>
           </div>
@@ -136,7 +136,7 @@ export function PoissonSimulatorView() {
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         {/* 1X2 */}
         <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
-          <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500">
+          <h3 className="text-xs font-bold uppercase tracking-wider text-slate-600">
             Mercato 1X2 Fair Model
           </h3>
           <div className="mt-3 space-y-2 text-xs">
@@ -156,7 +156,7 @@ export function PoissonSimulatorView() {
 
           {/* Confronto con le quote del mercato, sulle tre selezioni */}
           <div className="mt-3 space-y-2 border-t border-slate-100 pt-3">
-            <p className="text-[11px] text-slate-500">
+            <p className="text-[11px] text-slate-600">
               Quote del mercato da confrontare con il modello: sono valori che inserisci
               tu, e il confronto è fra la tua quota e la fair del modello — non contro i
               dati del sito, che qui non vengono letti.
@@ -167,16 +167,16 @@ export function PoissonSimulatorView() {
               { label: "Esito 2", value: marketOddsAway, set: setMarketOddsAway, ev: evAway },
             ].map((x) => (
               <div key={x.label} className="flex items-center gap-2">
-                <span className="w-14 text-[11px] text-slate-500">{x.label}</span>
+                <span className="w-14 text-[11px] text-slate-600">{x.label}</span>
                 <input
                   type="text"
-                  value={x.value}
+                  aria-label={`Quota bookmaker ${x.label}`} value={x.value}
                   onChange={(e) => x.set(e.target.value)}
                   className="w-20 rounded-lg border border-slate-300 px-2 py-1 text-xs font-bold text-slate-900"
                 />
                 <span
                   className={`text-xs font-extrabold ${
-                    x.ev && x.ev.hasEdge ? "text-emerald-600" : "text-rose-600"
+                    x.ev && x.ev.hasEdge ? "text-emerald-700" : "text-rose-600"
                   }`}
                 >
                   {x.ev
@@ -190,7 +190,7 @@ export function PoissonSimulatorView() {
 
         {/* Over / Under 2.5 */}
         <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
-          <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500">
+          <h3 className="text-xs font-bold uppercase tracking-wider text-slate-600">
             Over / Under 2.5 Fair Model
           </h3>
           <div className="mt-3 space-y-2 text-xs">
@@ -206,17 +206,17 @@ export function PoissonSimulatorView() {
 
           {/* Confronto Over 2.5 */}
           <div className="mt-3 border-t border-slate-100 pt-3">
-            <div className="text-[11px] text-slate-500">Quota Bookmaker su Over 2.5:</div>
+            <div className="text-[11px] text-slate-600">Quota Bookmaker su Over 2.5:</div>
             <div className="mt-1 flex items-center gap-2">
               <input
                 type="text"
-                value={marketOddsOver25}
+                aria-label="Quota bookmaker Over 2.5" value={marketOddsOver25}
                 onChange={(e) => setMarketOddsOver25(e.target.value)}
                 className="w-20 rounded-lg border border-slate-300 px-2 py-1 text-xs font-bold text-slate-900"
               />
               <span
                 className={`text-xs font-extrabold ${
-                  evOver25 && evOver25.hasEdge ? "text-emerald-600" : "text-rose-600"
+                  evOver25 && evOver25.hasEdge ? "text-emerald-700" : "text-rose-600"
                 }`}
               >
                 {evOver25
@@ -229,7 +229,7 @@ export function PoissonSimulatorView() {
 
         {/* Goal / No Goal */}
         <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
-          <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500">
+          <h3 className="text-xs font-bold uppercase tracking-wider text-slate-600">
             Goal / No Goal (BTTS) Fair Model
           </h3>
           <div className="mt-3 space-y-2 text-xs">
@@ -245,17 +245,17 @@ export function PoissonSimulatorView() {
 
           {/* Confronto BTTS */}
           <div className="mt-3 border-t border-slate-100 pt-3">
-            <div className="text-[11px] text-slate-500">Quota Bookmaker su Goal Sì:</div>
+            <div className="text-[11px] text-slate-600">Quota Bookmaker su Goal Sì:</div>
             <div className="mt-1 flex items-center gap-2">
               <input
                 type="text"
-                value={marketOddsBttsYes}
+                aria-label="Quota bookmaker Goal Sì" value={marketOddsBttsYes}
                 onChange={(e) => setMarketOddsBttsYes(e.target.value)}
                 className="w-20 rounded-lg border border-slate-300 px-2 py-1 text-xs font-bold text-slate-900"
               />
               <span
                 className={`text-xs font-extrabold ${
-                  evBtts && evBtts.hasEdge ? "text-emerald-600" : "text-rose-600"
+                  evBtts && evBtts.hasEdge ? "text-emerald-700" : "text-rose-600"
                 }`}
               >
                 {evBtts
@@ -274,14 +274,14 @@ export function PoissonSimulatorView() {
           {simulation.scoreMatrix.length - 1}-
           {simulation.scoreMatrix.length - 1})
         </h3>
-        <p className="mt-1 text-xs text-slate-500">
+        <p className="mt-1 text-xs text-slate-600">
           Probabilità percentuale e quota fair no-vig teorica per ciascun punteggio finale.
         </p>
 
-        <div className="mt-4 overflow-x-auto">
+        <div className="mt-4 overflow-x-auto" tabIndex={0} role="region" aria-label="Matrice risultati esatti">
           <table className="w-full text-center text-xs">
             <thead>
-              <tr className="border-b border-slate-200 text-slate-500">
+              <tr className="border-b border-slate-200 text-slate-600">
                 <th className="p-2 font-bold">Casa \ Ospite</th>
                 {/* le intestazioni derivano dalla matrice, non da un elenco
                     scritto a mano: se il lato cambia, cambia anche il titolo
@@ -313,7 +313,7 @@ export function PoissonSimulatorView() {
                         }}
                       >
                         <div className="font-semibold text-slate-900">{cell.probPct.toFixed(1)}%</div>
-                        <div className="text-[10px] text-slate-500">@{cell.fairOdds.toFixed(1)}</div>
+                        <div className="text-[10px] text-slate-600">@{cell.fairOdds.toFixed(1)}</div>
                       </td>
                     );
                   })}
@@ -387,7 +387,7 @@ export function PoissonSimulatorView() {
             </p>
           </div>
         </div>
-        <p className="mt-4 border-t border-slate-100 pt-3 text-[11px] leading-relaxed text-slate-400">
+        <p className="mt-4 border-t border-slate-100 pt-3 text-[11px] leading-relaxed text-slate-600">
           Nessuna selezione è indicata e nessuna puntata è calcolata: per
           giocare con i numeri — margine, Kelly, varianza — ci sono gli&nbsp;
           <Link href="/strumenti" className="underline">

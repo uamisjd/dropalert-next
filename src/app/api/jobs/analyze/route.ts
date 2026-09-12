@@ -9,6 +9,9 @@
  *     "matchIds": [1,2]     // limita l'analisi a partite specifiche
  *   }
  *
+ * `closing: false` salta cattura closing line e calcolo CLV. L’analisi
+ * resta attiva e può marcare come chiuso un segnale a kickoff passato.
+ *
  * È il punto di aggancio per uno scheduler esterno gratuito: un cron che
  * chiama questa rotta ottiene raccolta, analisi e chiusura in una sola
  * richiesta. Nessun processo resta vivo dopo la risposta.
@@ -83,6 +86,7 @@ export async function POST(request: Request) {
 
   const report = await runCycle({
     skipCollect: !body.collect,
+    skipClosing: !body.closing,
     force: body.force,
     matchIds: body.matchIds,
   });

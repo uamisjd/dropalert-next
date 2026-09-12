@@ -87,7 +87,7 @@ export function DutchingCalculator() {
             type="number"
             min="5"
             step="10"
-            value={totalStake}
+            aria-label="Budget Totale Scommessa (€)" value={totalStake}
             onChange={(e) =>
               setTotalStake(Math.max(5, Number(e.target.value) || 0))
             }
@@ -103,7 +103,7 @@ export function DutchingCalculator() {
             min="0"
             max="15"
             step="0.5"
-            value={commissionPct}
+            aria-label="Commissione Bookmaker / Exchange (%)" value={commissionPct}
             onChange={(e) =>
               setCommissionPct(Math.max(0, Number(e.target.value) || 0))
             }
@@ -119,32 +119,32 @@ export function DutchingCalculator() {
             key={o.id}
             className="flex flex-wrap items-center gap-2 rounded-2xl bg-slate-50 p-3 sm:gap-3"
           >
-            <div className="w-6 text-center text-xs font-bold text-slate-400">
+            <div className="w-6 text-center text-xs font-bold text-slate-600">
               #{idx + 1}
             </div>
             <div className="min-w-0 flex-1">
               <input
                 type="text"
-                value={o.label}
+                aria-label={`Descrizione esito ${idx + 1}`} value={o.label}
                 onChange={(e) => updateOutcome(o.id, "label", e.target.value)}
                 className="w-full rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-800 focus:border-cyan-500 focus:outline-none"
               />
             </div>
             <div className="w-28">
               <div className="relative">
-                <span className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-2 text-xs text-slate-400">
+                <span className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-2 text-xs text-slate-600">
                   @
                 </span>
                 <input
                   type="text"
-                  value={o.odds}
+                  aria-label={`Quota esito ${idx + 1}`} value={o.odds}
                   onChange={(e) => updateOutcome(o.id, "odds", e.target.value)}
                   className="w-full rounded-lg border border-slate-200 bg-white py-1.5 pr-2 pl-6 text-xs font-bold text-slate-900 tabular-nums focus:border-cyan-500 focus:outline-none"
                 />
               </div>
             </div>
             <div className="w-28 text-right">
-              <div className="text-[10px] text-slate-400 uppercase">Puntata</div>
+              <div className="text-[10px] text-slate-600 uppercase">Puntata</div>
               <div className="text-xs font-bold text-slate-900 tabular-nums">
                 {result?.outcomes[idx] ? `€ ${result.outcomes[idx].stake}` : "—"}
               </div>
@@ -153,7 +153,7 @@ export function DutchingCalculator() {
               <button
                 type="button"
                 onClick={() => removeOutcome(o.id)}
-                className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-200 hover:text-rose-600"
+                className="rounded-lg p-1.5 text-slate-600 hover:bg-slate-200 hover:text-rose-600"
                 title="Rimuovi esito"
               >
                 ✕
@@ -194,7 +194,7 @@ export function DutchingCalculator() {
                 </div>
                 <div
                   className={`text-lg font-extrabold tabular-nums ${
-                    result.profitAmount >= 0 ? "text-emerald-600" : "text-rose-600"
+                    result.profitAmount >= 0 ? "text-emerald-700" : "text-rose-600"
                   }`}
                 >
                   {result.profitAmount >= 0 ? "+" : ""}€ {result.profitAmount.toFixed(2)}

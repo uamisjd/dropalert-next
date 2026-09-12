@@ -216,7 +216,7 @@ export default async function ArbitragePage() {
             </p>
           </div>
         </div>
-        <p className="mt-4 border-t border-slate-100 pt-3 text-[11px] text-slate-400">
+        <p className="mt-4 border-t border-slate-100 pt-3 text-[11px] text-slate-600">
           Questa pagina è per uso personale. Le opportunità mostrate sono
           calcoli matematici, non garanzie di profitto. L&apos;arbitraggio
           comporta rischi pratici significativi.

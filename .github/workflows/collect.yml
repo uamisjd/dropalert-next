@@ -51,6 +51,7 @@ jobs:
     timeout-minutes: 10
 
     env:
+      INPUT_FORCE: ${{ inputs.force }}
       DATABASE_URL: ${{ secrets.DATABASE_URL }}
       # NODE_ENV NON è "production" a livello di job: con quel valore
       # `npm ci` salta le devDependencies, e drizzle-kit/tsx (che servono a
@@ -84,7 +85,7 @@ jobs:
           AGE_MIN=$(( ( $(date -u +%s) - LAST_EPOCH ) / 60 ))
           # soglia 40 < COLLECT_INTERVAL_MINUTES (45): questo controllo non
           # può mai scartare un giro che il codice avrebbe invece eseguito
-          if [ "$AGE_MIN" -lt 40 ] && [ "${{ inputs.force }}" != "true" ]; then
+          if [ "$AGE_MIN" -lt 40 ] && [ "$INPUT_FORCE" != "true" ]; then
             echo "run=false" >> "$GITHUB_OUTPUT"
             echo "Ultimo giro ${AGE_MIN} min fa: niente da fare, si esce senza installare."
           else
@@ -126,7 +127,7 @@ jobs:
           # --scheduled marca meta.trigger="scheduled": è l'unico valore che
           # entra nella profondità della serie (N/10). Senza, il giro sarebbe
           # contato come manuale e la serie non avanzerebbe mai.
-          if [ "${{ inputs.force }}" = "true" ]; then
+          if [ "$INPUT_FORCE" = "true" ]; then
             npm run job:collect -- --scheduled --force
           else
             npm run job:collect -- --scheduled

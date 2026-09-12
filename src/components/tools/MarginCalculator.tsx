@@ -150,7 +150,7 @@ export function MarginCalculator() {
           <h3 className="mt-4 text-xs font-semibold tracking-wide text-slate-700 uppercase">
             Quote fair, per metodo
           </h3>
-          <div className="mt-2 overflow-x-auto">
+          <div className="mt-2 overflow-x-auto" tabIndex={0} role="region" aria-label="Confronto margini e quote">
             <table className="w-full text-xs">
               <thead>
                 <tr className="border-b border-slate-200 text-left text-[11px] text-slate-500">
@@ -214,7 +214,7 @@ export function MarginCalculator() {
                           className="py-1.5 pr-2 tabular-nums text-slate-900"
                         >
                           {p.toFixed(3)}
-                          <span className="ml-1 text-[11px] text-slate-400">
+                          <span className="ml-1 text-[11px] text-slate-600">
                             ({(r.data.fairPct[j] ?? 0).toFixed(1)}%)
                           </span>
                         </td>

@@ -69,7 +69,7 @@ export function GreenUpCalculator() {
           </label>
           <input
             type="text"
-            value={backOdds}
+            aria-label="Quota di Entrata (Back @)" value={backOdds}
             onChange={(e) => setBackOdds(e.target.value)}
             className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 text-sm font-bold text-slate-900 focus:border-cyan-500 focus:outline-none"
           />
@@ -81,7 +81,7 @@ export function GreenUpCalculator() {
           </label>
           <input
             type="text"
-            value={backStake}
+            aria-label="Puntata Iniziale (€)" value={backStake}
             onChange={(e) => setBackStake(e.target.value)}
             className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 text-sm font-bold text-slate-900 focus:border-cyan-500 focus:outline-none"
           />
@@ -93,7 +93,7 @@ export function GreenUpCalculator() {
           </label>
           <input
             type="text"
-            value={layOdds}
+            aria-label="Quota Attuale di Uscita (Lay @)" value={layOdds}
             onChange={(e) => setLayOdds(e.target.value)}
             className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 text-sm font-bold text-slate-900 focus:border-cyan-500 focus:outline-none"
           />
@@ -105,7 +105,7 @@ export function GreenUpCalculator() {
           </label>
           <input
             type="text"
-            value={commissionPct}
+            aria-label="Commissione Exchange (%)" value={commissionPct}
             onChange={(e) => setCommissionPct(e.target.value)}
             className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 text-sm font-bold text-slate-900 focus:border-cyan-500 focus:outline-none"
           />

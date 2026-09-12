@@ -6,6 +6,9 @@
  * sia in caso di successo sia in caso di errore. Nessun dato di test resta
  * nel database e nessuna fixture è mai presentata come dato reale.
  */
+import { getPerformanceView } from "@/lib/repo/performance";
+import { getClvMaturity } from "@/lib/repo/dashboard";
+import { POST as analyzeJob } from "@/app/api/jobs/analyze/route";
 import { and, eq, like, inArray } from "drizzle-orm";
 import { db, sql } from "@/db/client";
 import {
@@ -884,6 +887,49 @@ async function main(): Promise<void> {
     assert(summary.total >= 0 && summary.unclassified >= 0, "conteggi coerenti");
   });
 
+  await test("Performance e dashboard condividono il campione, senza riscrivere CLV né includere demo", async () => {
+    const baseline = await getPerformanceView();
+    const fixtureIds: number[] = [];
+    let demoId: number | undefined;
+    try {
+      for (const [index, basis] of ["raw_consensus", "fair_novig", "non-riconosciuta", "raw_consensus"].entries()) {
+        const fixture = await makeFixture({ key: `performance-${index}`, hoursFromNow: -2,
+          from: 2.4, to: 1.8, bookCount: 3, spanMinutes: 200 });
+        fixtureIds.push(fixture.matchId);
+        await detectForMatch(fixture.matchId, new Date());
+        const signal = await getSignalRow(fixture.matchId, "1x2", "home");
+        assert(signal !== null, "segnale della fixture performance assente");
+        await db.insert(clvRecords).values({
+          signalId: signal.id, matchId: fixture.matchId, closingBasis: basis,
+          signalPrice: "2.000", closingPrice: "2.083", clvPp: "-2.00", clvPct: "-3.985",
+          beatClose: false, signalScore: "30.00",
+        });
+        if (index === 3) {
+          demoId = fixture.matchId;
+          await db.update(matches).set({ key: "demo-pipetest-performance" }).where(eq(matches.id, demoId));
+        }
+      }
+      const before = await db.select().from(clvRecords).where(inArray(clvRecords.matchId, fixtureIds));
+      const performance = await getPerformanceView();
+      const dashboard = await getClvMaturity();
+      assertEqual(performance.totalN, baseline.totalN + 1);
+      assertEqual(performance.archiveN, baseline.archiveN + 3, "demo esclusa anche dal conteggio dell’archivio");
+      assertEqual(performance.excludedN, baseline.excludedN + 2);
+      assertEqual(performance.basis.counts.fair_novig, baseline.basis.counts.fair_novig + 1);
+      assertEqual(performance.basis.counts.sconosciuta, baseline.basis.counts.sconosciuta + 1);
+      assertEqual(dashboard.sampleSize, performance.totalN);
+      assertEqual(dashboard.avgClvPp, performance.overallAvgPp);
+      assertEqual(dashboard.beatCloseRate, performance.beatCloseRate);
+      assertEqual(dashboard.basisNote, performance.basisNote);
+      assertEqual(JSON.stringify(dashboard.buckets.map((bucket) => ({ key: bucket.key, label: bucket.label, sampleSize: bucket.sampleSize, avgClvPp: bucket.avgClvPp, beatCloseRate: bucket.beatCloseRate, inconclusive: bucket.inconclusive }))), JSON.stringify(performance.buckets));
+      const after = await db.select().from(clvRecords).where(inArray(clvRecords.matchId, fixtureIds));
+      assertEqual(JSON.stringify(after), JSON.stringify(before), "la lettura non deve ribasare lo storico");
+    } finally {
+      // Ripristina il prefisso anche in caso di errore: cleanup rimuove ogni fixture.
+      if (demoId !== undefined) await db.update(matches).set({ key: "pipetest-performance-3" }).where(eq(matches.id, demoId));
+    }
+  });
+
   group("Scansione concorrente");
 
   await test("la coda limita i worker e conserva tutti i risultati in ordine", async () => {
@@ -901,6 +947,54 @@ async function main(): Promise<void> {
   });
 
   group("Scheduler — giro senza rete");
+
+  await test("API closing=false non scrive closing/CLV né rinvia il ciclo completo", async () => {
+    await borrowCycleState();
+    const previous = await readLastCycle();
+    const fixture = await makeFixture({
+      key: "skip-closing-api", hoursFromNow: -1, from: 2.4, to: 1.8,
+      bookCount: 3, spanMinutes: 200,
+    });
+    const token = process.env.JOBS_TOKEN;
+    const privateKey = process.env.VAPID_PRIVATE_KEY;
+    process.env.JOBS_TOKEN = "pipeline-local-test";
+    process.env.VAPID_PRIVATE_KEY = ""; // nessun invio reale in questo test API
+    try {
+      const call = (closing?: boolean) => analyzeJob(new Request("http://localhost/api/jobs/analyze", {
+        method: "POST",
+        headers: { "content-type": "application/json", "x-jobs-token": "pipeline-local-test" },
+        body: JSON.stringify({ collect: false, closing, matchIds: [fixture.matchId] }),
+      }));
+      const skippedResponse = await call(false);
+      assertEqual(skippedResponse.status, 200);
+      const skipped = await skippedResponse.json();
+      assertEqual(skipped.closing, null, "compatibilità della risposta API");
+      assertEqual(skipped.detection.executed, true);
+      const signal = await getSignalRow(fixture.matchId, "1x2", "home");
+      assert(signal !== null, "l’analisi deve comunque produrre il segnale");
+      assertEqual((await db.select().from(closingLines).where(eq(closingLines.matchId, fixture.matchId))).length, 0);
+      assertEqual((await db.select().from(clvRecords).where(eq(clvRecords.signalId, signal.id))).length, 0);
+      const [run] = await db.select().from(collectorRuns).where(eq(collectorRuns.id, skipped.runId));
+      assertEqual((run.meta as { closingExecuted?: boolean }).closingExecuted, false);
+      assertEqual((run.meta as { clvComputed?: number }).clvComputed, 0);
+      assertEqual((await readLastCycle())?.at, previous?.at, "heartbeat full invariato");
+
+      // Il default dell’API deve continuare ad acquisire la chiusura e il CLV.
+      const completedResponse = await call();
+      assertEqual(completedResponse.status, 200);
+      const completed = await completedResponse.json();
+      assertEqual(completed.closing.executed, true);
+      assert(completed.closing.linesCaptured > 0, "closing line non acquisita");
+      assertEqual(completed.closing.clvComputed, 1);
+      assertEqual((await db.select().from(clvRecords).where(eq(clvRecords.signalId, signal.id))).length, 1);
+      const repeat = await (await call(true)).json();
+      assertEqual(repeat.closing.executed, true);
+      assertEqual(repeat.closing.clvComputed, 0, "closing=true non duplica il CLV");
+    } finally {
+      if (token === undefined) delete process.env.JOBS_TOKEN; else process.env.JOBS_TOKEN = token;
+      if (privateKey === undefined) delete process.env.VAPID_PRIVATE_KEY; else process.env.VAPID_PRIVATE_KEY = privateKey;
+    }
+  });
 
   await test("il giro salta la raccolta se l'intervallo non è trascorso", async () => {
     await borrowCycleState();

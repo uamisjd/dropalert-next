@@ -131,6 +131,9 @@ export function describeClvBasisMix(mix: ClvBasisMix): string {
 
   if (!mix.mixed) {
     const sola = CLV_BASIS_KEYS.find((k) => mix.counts[k] > 0)!;
+    if (sola === "sconosciuta") {
+      return `Per tutte le ${mix.total} osservazioni la base non è registrata o riconosciuta: il confronto non è verificabile. Nessuna base viene dedotta.`;
+    }
     if (sola === "fair_novig") {
       /* Tutte sulla stessa colonna non vuol dire confronto omogeneo: il
          segnale resta grezzo, quindi ogni riga mescola le due basi. */
@@ -153,7 +156,7 @@ export function describeClvBasisMix(mix: ClvBasisMix): string {
   return (
     `Basi miste: ${parti.join("; ")}. ` +
     `Le due metà del CLV non stanno sullo stesso piano — il prezzo del segnale è grezzo, la chiusura a volte no — ` +
-    `e la media che segue somma numeri non confrontabili. ` +
+    `e sommarle in una media unica mescolerebbe numeri non confrontabili. ` +
     `Misurato sull'archivio congelato, il solo errore di base vale −1,86 pp di CLV (studio §1.1).`
   );
 }

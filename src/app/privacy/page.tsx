@@ -3,7 +3,8 @@
  *
  * Pagina statica, in italiano. Dice ciò che il sito fa davvero: nessun
  * account, nessuna profilazione, nessun cookie di terze parti. L'unica
- * memoria lato utente è il localStorage del browser, e si dichiara.
+ * memoria locale è il localStorage; la sincronizzazione push è facoltativa
+ * e descritta separatamente.
  */
 import type { Metadata } from "next";
 import Link from "next/link";
@@ -18,7 +19,7 @@ export const metadata: Metadata = {
 /* pagina di solo testo: si può servire dalla cache di bordo a lungo */
 export const revalidate = 86400;
 
-const UPDATED = "26 agosto 2026";
+const UPDATED = "12 settembre 2026";
 
 function Section({
   title,
@@ -60,7 +61,7 @@ export default function PrivacyPage() {
 
       <Section title="Quali dati trattiamo">
         <p>
-          <strong>Nessun dato personale richiesto.</strong> Il sito non ha
+          <strong>Nessun dato anagrafico richiesto.</strong> Il sito non ha
           registrazione, non ha area riservata, non chiede nome, email o numero
           di telefono, e non ospita moduli di contatto.
         </p>
@@ -87,8 +88,7 @@ export default function PrivacyPage() {
         </p>
         <p>
           Usiamo esclusivamente il <strong>localStorage</strong> del tuo
-          browser, che resta sul tuo dispositivo e non viene mai inviato al
-          server, per ricordare due sole cose:
+          browser per ricordare:
         </p>
         <ul className="list-disc space-y-1 pl-5">
           <li>
@@ -97,13 +97,65 @@ export default function PrivacyPage() {
           </li>
           <li>
             le eventuali preferenze di visualizzazione che imposti nella
-            pagina.
+            pagina, le partite preferite e le relative soglie di notifica.
           </li>
+          <li>Il registro delle giocate e il bankroll inseriti negli strumenti personali.</li>
+          <li>La chiave di gestione dell’iscrizione push verificata, associata al suo endpoint.</li>
         </ul>
         <p>
+          Il registro delle giocate resta sul dispositivo. Se attivi le notifiche
+          push, le partite seguite e le soglie vengono invece inviate al server
+          per stabilire quando avvisarti.
+        </p>
+        <p>
           Puoi cancellare questi valori in qualunque momento svuotando i dati
-          del sito dalle impostazioni del browser: non perdi nulla, il sito
-          torna semplicemente allo stato iniziale.
+          del sito dalle impostazioni del browser: perderai anche preferite,
+          preferenze e registro locale delle giocate. Esporta prima i dati che
+          vuoi conservare. Cancellare i dati locali non cancella automaticamente
+          l’iscrizione push sul server: disattiva prima le notifiche dalle preferite.
+        </p>
+      </Section>
+
+      <Section title="Notifiche push facoltative">
+        <p>
+          Solo se le attivi, conserviamo sul server l’endpoint del servizio push,
+          le chiavi di cifratura, la lista delle partite seguite e le soglie
+          scelte. Sono identificativi tecnici pseudonimi, non dati anonimi:
+          non richiedono un account ma consentono di recapitare avvisi al tuo browser.
+        </p>
+        <p>
+          L’invio passa dal servizio push del browser (per esempio Google,
+          Mozilla, Apple o Microsoft), soggetto alla relativa informativa.
+          Puoi disattivare le notifiche dalla pagina Preferite; il sito richiede
+          allora la cancellazione dell’iscrizione dal registro del server usando
+          la chiave locale di gestione. Se la chiave manca, la disiscrizione locale
+          non conferma la cancellazione sul server: occorre verificare nuovamente
+          l’iscrizione per gestirla.
+        </p>
+        <p>
+          Per limitare abusi sulle registrazioni e sulle notifiche di prova,
+          il server conserva contatori temporanei: tipo di operazione, conteggio,
+          scadenza e impronta SHA-256 dell’endpoint. L’impronta è un identificativo
+          pseudonimo, non un dato anonimo. Questi contatori non conservano
+          indirizzi IP, chiavi push o la lista delle partite.
+        </p>
+      </Section>
+
+      <Section title="Verifica e gestione delle notifiche">
+        <p>
+          L’attivazione richiede di aprire una notifica di verifica entro cinque
+          minuti. Il server conserva temporaneamente la richiesta e l’impronta
+          del codice monouso; dopo la conferma conserva l’impronta della chiave
+          di gestione. La chiave completa resta nel browser e autorizza
+          aggiornamenti, prove e cancellazione. Non condividere chiavi o link di
+          verifica. Le vecchie iscrizioni richiedono una nuova verifica prima
+          di ricevere avvisi automatici.
+        </p>
+        <p>
+          Per evitare duplicati, il server registra un tentativo per endpoint,
+          partita e giornata italiana, con stato ed eventuale esito tecnico.
+          Il limite riguarda i tentativi, non garantisce la consegna: un errore
+          non provoca un nuovo invio automatico nello stesso giorno.
         </p>
       </Section>
 
@@ -125,7 +177,15 @@ export default function PrivacyPage() {
 
       <Section title="Conservazione">
         <p>
-          Non conserviamo dati personali degli utenti. I dati sportivi e le
+          Le iscrizioni non aggiornate da 90 giorni non vengono più usate e
+          diventano eliminabili; una sincronizzazione verificata rinnova il termine.
+          Sono rimosse anche su richiesta autorizzata o quando il servizio push
+          le segnala come scadute. Le richieste di verifica diventano eliminabili
+          dopo 10 minuti (il codice scade dopo cinque), i marcatori di invio dopo
+          sette giorni. La pulizia avviene a lotti limitati durante l’attività push,
+          non a una scadenza garantita. I contatori antiabuso sono eliminabili dopo
+          oltre 24 ore di inattività durante successive richieste ammesse.
+          Senza attività la pulizia attende. I dati sportivi e le
           elaborazioni restano in archivio finché servono all&apos;osservatorio
           statistico. I log tecnici sono conservati dal fornitore di hosting per
           il tempo strettamente necessario alla sicurezza del servizio.
@@ -150,7 +210,7 @@ export default function PrivacyPage() {
           ).
         </p>
         <p>
-          Poiché non raccogliamo identificativi, nella maggior parte dei casi
+          Poiché non raccogliamo nomi o account, in alcuni casi
           non siamo in grado di collegare una richiesta a dati esistenti: in
           quel caso te lo diremo, invece di chiederti altri dati per cercarli.
         </p>
@@ -178,7 +238,8 @@ export default function PrivacyPage() {
           >
             github.com/uamisjd/dropalert-next
           </a>
-          .
+          . Non pubblicare endpoint push, chiavi, indirizzi IP o altri dati
+          personali nelle segnalazioni pubbliche.
         </p>
       </Section>
 

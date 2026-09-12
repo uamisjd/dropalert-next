@@ -3,8 +3,8 @@
 /**
  * Azione "Raccogli ora": un solo giro di raccolta, su richiesta esplicita.
  *
- * È un'azione server, non una chiamata dal browser: il token dei job non
- * esce mai dal server e non serve esporre la rotta protetta al client.
+ * Le Server Action sono richiamabili dal browser: questa operazione è
+ * disponibile soltanto in sviluppo. In produzione usare i job autenticati.
  *
  * Fa **una** raccolta e nient'altro. Nessun ciclo, nessuna attesa, nessun
  * processo che sopravvive alla risposta: il pulsante lancia un giro e
@@ -20,6 +20,13 @@ export interface CollectNowResult {
 }
 
 export async function collectNow(): Promise<CollectNowResult> {
+  if (process.env.NODE_ENV !== "development") {
+    return {
+      ok: false,
+      status: "error",
+      message: "Raccolta manuale disponibile solo in sviluppo. In produzione usare il workflow autorizzato.",
+    };
+  }
   try {
     /* giro chiesto a mano: dichiarato tale, così non gonfia la
        profondità della serie, che si conta sui giri schedulati */
@@ -45,19 +52,16 @@ export async function collectNow(): Promise<CollectNowResult> {
         : "";
 
     return {
-      ok: true,
+      ok: report.status !== "failed",
       status: report.status,
       message: `Giro ${report.status === "partial" ? "parziale" : "fallito"}: ${summary}${problems}`,
     };
-  } catch (error) {
+  } catch {
     /* mai fingere che sia andata bene */
     return {
       ok: false,
       status: "error",
-      message:
-        error instanceof Error
-          ? `Raccolta non eseguita: ${error.message}`
-          : "Raccolta non eseguita: errore non identificato.",
+      message: "Raccolta non eseguita. Verificare la configurazione e lo stato della fonte.",
     };
   }
 }

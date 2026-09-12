@@ -320,10 +320,10 @@ export default function MioBankrollPage() {
         <div>
           <label className="block text-xs font-semibold text-slate-500 uppercase">Bankroll iniziale</label>
           <div className="mt-1 flex items-center gap-2">
-            <span className="text-sm text-slate-400">€</span>
+            <span className="text-sm text-slate-600">€</span>
             <input
               type="number"
-              value={bankroll}
+              aria-label="Bankroll iniziale" value={bankroll}
               onChange={(e) => {
                 const v = Number(e.target.value);
                 setBankroll(v);
@@ -335,14 +335,14 @@ export default function MioBankrollPage() {
         </div>
         <div>
           <label className="block text-xs font-semibold text-slate-500 uppercase">Bankroll attuale</label>
-          <p className={`mt-1 text-2xl font-extrabold tabular-nums ${currentBankroll >= bankroll ? "text-emerald-600" : "text-rose-600"}`}>
+          <p className={`mt-1 text-2xl font-extrabold tabular-nums ${currentBankroll >= bankroll ? "text-emerald-700" : "text-rose-600"}`}>
             €{currentBankroll.toFixed(2)}
           </p>
         </div>
         <div className="ml-auto flex gap-2">
           <button
             onClick={() => setShowForm(!showForm)}
-            className="rounded-xl bg-cyan-600 px-4 py-2 text-sm font-bold text-white hover:bg-cyan-700"
+            className="rounded-xl bg-cyan-700 px-4 py-2 text-sm font-bold text-white hover:bg-cyan-800"
           >
             + Nuova scommessa
           </button>
@@ -373,11 +373,11 @@ export default function MioBankrollPage() {
       <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-6">
         {[
           { label: "Scommesse", value: stats.totalBets, color: "text-slate-900" },
-          { label: "ROI", value: `${stats.roiPct > 0 ? "+" : ""}${stats.roiPct}%`, color: stats.roiPct >= 0 ? "text-emerald-600" : "text-rose-600" },
-          { label: "Profitto", value: `€${stats.totalProfit >= 0 ? "+" : ""}${stats.totalProfit.toFixed(0)}`, color: stats.totalProfit >= 0 ? "text-emerald-600" : "text-rose-600" },
-          { label: "CLV medio", value: `${stats.avgClvPct > 0 ? "+" : ""}${stats.avgClvPct}%`, color: stats.avgClvPct >= 2 ? "text-emerald-600" : stats.avgClvPct >= 0 ? "text-amber-600" : "text-rose-600" },
-          { label: "Win rate", value: `${stats.winRate}%`, color: stats.winRate >= 50 ? "text-emerald-600" : "text-slate-600" },
-          { label: "Drawdown max", value: `${stats.maxDrawdown}%`, color: stats.maxDrawdown < 10 ? "text-emerald-600" : stats.maxDrawdown < 20 ? "text-amber-600" : "text-rose-600" },
+          { label: "ROI", value: `${stats.roiPct > 0 ? "+" : ""}${stats.roiPct}%`, color: stats.roiPct >= 0 ? "text-emerald-700" : "text-rose-600" },
+          { label: "Profitto", value: `€${stats.totalProfit >= 0 ? "+" : ""}${stats.totalProfit.toFixed(0)}`, color: stats.totalProfit >= 0 ? "text-emerald-700" : "text-rose-600" },
+          { label: "CLV medio", value: `${stats.avgClvPct > 0 ? "+" : ""}${stats.avgClvPct}%`, color: stats.avgClvPct >= 2 ? "text-emerald-700" : stats.avgClvPct >= 0 ? "text-amber-600" : "text-rose-600" },
+          { label: "Win rate", value: `${stats.winRate}%`, color: stats.winRate >= 50 ? "text-emerald-700" : "text-slate-600" },
+          { label: "Drawdown max", value: `${stats.maxDrawdown}%`, color: stats.maxDrawdown < 10 ? "text-emerald-700" : stats.maxDrawdown < 20 ? "text-amber-600" : "text-rose-600" },
         ].map((stat) => (
           <div key={stat.label} className="rounded-xl border border-slate-200 bg-white p-3 text-center shadow-sm">
             <p className="text-xs font-semibold text-slate-500 uppercase">{stat.label}</p>
@@ -391,13 +391,13 @@ export default function MioBankrollPage() {
         <div className={`mb-6 rounded-2xl border p-4 ${stats.avgClvPct >= 2 ? "border-emerald-200 bg-emerald-50" : stats.avgClvPct >= 0 ? "border-amber-200 bg-amber-50" : "border-rose-200 bg-rose-50"}`}>
           <p className="text-sm font-bold">
             {stats.avgClvPct >= 2
-              ? `✅ CLV medio +${stats.avgClvPct}%: stai battendo la chiusura. Il metodo funziona.`
+              ? `✅ CLV medio +${stats.avgClvPct}%: il campione registrato batte la chiusura, ma non prova la redditività del metodo.`
               : stats.avgClvPct >= 0
                 ? `⚠️ CLV medio +${stats.avgClvPct}%: sei vicino alla chiusura. Alza la soglia di edge.`
                 : `❌ CLV medio ${stats.avgClvPct}%: non stai battendo la chiusura. Rivedi i filtri.`}
           </p>
           <p className="mt-1 text-xs text-slate-600">
-            Basato su {stats.settledBets} scommesse chiuse. Obiettivo: CLV &gt; +2% su 30+ scommesse.
+            Basato su {stats.settledBets} scommesse chiuse. CLV e risultati economici sono misure diverse; anche 30 osservazioni non dimostrano la validità del metodo.
           </p>
         </div>
       )}
@@ -407,16 +407,16 @@ export default function MioBankrollPage() {
         <div className="mb-6 rounded-2xl border border-cyan-200 bg-cyan-50 p-5">
           <h2 className="mb-3 text-sm font-bold text-slate-900">Nuova scommessa</h2>
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-            <input placeholder="Casa" value={formHome} onChange={(e) => setFormHome(e.target.value)} className="rounded-lg border border-slate-300 px-3 py-2 text-sm" />
-            <input placeholder="Trasferta" value={formAway} onChange={(e) => setFormAway(e.target.value)} className="rounded-lg border border-slate-300 px-3 py-2 text-sm" />
-            <input placeholder="Campionato" value={formLeague} onChange={(e) => setFormLeague(e.target.value)} className="rounded-lg border border-slate-300 px-3 py-2 text-sm" />
-            <select value={formMarket} onChange={(e) => setFormMarket(e.target.value)} className="rounded-lg border border-slate-300 px-3 py-2 text-sm">
+            <input placeholder="Casa" aria-label="Squadra casa" value={formHome} onChange={(e) => setFormHome(e.target.value)} className="rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+            <input placeholder="Trasferta" aria-label="Squadra trasferta" value={formAway} onChange={(e) => setFormAway(e.target.value)} className="rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+            <input placeholder="Campionato" aria-label="Campionato" value={formLeague} onChange={(e) => setFormLeague(e.target.value)} className="rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+            <select aria-label="Mercato della giocata" value={formMarket} onChange={(e) => setFormMarket(e.target.value)} className="rounded-lg border border-slate-300 px-3 py-2 text-sm">
               <option value="1x2">1X2</option>
               <option value="ou_2_5">Over/Under 2.5</option>
               <option value="btts">Gol/No Gol</option>
               <option value="other">Altro</option>
             </select>
-            <select value={formSelection} onChange={(e) => setFormSelection(e.target.value)} className="rounded-lg border border-slate-300 px-3 py-2 text-sm">
+            <select aria-label="Esito della giocata" value={formSelection} onChange={(e) => setFormSelection(e.target.value)} className="rounded-lg border border-slate-300 px-3 py-2 text-sm">
               <option value="home">Casa (1)</option>
               <option value="draw">Pareggio (X)</option>
               <option value="away">Trasferta (2)</option>
@@ -425,15 +425,15 @@ export default function MioBankrollPage() {
               <option value="yes">Gol</option>
               <option value="no">No Gol</option>
             </select>
-            <input type="number" step="0.01" placeholder="Quota" value={formOdds} onChange={(e) => setFormOdds(e.target.value)} className="rounded-lg border border-slate-300 px-3 py-2 text-sm" />
-            <input type="number" step="1" placeholder="Puntata €" value={formStake} onChange={(e) => setFormStake(e.target.value)} className="rounded-lg border border-slate-300 px-3 py-2 text-sm" />
-            <input type="number" step="0.1" placeholder="Edge %" value={formEdge} onChange={(e) => setFormEdge(e.target.value)} className="rounded-lg border border-slate-300 px-3 py-2 text-sm" />
-            <input type="number" step="0.1" placeholder="Kelly %" value={formKelly} onChange={(e) => setFormKelly(e.target.value)} className="rounded-lg border border-slate-300 px-3 py-2 text-sm" />
-            <input type="datetime-local" value={formKickoff} onChange={(e) => setFormKickoff(e.target.value)} className="rounded-lg border border-slate-300 px-3 py-2 text-sm" />
-            <input placeholder="Note" value={formNotes} onChange={(e) => setFormNotes(e.target.value)} className="rounded-lg border border-slate-300 px-3 py-2 text-sm col-span-2" />
+            <input type="number" step="0.01" placeholder="Quota" aria-label="Quota" value={formOdds} onChange={(e) => setFormOdds(e.target.value)} className="rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+            <input type="number" step="1" placeholder="Puntata €" aria-label="Puntata (€)" value={formStake} onChange={(e) => setFormStake(e.target.value)} className="rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+            <input type="number" step="0.1" placeholder="Edge %" aria-label="Edge (%)" value={formEdge} onChange={(e) => setFormEdge(e.target.value)} className="rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+            <input type="number" step="0.1" placeholder="Kelly %" aria-label="Kelly (%)" value={formKelly} onChange={(e) => setFormKelly(e.target.value)} className="rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+            <input type="datetime-local" aria-label="Data e ora del calcio di inizio" value={formKickoff} onChange={(e) => setFormKickoff(e.target.value)} className="rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+            <input placeholder="Note" aria-label="Note della giocata" value={formNotes} onChange={(e) => setFormNotes(e.target.value)} className="rounded-lg border border-slate-300 px-3 py-2 text-sm col-span-2" />
           </div>
           <div className="mt-3 flex gap-2">
-            <button onClick={addBet} className="rounded-xl bg-cyan-600 px-5 py-2 text-sm font-bold text-white hover:bg-cyan-700">
+            <button onClick={addBet} className="rounded-xl bg-cyan-700 px-5 py-2 text-sm font-bold text-white hover:bg-cyan-700">
               Salva scommessa
             </button>
             <button onClick={() => setShowForm(false)} className="rounded-xl border border-slate-300 px-5 py-2 text-sm font-medium text-slate-600 hover:bg-white">
@@ -483,7 +483,7 @@ export default function MioBankrollPage() {
                   <span className="text-xs font-medium text-amber-600">In attesa</span>
                 )}
                 {bet.result === "won" && (
-                  <span className="text-xs font-bold text-emerald-600">
+                  <span className="text-xs font-bold text-emerald-700">
                     +€{bet.profit?.toFixed(2)}
                   </span>
                 )}
@@ -503,7 +503,7 @@ export default function MioBankrollPage() {
                 <span>Edge: +{bet.edgePct}%</span>
                 {bet.kellyPct > 0 && <span>Kelly: {bet.kellyPct}%</span>}
                 {bet.clvPct !== undefined && (
-                  <span className={bet.clvPct >= 0 ? "text-emerald-600" : "text-rose-600"}>
+                  <span className={bet.clvPct >= 0 ? "text-emerald-700" : "text-rose-600"}>
                     CLV: {bet.clvPct > 0 ? "+" : ""}{bet.clvPct}%
                   </span>
                 )}
@@ -517,7 +517,7 @@ export default function MioBankrollPage() {
                     const closing = prompt("Quota di chiusura (es. 1.85):");
                     settleBet(bet.id, "won", closing ? Number(closing) : undefined);
                   }}
-                  className="rounded-lg bg-emerald-600 px-3 py-1 text-xs font-bold text-white hover:bg-emerald-700"
+                  className="rounded-lg bg-emerald-700 px-3 py-1 text-xs font-bold text-white hover:bg-emerald-700"
                 >
                   ✓ Vinta
                 </button>
@@ -538,7 +538,7 @@ export default function MioBankrollPage() {
                 </button>
                 <button
                   onClick={() => deleteBet(bet.id)}
-                  className="ml-auto text-xs text-slate-400 hover:text-rose-600"
+                  className="ml-auto text-xs text-slate-600 hover:text-rose-600"
                 >
                   Elimina
                 </button>
@@ -577,7 +577,7 @@ export default function MioBankrollPage() {
             </p>
           </div>
         </div>
-        <p className="mt-3 text-slate-400">
+        <p className="mt-3 text-slate-600">
           I dati restano nel tuo browser. Esporta regolarmente il JSON come backup.
         </p>
       </footer>

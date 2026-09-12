@@ -134,7 +134,7 @@ e allo stesso importo, non lo è.
             type="number"
             min="10"
             step="50"
-            value={totalStake}
+            aria-label="Budget totale surebet (€)" value={totalStake}
             onChange={(e) =>
               setTotalStake(Math.max(10, Number(e.target.value) || 0))
             }
@@ -170,20 +170,20 @@ e allo stesso importo, non lo è.
               <input
                 type="text"
                 placeholder="Nome Bookmaker"
-                value={outcome.bookmaker}
+                aria-label={`Bookmaker ${outcome.label}`} value={outcome.bookmaker}
                 onChange={(e) => handleBookChange(idx, e.target.value)}
                 className="w-full rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs text-slate-800 focus:border-cyan-500 focus:outline-none"
               />
             </div>
             <div className="sm:col-span-3">
               <div className="relative">
-                <span className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-2 text-xs text-slate-400">
+                <span className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-2 text-xs text-slate-600">
                   @
                 </span>
                 <input
                   type="text"
                   placeholder="Quota (es. 2.10)"
-                  value={outcome.odds}
+                  aria-label={`Quota ${outcome.label}`} value={outcome.odds}
                   onChange={(e) => handleOddsChange(idx, e.target.value)}
                   className="w-full rounded-lg border border-slate-200 bg-white py-1.5 pr-2.5 pl-6 text-xs font-bold text-slate-900 tabular-nums focus:border-cyan-500 focus:outline-none"
                 />
@@ -247,7 +247,7 @@ e allo stesso importo, non lo è.
                     {result.guaranteedProfit.toFixed(2)}
                   </div>
                 </div>
-                <div className="rounded-xl bg-emerald-600 px-3.5 py-2 text-center text-white">
+                <div className="rounded-xl bg-emerald-700 px-3.5 py-2 text-center text-white">
                   <div className="text-[10px] font-bold uppercase opacity-90">
                     ROI su queste quote
                   </div>

@@ -12,7 +12,6 @@
 import { and, asc, desc, eq, gte, inArray, sql as raw } from "drizzle-orm";
 import { db } from "@/db/client";
 import {
-  clvRecords,
   collectorRuns,
   dataGaps,
   dropSignals,
@@ -36,7 +35,7 @@ import {
   SELECTION_LABELS_IT,
   STALE_SNAPSHOT_MINUTES,
 } from "@/lib/drop/constants";
-import { SCORE_BUCKETS, scoreBucketOf, type ScoreBucketKey } from "@/lib/drop/novig";
+import { SCORE_BUCKETS, type ScoreBucketKey } from "@/lib/drop/novig";
 import { WIDE_DROP_THRESHOLD } from "@/lib/drop/constants";
 import {
   normalizedReachabilityScore,
@@ -64,20 +63,14 @@ import {
   hasSharpProductionBook,
 } from "@/lib/repo/odds";
 
+import { getPerformanceView } from "@/lib/repo/performance";
+import { CLV_MATURITY_NOTE } from "@/lib/view/clv-performance";
+
 /* ------------------------------------------------------------------ */
 /* Soglie di lettura                                                   */
 /* ------------------------------------------------------------------ */
 
-/**
- * Sotto questo numero di osservazioni il CLV è dichiarato NON CONCLUDENTE.
- * È una soglia di prudenza deliberatamente più severa del minimo statistico
- * usato altrove (10): un campione piccolo che oscilla non prova nulla.
- */
-export const CLV_INCONCLUSIVE_BELOW = 30;
-
-/** Riga fissa che accompagna ogni numero di CLV provvisorio. */
-export const CLV_MATURITY_NOTE =
-  "Con campioni piccoli il CLV oscillante non prova nulla. Serve storico.";
+export { CLV_INCONCLUSIVE_BELOW, CLV_MATURITY_NOTE } from "@/lib/view/clv-performance";
 
 /**
  * Tetto dell'indice nel caso in cui non si riesca a leggere la configurazione:
@@ -346,6 +339,8 @@ export interface DashboardStatus {
 
 export interface ClvMaturity {
   sampleSize: number;
+  /** Osservazioni sullo stesso campione ma senza fascia di indice valida. */
+  unclassifiedN: number;
   inconclusive: boolean;
   avgClvPp: number | null;
   beatCloseCount: number;
@@ -364,16 +359,7 @@ export interface ClvMaturity {
   pendingClosings: number;
   nextClosingAt: string | null;
   note: string;
-  /**
-   * Su quali basi è misurato il CLV che questa sezione riassume.
-   *
-   * Non è un dettaglio tecnico: il prezzo del segnale è sempre grezzo, mentre
-   * la chiusura può essere fair no-vig oppure grezza a seconda della
-   * completezza del mercato (`clv_records.closing_basis`). Mescolare le due
-   * cose deprime il CLV di un importo meccanico — misurato a −1,86 pp
-   * sull'archivio congelato, `docs/STUDIO-PARTITE-FINITE.md` §1.1 — quindi la
-   * composizione va letta PRIMA del numero, non dopo.
-   */
+  /** Composizione dell’archivio intero, separata dai numeri del solo campione grezzo. */
   basis: ClvBasisMix;
   /** la stessa composizione, in una frase pubblicata accanto al numero */
   basisNote: string;
@@ -913,15 +899,8 @@ export async function getDashboardSignals(
  * classifiche o affermazioni di merito.
  */
 export async function getClvMaturity(now = new Date()): Promise<ClvMaturity> {
-  const [records, pending] = await Promise.all([
-    db
-      .select({
-        clvPp: clvRecords.clvPp,
-        beatClose: clvRecords.beatClose,
-        signalScore: clvRecords.signalScore,
-        closingBasis: clvRecords.closingBasis,
-      })
-      .from(clvRecords),
+  const [performance, pending] = await Promise.all([
+    getPerformanceView(now),
     db
       .select({
         kickoffAt: raw<Date>`min(${matches.kickoffAt})`,
@@ -937,59 +916,29 @@ export async function getClvMaturity(now = new Date()): Promise<ClvMaturity> {
       ),
   ]);
 
-  const n = records.length;
-  const values = records
-    .map((r) => num(r.clvPp))
-    .filter((v): v is number => v !== null);
-  const beat = records.filter((r) => r.beatClose).length;
-
-  const basis = clvBasisMix(records);
   const ceiling = await currentScoreCeiling();
   const reachableByKey = new Map(
     bandReachability(SCORE_BUCKETS, ceiling.maxRaw).map((b) => [b.key, !b.empty]),
   );
 
-  const buckets = SCORE_BUCKETS.map((b) => {
-    const rows = records.filter((r) => {
-      const score = num(r.signalScore);
-      return score !== null && scoreBucketOf(score) === b.key;
-    });
-    const vals = rows
-      .map((r) => num(r.clvPp))
-      .filter((v): v is number => v !== null);
-    return {
-      key: b.key,
-      label: b.label,
-      sampleSize: rows.length,
-      avgClvPp:
-        vals.length > 0
-          ? round(vals.reduce((a, v) => a + v, 0) / vals.length, 2)
-          : null,
-      beatCloseRate:
-        rows.length > 0
-          ? round(rows.filter((r) => r.beatClose).length / rows.length, 4)
-          : null,
-      inconclusive: rows.length < CLV_INCONCLUSIVE_BELOW,
-      /** la fascia sta sopra il tetto strutturale: nessuna osservazione può caderci */
-      unreachable: reachableByKey.get(b.key) === false,
-    };
-  });
+  const buckets = performance.buckets.map((bucket) => ({
+    ...bucket,
+    unreachable: reachableByKey.get(bucket.key) === false,
+  }));
 
   return {
-    sampleSize: n,
-    inconclusive: n < CLV_INCONCLUSIVE_BELOW,
-    avgClvPp:
-      values.length > 0
-        ? round(values.reduce((a, v) => a + v, 0) / values.length, 2)
-        : null,
-    beatCloseCount: beat,
-    beatCloseRate: n > 0 ? round(beat / n, 4) : null,
+    sampleSize: performance.totalN,
+    unclassifiedN: performance.unclassifiedN,
+    inconclusive: performance.inconclusive,
+    avgClvPp: performance.overallAvgPp,
+    beatCloseCount: performance.beatCloseCount,
+    beatCloseRate: performance.beatCloseRate,
     buckets,
     pendingClosings: pending[0]?.n ?? 0,
     nextClosingAt: pending[0]?.kickoffAt ? toIso(pending[0].kickoffAt) : null,
     note: CLV_MATURITY_NOTE,
-    basis,
-    basisNote: describeClvBasisMix(basis),
+    basis: performance.basis,
+    basisNote: performance.basisNote,
     ceiling,
     ceilingNote: describeCeiling(ceiling),
   };
@@ -1075,6 +1024,7 @@ export async function getDashboardData(
       },
       clv: {
         sampleSize: 0,
+        unclassifiedN: 0,
         inconclusive: true,
         avgClvPp: null,
         beatCloseCount: 0,

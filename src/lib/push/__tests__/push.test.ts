@@ -43,7 +43,7 @@ const item = (over: Partial<WatchedItem> = {}): WatchedItem => ({
 
 /* --- limiti dichiarati --- */
 eq("una notifica al giorno per partita", MAX_NOTIFICHE_PER_PARTITA_AL_GIORNO, 1);
-check("il dedupe è spiegato in italiano", DEDUPE_NOTE.includes("una notifica al giorno"));
+check("il dedupe è spiegato in italiano", DEDUPE_NOTE.includes("un tentativo di notifica automatica al giorno"));
 check("i limiti di piattaforma sono dichiarati", PLATFORM_NOTE.includes("Aggiungi a Home"));
 
 /* --- soglie --- */
@@ -143,16 +143,15 @@ check("il corpo cita la soglia", testo.body.includes("soglia 15%"));
 /* --- iscrizione --- */
 const valida = parseSubscription(
   {
-    subscription: { endpoint, keys: { p256dh: "chiave", auth: "auth" } },
+    subscription: { endpoint, keys: { p256dh: "B" + "a".repeat(86), auth: "a".repeat(22) } },
     watchlist: [
       { matchKey: "alfa|beta@2026-08-27", matchId: 7, homeTeam: "Alfa", awayTeam: "Beta", thresholdKind: "indice", thresholdValue: 60 },
-      { matchKey: "", matchId: 8 },
     ],
   },
   now,
 );
 check("iscrizione valida accettata", valida !== null);
-eq("le voci incomplete della watchlist si scartano", valida!.watchlist.length, 1);
+eq("la lista valida si conserva integralmente", valida!.watchlist.length, 1);
 eq("nessun endpoint: rifiutata", parseSubscription({ subscription: { keys: { p256dh: "a", auth: "b" } } }, now), null);
 eq(
   "endpoint non https: rifiutata",

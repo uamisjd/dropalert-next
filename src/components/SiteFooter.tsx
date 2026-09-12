@@ -75,7 +75,7 @@ export function SiteFooter() {
           </Link>
         </nav>
 
-        <p className="mt-2 text-[11px] leading-relaxed text-slate-500">
+        <p className="mt-2 text-[11px] leading-relaxed text-slate-400">
           DropAlert è un terminale quantitativo per scommesse sportive: segnali
           e strumenti basati sui movimenti delle quote. Non raccoglie scommesse
           e non è affiliato ad alcun operatore di gioco. Nessuna vincita è

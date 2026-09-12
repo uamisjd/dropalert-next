@@ -1,3 +1,5 @@
+import { parsePushTarget, parsePushWatchlist } from "./validation";
+
 /**
  * Notifiche push — regole pure (Sprint ENH-1, Fase B).
  *
@@ -19,7 +21,7 @@ export const MAX_NOTIFICHE_PER_PARTITA_AL_GIORNO = 1;
 
 /** Testo unico del limite, mostrato in interfaccia. */
 export const DEDUPE_NOTE =
-  "Massimo una notifica al giorno per partita: se la quota continua a muoversi non ricevi una raffica di avvisi.";
+  "Massimo un tentativo di notifica automatica al giorno per partita: in caso di consegna incerta non ritentiamo, per evitare duplicati.";
 
 /** Limiti di piattaforma, dichiarati invece che scoperti dall'utente. */
 export const PLATFORM_NOTE =
@@ -158,40 +160,12 @@ export function parseSubscription(
 ): PushSubscriptionRecord | null {
   if (typeof payload !== "object" || payload === null) return null;
   const p = payload as Record<string, unknown>;
-  const sub = p.subscription as Record<string, unknown> | undefined;
-  if (typeof sub !== "object" || sub === null) return null;
+  const sub = parsePushTarget(p.subscription);
+  if (sub === null) return null;
+  const { endpoint, keys: { p256dh, auth } } = sub;
 
-  const endpoint = typeof sub.endpoint === "string" ? sub.endpoint.trim() : "";
-  if (!/^https:\/\//i.test(endpoint)) return null;
-
-  const keys = sub.keys as Record<string, unknown> | undefined;
-  const p256dh = typeof keys?.p256dh === "string" ? keys.p256dh : "";
-  const auth = typeof keys?.auth === "string" ? keys.auth : "";
-  if (p256dh === "" || auth === "") return null;
-
-  const rawList = Array.isArray(p.watchlist) ? p.watchlist : [];
-  const watchlist: WatchedItem[] = [];
-  for (const raw of rawList) {
-    if (typeof raw !== "object" || raw === null) continue;
-    const r = raw as Record<string, unknown>;
-    const matchKey = typeof r.matchKey === "string" ? r.matchKey : "";
-    const matchId = typeof r.matchId === "number" ? r.matchId : null;
-    if (matchKey === "" || matchId === null) continue;
-    watchlist.push({
-      matchKey,
-      matchId,
-      homeTeam: typeof r.homeTeam === "string" ? r.homeTeam : "—",
-      awayTeam: typeof r.awayTeam === "string" ? r.awayTeam : "—",
-      thresholdKind:
-        r.thresholdKind === "indice" || r.thresholdKind === "drop"
-          ? r.thresholdKind
-          : null,
-      thresholdValue:
-        typeof r.thresholdValue === "number" && Number.isFinite(r.thresholdValue)
-          ? r.thresholdValue
-          : null,
-    });
-  }
+  const watchlist = parsePushWatchlist(p.watchlist);
+  if (watchlist === null) return null;
 
   return {
     endpoint,
@@ -201,7 +175,7 @@ export function parseSubscription(
   };
 }
 
-/** Chiave di registro dell'iscrizione. */
+/** Chiave legacy: solo compatibilità/rimozione. Le nuove iscrizioni usano un hash completo lato server. */
 export function subscriptionKey(endpoint: string): string {
   return `push:sub:${endpoint.slice(-64)}`;
 }

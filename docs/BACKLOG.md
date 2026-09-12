@@ -1,6 +1,27 @@
 # DropAlert — Coda di lavoro dichiarata
 
-Ultimo aggiornamento: 04/09/2026.
+Ultimo aggiornamento della verifica: 12/09/2026.
+
+**Audit recente:** vedere [AUDIT-2026-09-12.md](AUDIT-2026-09-12.md) per
+riscontri live, correzioni verificate e priorità ancora aperte. Le sezioni
+storiche sotto conservano le rispettive date e non attestano da sole lo stato live.
+
+**Aggiornamento implementativo 12/09:** Performance e riepilogo CLV ora
+usano soltanto il campione grezzo contro grezzo valido. Storico non allineato,
+basi sconosciute e record non validi sono conteggiati separatamente; nessuna
+ribasatura o pubblicazione live eseguita. Coperto da test puri, DOM e database.
+
+**Protezione push 12/09:** quote persistenti per iscrizione e globali,
+limiti JSON/watchlist, risposte 429/503 e cancellazione fuori quota
+implementati e verificati. Completate anche prova di possesso via notifica,
+chiave di gestione, migrazione verificata legacy, dedupe atomico e retention;
+dettagli nell’audit §9. Restano collaudo push su dispositivi reali, protezione
+volumetrica di piattaforma e rilascio autorizzato. Nessun invio reale eseguito.
+
+**Gate esterni non chiusi:** attivazione/licenza e copertura del provider quote,
+identità del titolare e contatto privacy riservato da fornire e verificare,
+eventuale ribasatura storica con backup/dry-run/autorizzazione. Le modifiche locali
+non risolvono da sole questi punti e non attestano conformità legale.
 
 Questo file è la coda ufficiale del progetto. Serve a un'unica cosa: tenere
 visibile ciò che manca, invece di lasciarlo implicito nel codice o nella
