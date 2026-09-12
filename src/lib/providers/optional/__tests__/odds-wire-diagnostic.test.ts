@@ -1,0 +1,13 @@
+import assert from "node:assert/strict";
+import { wireDiagnosticSummary, wireDiagnosticVerdict, diagnosticText } from "../odds-wire-diagnostic";
+assert.match(wireDiagnosticVerdict(0, 0, 0), /non prova un guasto/);
+assert.match(wireDiagnosticVerdict(1, 0, 0), /nessuno raggiunge 45/);
+assert.match(wireDiagnosticVerdict(5, 3, 0), /altri gate/);
+assert.match(wireDiagnosticVerdict(5, 3, 2), /NON raccomandazioni BET/);
+assert.equal(diagnosticText("\n::error::fake\u001b[31m"), " ::error::fake [31m");
+assert.equal(diagnosticText("x".repeat(700)).length, 600);
+const summary = wireDiagnosticSummary(["</pre><script>&", "test\n## Fake"]);
+assert.ok(!summary.includes("<script>"));
+assert.ok(summary.includes("&lt;/pre&gt;&lt;script&gt;&amp;"));
+assert.ok(summary.includes("test ## Fake"));
+console.log("✓ 9 controlli diagnosi wire: assenza segnali, sotto soglia, gate, nessuna promozione BET, escaping e limiti");

@@ -23,9 +23,11 @@
  *    lo smoke lo dice, ma la lettura esplicita resta possibile per verificare
  *    il percorso prima di accenderla.
  */
+import { appendFileSync } from "node:fs";
+import { diagnosticText, wireDiagnosticSummary, wireDiagnosticVerdict } from "@/lib/providers/optional/odds-wire-diagnostic";
 import { eq } from "drizzle-orm";
 import { db, sql } from "@/db/client";
-import { leagues, matches, teams } from "@/db/schema";
+import { leagues, matches, teams, sourceHealth } from "@/db/schema";
 import {
   creditsSpentFor,
   listWireSignalRows,
@@ -85,48 +87,45 @@ async function loadMatchRow(matchId: number): Promise<DbMatchRow | null> {
 }
 
 async function listCandidates(): Promise<void> {
+  const now = new Date();
   const gate = wireGate(process.env);
-  console.log("=== CABLAGGIO PER-BOOKMAKER — SMOKE (0 crediti) ===");
-  console.log(
-    `flag                  : ${gate.enabled ? "ACCESO" : "SPENTO"}${
-      gate.reason ? ` — ${gate.reason}` : ""
-    }`,
-  );
-
   const stats = await listWireSignalStats();
-  console.log(
-    `segnali attivi in DB   : ${stats.activeTotal} (di cui ${stats.activeEligible} con indice ≥ ${WIRE_MIN_CONFIDENCE}, la soglia del cablaggio)`,
-  );
-
   const rows = await listWireSignalRows();
-  const { candidates, skipped } = pickWireCandidates(rows, new Date());
-
-  console.log(`\nCandidati del ciclo (${candidates.length}):`);
-  for (const c of candidates) {
-    console.log(
-      `  #${c.matchId} ${c.homeTeam} — ${c.awayTeam} · ${c.sportKey} · indice ${c.confidenceScore} · kickoff ${c.kickoffAt.toISOString()}`,
-    );
+  const lowRows = await listWireSignalRows({ belowThresholdSample: true });
+  const { candidates, skipped } = pickWireCandidates(rows, now);
+  const lowSkipped = pickWireCandidates(lowRows, now).skipped;
+  const sources = await db.select({
+    key: sourceHealth.sourceKey,
+    status: sourceHealth.status,
+    lastSuccess: sourceHealth.lastSuccessAt,
+    lastAttempt: sourceHealth.lastAttemptAt,
+    lastRateLimit: sourceHealth.lastRateLimitAt,
+    errors: sourceHealth.consecutiveErrors,
+  }).from(sourceHealth).orderBy(sourceHealth.sourceKey).limit(30);
+  const lines = [
+    `Rilevazione: ${now.toISOString()}`,
+    `Flag del processo workflow: ${gate.enabled ? "ACCESO" : "SPENTO"} — ${gate.reason ?? "entrambi presenti"}`,
+    "I flag di questo workflow NON attestano la configurazione Vercel o del collector.",
+    `Segnali attivi: ${stats.activeTotal}; indice ≥ ${WIRE_MIN_CONFIDENCE}: ${stats.activeEligible}`,
+    `Campione sotto soglia (massimo 12): ${lowSkipped.length}`,
+    ...lowSkipped.map(s => `#${s.matchId}: ${s.reason}`),
+    `Candidati alla lettura (${candidates.length} partite, NON BET):`,
+    ...candidates.slice(0, 30).map(c => `#${c.matchId} ${c.homeTeam} — ${c.awayTeam} · ${c.sportKey} · indice ${c.confidenceScore} · kickoff ${c.kickoffAt.toISOString()}`),
+    ...(candidates.length > 30 ? ["Elenco candidati limitato ai primi 30."] : []),
+    `Scarti sopra soglia: ${skipped.length} segnali; primi 12:`,
+    ...skipped.slice(0, 12).map(s => `#${s.matchId}: ${s.reason}`),
+    wireDiagnosticVerdict(stats.activeTotal, stats.activeEligible, candidates.length),
+    "Stato fonti registrato nel DB (non una nuova sonda HTTP; massimo 30):",
+    ...sources.map(s => `${s.key}: ${s.status}; ultimo successo ${s.lastSuccess?.toISOString() ?? "non noto"}; ultimo tentativo ${s.lastAttempt?.toISOString() ?? "non noto"}; ultimo rate limit ${s.lastRateLimit?.toISOString() ?? "non noto"}; errori consecutivi ${s.errors}`),
+    "Successo della fonte non significa quote fresche per ogni partita. Non aumentare richieste in presenza di rate limit.",
+    "Conteggi e campioni letti in query separate: possono variare se il collector aggiorna il DB nel frattempo.",
+    "Nessuna chiamata quote, nessuna scrittura DB, nessuna attivazione. Il verde del job non significa candidati presenti.",
+  ];
+  console.log("=== CABLAGGIO PER-BOOKMAKER — SMOKE (0 crediti) ===");
+  for (const line of lines) console.log(`  ${diagnosticText(line)}`);
+  if (process.env.GITHUB_STEP_SUMMARY) {
+    appendFileSync(process.env.GITHUB_STEP_SUMMARY, wireDiagnosticSummary(lines));
   }
-  if (candidates.length === 0) {
-    console.log(
-      "  nessuno in questo istante: guarda i segnali attivi qui sopra e gli scartati qui sotto per capire il perché.",
-    );
-  }
-
-  if (skipped.length > 0) {
-    console.log(`\nScartati dalla selezione (${skipped.length}):`);
-    for (const s of skipped.slice(0, 12)) {
-      console.log(`  #${s.matchId}: ${s.reason}`);
-    }
-    if (skipped.length > 12) {
-      console.log(`  … e altri ${skipped.length - 12}`);
-    }
-  }
-
-  console.log(
-    "\nPer la lettura reale di una partita (1 credito):",
-  );
-  console.log("  npm run smoke:odds-wire -- --read <id>");
 }
 
 async function readMatch(matchId: number): Promise<void> {

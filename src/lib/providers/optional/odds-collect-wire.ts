@@ -35,7 +35,7 @@
  * mista (consenso + per-book). L'accensione dei due flag su Vercel resta un
  * passo umano deliberato, non un effetto collaterale del merge.
  */
-import { and, desc, eq, gte, inArray, sql as raw } from "drizzle-orm";
+import { and, desc, eq, gte, lt, inArray, sql as raw } from "drizzle-orm";
 import { db } from "@/db/client";
 import {
   dropSignals,
@@ -325,8 +325,10 @@ async function matchAlreadyReadToday(matchId: number, now: Date): Promise<boolea
  * elencare i candidati con la STESSA selezione del ciclo: una selezione
  * diversa nello smoke non proverebbe nulla su ciò che il ciclo farebbe.
  */
-export async function listWireSignalRows(): Promise<WireSignalRow[]> {
-  const rows = await db
+export async function listWireSignalRows(
+  options: { belowThresholdSample?: boolean } = {},
+): Promise<WireSignalRow[]> {
+  const query = db
     .select({
       matchId: matches.id,
       matchKey: matches.key,
@@ -346,10 +348,14 @@ export async function listWireSignalRows(): Promise<WireSignalRow[]> {
     .where(
       and(
         eq(dropSignals.status, "active" satisfies SignalStatus),
-        gte(dropSignals.confidenceScore, String(WIRE_MIN_CONFIDENCE)),
+        options.belowThresholdSample
+          ? lt(dropSignals.confidenceScore, String(WIRE_MIN_CONFIDENCE))
+          : gte(dropSignals.confidenceScore, String(WIRE_MIN_CONFIDENCE)),
       ),
     )
-    .orderBy(desc(dropSignals.confidenceScore));
+    .orderBy(desc(dropSignals.confidenceScore), dropSignals.id).$dynamic();
+  // Il campione diagnostico non entra mai nella selezione del collector.
+  const rows = await (options.belowThresholdSample ? query.limit(12) : query);
 
   const teamIds = [...new Set(rows.flatMap((r) => [r.homeTeamId, r.awayTeamId]))];
   const teamRows = teamIds.length
