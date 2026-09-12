@@ -47,7 +47,7 @@
     "test:feed": "tsx src/lib/view/__tests__/feed.test.ts",
     "test:watchlist": "tsx src/lib/view/__tests__/watchlist.test.ts",
     "test:odds-budget": "tsx src/lib/providers/optional/__tests__/odds-budget.test.ts",
-    "test:odds-adapter": "tsx src/lib/providers/optional/__tests__/the-odds-api-odds.test.ts",
+    "test:odds-adapter": "tsx src/lib/providers/optional/__tests__/the-odds-api-odds.test.ts && tsx src/lib/providers/optional/__tests__/quote-timestamp-origin.test.ts",
     "test:odds-client": "tsx src/lib/providers/optional/__tests__/the-odds-api-client.test.ts",
     "test:odds-persistence": "tsx src/lib/providers/optional/__tests__/collect-the-odds-api.test.ts",
     "test:odds-resolver": "tsx src/lib/providers/optional/__tests__/odds-match-resolver.test.ts",

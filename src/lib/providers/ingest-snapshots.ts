@@ -1,7 +1,7 @@
 import { eq } from "drizzle-orm";
 import { db } from "@/db/client";
 import { bookmakers, oddsSnapshots } from "@/db/schema";
-import type { OddsQuoteDTO } from "./types";
+import type { OddsQuoteDTO, QuoteTimestampOrigin } from "./types";
 
 export interface ProviderSnapshotWriteReport {
   written: number;
@@ -19,6 +19,7 @@ export interface ProviderSnapshotRecord {
   price: number;
   impliedProb: number;
   collectedAt: Date;
+  timestampOrigin: QuoteTimestampOrigin;
   source: string;
   runId: number | null;
 }
@@ -96,6 +97,7 @@ export function toProviderSnapshotRecords(
     price: quote.price,
     impliedProb: impliedProbabilityOf(quote.price),
     collectedAt: quote.observedAt,
+    timestampOrigin: quote.timestampOrigin === "provider_market" || quote.timestampOrigin === "provider_bookmaker" || quote.timestampOrigin === "collection_fallback" ? quote.timestampOrigin : "unknown",
     source,
     runId,
   }));
@@ -105,8 +107,8 @@ export function toProviderSnapshotRecords(
  * Persistenza comune delle quote per bookmaker.
  *
  * Non calcola consensus, fair o edge: salva esclusivamente ciò che l'adapter
- * ha osservato. Il timestamp resta quello della fonte, così la freshness non
- * viene mascherata dal momento della scrittura nel database.
+ * ha osservato. Il timestamp conserva la provenienza dichiarata dal parser: fonte,
+ * ripiego di raccolta o origine sconosciuta. Non lo si deduce dalla data.
  */
 export async function writeProviderSnapshots(
   matchId: number,
@@ -143,6 +145,7 @@ export async function writeProviderSnapshots(
     price: record.price.toFixed(3),
     impliedProb: record.impliedProb.toFixed(6),
     collectedAt: record.collectedAt,
+    timestampOrigin: record.timestampOrigin,
     source: record.source,
     isStale: false,
     runId: record.runId,

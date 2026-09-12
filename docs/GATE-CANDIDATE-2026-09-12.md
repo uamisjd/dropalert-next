@@ -107,3 +107,13 @@ ed espone i gate mancanti, ma non rimpiazza ancora lo scanner pubblico né
 abilita BET. La provenienza temporale non persistita resta un blocco esplicito,
 non una freshness inventata. Non occorre ripetere il workflow smoke per testare
 questo codice: sono disponibili fixture pure e test PostgreSQL locali.
+
+
+### Provenienza temporale — aggiornamento implementativo
+
+Aggiunta la migrazione 0010 e la catena DTO/parser/persistenza/lettura per i nuovi
+snapshot. Lo storico rimane unknown e non viene promosso nemmeno da un conflitto
+con una nuova lettura dello stesso istante. Il blocco sullo storico resta valido;
+per i nuovi dati espliciti il gate può essere superato, ma non quelli di accesso
+all’offerta, movimento, freshness o validazione. Dettagli e ordine di rilascio in
+SCANNER-INDIPENDENTE.md. Nessuna migrazione applicata al DB reale.

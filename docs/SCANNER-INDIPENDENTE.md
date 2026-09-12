@@ -55,14 +55,22 @@ timestamp. Non è quindi possibile attestare retroattivamente la freshness di
 esecuzione di quelle righe sulla sola colonna temporale.
 
 Il modulo puro richiede `providerTimestampVerified=true` per ogni riga usata
-come evidenza. Il repository, che non dispone di tale attestazione nel DB,
-passa **false** e restituisce il blocco esplicito. Una conferma di accesso al
+come evidenza. Dopo la migrazione `0010_quote_timestamp_origin`, il repository legge la
+provenienza conservata: soltanto `provider_market` e `provider_bookmaker`
+soddisfano questo gate; `unknown` e `collection_fallback` restano bloccati. Una conferma di accesso al
 bookmaker non sana l'assenza di provenienza temporale del riferimento sharp.
 
-Per abilitare il percorso su nuovi dati occorre un intervento successivo su
-contratto DTO/parser, schema e persistenza: origine del timestamp conservata,
-nessun backfill ottimistico dello storico e test/migrazione revisionati.
-Non sostituire `false` con `true` per aggirare il limite.
+Implementati DTO/parser/schema/persistenza per i nuovi dati: il parser preferisce
+il timestamp specifico del mercato, altrimenti quello del bookmaker. Se il campo
+scelto è assente o non valido, usa l’ora di osservazione marcata come fallback,
+non un altro timestamp scelto per sembrare più fresco. Date prive di timezone o
+calendarialmente invalide non attestano freshness. Date future restano future e
+lo scanner le blocca. Gli adapter non aggiornati restano `unknown`.
+
+Lo storico riceve soltanto il default `unknown`, senza attribuzione retroattiva.
+I conflitti di deduplicazione non aggiornano la provenienza di vecchie righe.
+L’origine provider attesta la provenienza del timestamp, NON l’eseguibilità del
+prezzo, la presenza del bookmaker nell’account dell’utente o la qualità del feed.
 
 Inoltre la raccolta attuale, con una lettura per partita al giorno, non garantisce
 la storia e la freshness richieste da questo protocollo. Prima di cambiarla
@@ -83,7 +91,25 @@ come effetto collaterale del rilascio dello scanner.
 ## Stato di rilascio
 
 Questo è il primo percorso end-to-end di audit indipendente, non l'attivazione
-pubblica dei BET. Mancano persistenza della provenienza temporale, alimentazione
-adeguata autorizzata, integrazione UI/conferma offerta e collaudo reale. Il vecchio
-scanner pubblico non è stato silenziosamente cambiato. Nessuna migrazione o
-scrittura di produzione eseguita per questa implementazione.
+pubblica dei BET. La persistenza della provenienza è implementata, ma richiede la migrazione
+autorizzata nell’ambiente target. Restano alimentazione adeguata autorizzata,
+integrazione UI/conferma offerta e collaudo reale. Il vecchio
+scanner pubblico non è stato silenziosamente cambiato. La migrazione è stata verificata solo localmente; nessuna migrazione o
+scrittura di produzione eseguita.
+
+
+## Rilascio della provenienza temporale
+
+- Migrazione additiva `drizzle/0010_quote_timestamp_origin.sql`: enum con quattro
+  valori e colonna NOT NULL DEFAULT unknown. Nessun UPDATE di reinterpretazione.
+- Prima del codice nuovo occorre applicare la migrazione al DB dell'ambiente
+  target, con backup e autorizzazione del gestore. Valido anche per una preview:
+  non presumere che il suo DB sia separato dalla produzione.
+- Senza colonna, lo scanner deve fallire esplicitamente; non convertire l'errore
+  in una lista vuota. Anche i nuovi scrittori dipendono dalla migrazione.
+- Il codice precedente rimane compatibile con la colonna aggiuntiva grazie al
+  default; rollback applicativo senza cancellare colonna o dati. Non eliminare
+  l'enum se sono presenti record che ne dipendono.
+- Test end-to-end locale: parser → scrittura provider → scanner; con provenienza
+  valida e conferma esplicita la fixture arriva a CANDIDATA. Senza conferma,
+  con fallback o con storico unknown resta NON AZIONABILE. Nessun valore verificato.

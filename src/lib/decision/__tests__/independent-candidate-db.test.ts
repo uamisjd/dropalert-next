@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
+import { parseOddsResponse } from "@/lib/providers/optional/the-odds-api-odds";
+import { writeProviderSnapshots } from "@/lib/providers/ingest-snapshots";
 import { sql } from "@/db/client";
 import { readIndependentCandidate } from "@/lib/repo/independent-candidates";
 const url = new URL(process.env.DATABASE_URL ?? "postgres://dropalert@127.0.0.1:5433/dropalert");
@@ -38,10 +40,29 @@ async function main() {
     assert.equal(confirmed.result.decision.state, "NON_AZIONABILE");
     assert.ok(confirmed.result.blockers.some(b => b.includes("timestamp provider")));
     assert.deepEqual(await sql`select * from odds_snapshots where match_id = ${matchId!} order by id`, before, "lettura senza scritture");
+    // Lo storico senza provenienza non viene promosso da un conflitto di dedupe.
+    async function persist(at: Date, source = "the-odds-api") {
+      const parsed = parseOddsResponse({ id: "test", sport_key: "soccer_italy_serie_a", commence_time: new Date(now.getTime() + 3600_000).toISOString(), home_team: "Home", away_team: "Away",
+        bookmakers: [key, "pinnacle"].map(book => ({ key: book, title: book, last_update: at.toISOString(), markets: [{ key: "h2h", outcomes: [
+          { name: "Home", price: book === key ? (at === now ? 2.4 : 2.5) : (at === now ? 2 : 2.1) },
+          { name: "Draw", price: 3.5 }, { name: "Away", price: 4 },
+        ] }] })),
+      }, { fixtureKey: key, observedAt: now });
+      return writeProviderSnapshots(matchId!, parsed.quotes, null, source);
+    }
+    assert.equal((await persist(now)).written, 0);
+    assert.ok((await readIndependentCandidate(params, now)).result.blockers.some(b => b.includes("timestamp provider")));
+    await sql`delete from odds_snapshots where match_id = ${matchId!}`;
+    await persist(earlier); await persist(now);
+    const verified = await readIndependentCandidate({ ...params, execution: { matchId: matchId!, bookmaker: key, market: "1x2", selection: "home", price: 2.4, checkedAt: now } }, now);
+    assert.equal(verified.result.decision.state, "CANDIDATA", "parser → persistenza → scanner con timestamp provider e conferma esplicita");
+    assert.equal((await readIndependentCandidate(params, now)).result.decision.state, "NON_AZIONABILE", "origine nota non inventa accesso all’offerta");
+    await sql`update odds_snapshots set timestamp_origin = 'collection_fallback' where match_id = ${matchId!}`;
+    assert.ok((await readIndependentCandidate(params, now)).result.blockers.some(b => b.includes("timestamp provider")));
     await sql`update odds_snapshots set source = 'the-odds-api-wire-smoke' where match_id = ${matchId!}`;
     assert.equal((await readIndependentCandidate(params, now)).snapshotsRead, 0, "smoke escluso");
     await assert.rejects(readIndependentCandidate({ ...params, matchId: -1 }, now));
-    console.log("✓ 7 controlli DB scanner: snapshot, conferma, provenienza timestamp, immutabilità, esclusione smoke, input");
+    console.log("✓ 12 controlli DB scanner: parser/persistenza, provenienza, legacy/dedupe, fallback, accessibilità, immutabilità e smoke");
   } finally {
     if (matchId) await sql`delete from matches where id = ${matchId}`;
     if (leagueId) await sql`delete from leagues where id = ${leagueId}`;

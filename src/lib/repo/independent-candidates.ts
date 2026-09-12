@@ -18,7 +18,7 @@ export async function readIndependentCandidate(input: {
     // Non filtrare is_stale prima del raggruppamento: nascondere l'ultima
     // linea incompleta/stale farebbe riemergere un prezzo vecchio.
     const rows = await tx`select s.match_id, s.market, s.selection, b.key as bookmaker,
-      s.source, s.collected_at, s.price, s.is_stale from odds_snapshots s
+      s.source, s.collected_at, s.price, s.is_stale, s.timestamp_origin from odds_snapshots s
       join bookmakers b on b.id = s.bookmaker_id
       where s.match_id = ${input.matchId} and s.market = '1x2'
       and b.key in (${input.bookmaker}, 'pinnacle') and s.source = ${THE_ODDS_API_SNAPSHOT_SOURCE}
@@ -28,9 +28,8 @@ export async function readIndependentCandidate(input: {
     const snapshots: CandidateSnapshot[] = rows.map(r => ({ matchId: r.match_id, market: r.market,
       selection: r.selection, bookmaker: r.bookmaker, source: r.source,
       at: new Date(r.collected_at), price: Number(r.price), isStale: r.is_stale,
-      // Il DB attuale non distingue last_update del provider dal fallback
-      // sull’ora di download. Non inventare questa attestazione.
-      providerTimestampVerified: false }));
+      // Solo provenienza esplicita; storico e fallback non vengono promossi.
+      providerTimestampVerified: r.timestamp_origin === "provider_market" || r.timestamp_origin === "provider_bookmaker" }));
     return {
       matchId: input.matchId, selection: input.selection, generatedAt: now,
       snapshotsRead: snapshots.length, policyVersion: "independent-1x2-research-v1",

@@ -220,6 +220,11 @@ export const matches = pgTable(
  * da cui ogni metrica viene ricalcolata. Nessun valore derivato viene
  * salvato qui se non la probabilità implicita (1/quota).
  */
+/** Provenienza dichiarata, non attestazione dell'accessibilità dell'offerta. */
+export const quoteTimestampOriginEnum = pgEnum("quote_timestamp_origin", [
+  "unknown", "provider_market", "provider_bookmaker", "collection_fallback",
+]);
+
 export const oddsSnapshots = pgTable(
   "odds_snapshots",
   {
@@ -237,6 +242,8 @@ export const oddsSnapshots = pgTable(
     /** 1/quota, in frazione 0–1 */
     impliedProb: numeric("implied_prob", { precision: 7, scale: 6 }).notNull(),
     collectedAt: timestamp("collected_at", { withTimezone: true }).notNull(),
+    /** Lo storico e gli scrittori senza provenienza restano unknown. */
+    timestampOrigin: quoteTimestampOriginEnum("timestamp_origin").notNull().default("unknown"),
     /** chiave del collector che ha prodotto il dato */
     source: text("source").notNull(),
     /** true se il provider ha restituito un timestamp più vecchio della soglia */
