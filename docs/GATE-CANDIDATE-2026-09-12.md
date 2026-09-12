@@ -93,3 +93,17 @@ il log del gestore è quello della versione precedente.
 
 Il percorso candidato indipendente del punto 4 rimane da implementare e
 validare: questo intervento di osservabilità non lo sostituisce.
+
+## Esito del secondo workflow e nuovo percorso applicativo
+
+Run `34715864943`, log fornito dal gestore: rilevazione 20:02:06 UTC, segnale #822
+con indice 26,63, nessun segnale ≥45 e nessun candidato. Fonte BetExplorer con
+successo 20:01:32 UTC, zero errori consecutivi: non è prova di arresto totale
+né di copertura completa.
+
+Implementato successivamente il percorso separato `audit:candidate`: vedere
+[SCANNER-INDIPENDENTE.md](SCANNER-INDIPENDENTE.md). Confronta operatori distinti
+ed espone i gate mancanti, ma non rimpiazza ancora lo scanner pubblico né
+abilita BET. La provenienza temporale non persistita resta un blocco esplicito,
+non una freshness inventata. Non occorre ripetere il workflow smoke per testare
+questo codice: sono disponibili fixture pure e test PostgreSQL locali.
