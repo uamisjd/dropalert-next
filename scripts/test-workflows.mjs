@@ -25,6 +25,7 @@ for (const mode of ["audit", "smoke"]) {
   for (const value of ["soccer_", "basketball_nba", "soccer_a; exit 0", "soccer_a\nb", "--help"]) valid(mode, { INPUT_SPORT_KEY: value }, false);
 }
 valid("audit", { INPUT_WHICH: "smoke-wire" }, true);
+valid("audit", { INPUT_WHICH: "migration-rehearsal" }, true);
 valid("audit", { INPUT_WHICH: "unknown" }, false);
 valid("smoke", { INPUT_MODE: "smoke-test" }, false);
 valid("smoke", { INPUT_MODE: "smoke-test", INPUT_MATCH_ID: "123" }, true);
@@ -46,6 +47,18 @@ for (const file of readdirSync(".github/workflows").filter((p) => p.endsWith(".y
     }
   }
 }
+
+// La modalità migrazione non può avviare il job con collector/credenziali provider.
+assert.equal(workflows['audit.yml'].jobs.audit.if, "inputs.which != 'migration-rehearsal'");
+const rehearsal = workflows['audit.yml'].jobs['migration-rehearsal'];
+assert.equal(rehearsal.if, "inputs.which == 'migration-rehearsal'");
+assert.equal(rehearsal.env, undefined);
+assert.deepEqual(rehearsal.steps.at(-1).env, {
+  MIGRATION_TEST_DATABASE_URL: '${{ secrets.MIGRATION_TEST_DATABASE_URL }}',
+  PRODUCTION_DATABASE_URL: '${{ secrets.DATABASE_URL }}',
+});
+assert.equal(rehearsal.steps.at(-1).run, 'node scripts/rehearse-quote-migration.mjs');
+checks += 5;
 
 // Esegue i blocchi veri, ma sostituisce npm: nessun DB, provider o credito.
 const dir = mkdtempSync(join(tmpdir(), "dropalert-workflows-"));

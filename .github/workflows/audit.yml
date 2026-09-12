@@ -21,6 +21,7 @@ on:
           - smoke-odds
           - smoke-wire
           - control
+          - migration-rehearsal
       match_id:
         description: "Solo per smoke-odds: id partita. Vuoto = ricerca partita (0 crediti)"
         required: false
@@ -40,6 +41,7 @@ concurrency:
 
 jobs:
   audit:
+    if: inputs.which != 'migration-rehearsal'
     runs-on: ubuntu-latest
     timeout-minutes: 12
     defaults:
@@ -181,3 +183,25 @@ jobs:
             echo "::notice::$(echo "$line" | sed -E "$MASK")"
           done < <(grep -E "ESITO|Crediti spesi|origine" /tmp/control.log | head -4)
           exit "$code"
+
+  migration-rehearsal:
+    if: inputs.which == 'migration-rehearsal'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - name: Codice
+        uses: actions/checkout@v4
+      - name: Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Dipendenze senza script e senza secret
+        run: npm ci --ignore-scripts
+      - name: Prova su copia Neon con rollback obbligatorio
+        env:
+          MIGRATION_TEST_DATABASE_URL: ${{ secrets.MIGRATION_TEST_DATABASE_URL }}
+          PRODUCTION_DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: node scripts/rehearse-quote-migration.mjs
