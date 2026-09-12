@@ -7,7 +7,7 @@ fail() { echo "::error::$1" >&2; exit 1; }
 case "${1:-}" in
   audit)
     case "${INPUT_WHICH:-}" in
-      value|finished|both|smoke-odds|smoke-wire|control|migration-rehearsal) ;;
+      value|finished|both|smoke-odds|smoke-wire|control|migration-rehearsal|migration-apply-production) ;;
       *) fail "Modalità audit non valida." ;;
     esac ;;
   smoke)

@@ -84,7 +84,7 @@
     "test:decision": "tsx src/lib/decision/__tests__/contract.test.ts",
     "test:price-evidence": "tsx src/lib/decision/__tests__/price-evidence.test.ts",
     "test:security": "tsx src/lib/security/__tests__/security.test.ts",
-    "test:workflows": "node scripts/test-workflows.mjs && node scripts/test-migration-rehearsal.mjs && node --env-file-if-exists=.env scripts/test-migration-rehearsal-db.mjs",
+    "test:workflows": "node scripts/test-workflows.mjs && node scripts/test-migration-rehearsal.mjs && node --env-file-if-exists=.env scripts/test-migration-rehearsal-db.mjs && node --env-file-if-exists=.env scripts/test-apply-quote-migration.mjs",
     "test:performance": "tsx src/lib/view/__tests__/clv-performance.test.ts && tsx src/components/__tests__/performance.test.tsx",
     "test:push-security": "tsx src/lib/security/__tests__/push-inputs.test.ts && tsx --env-file-if-exists=.env src/lib/security/__tests__/push-quota.test.ts",
     "test:push-lifecycle": "tsx --env-file-if-exists=.env src/lib/security/__tests__/push-lifecycle.test.ts && tsx src/components/__tests__/push-verification.test.tsx && node scripts/test-service-worker.mjs",

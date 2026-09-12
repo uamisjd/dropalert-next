@@ -49,7 +49,7 @@ for (const file of readdirSync(".github/workflows").filter((p) => p.endsWith(".y
 }
 
 // La modalità migrazione non può avviare il job con collector/credenziali provider.
-assert.equal(workflows['audit.yml'].jobs.audit.if, "inputs.which != 'migration-rehearsal'");
+assert.equal(workflows['audit.yml'].jobs.audit.if, "inputs.which != 'migration-rehearsal' && inputs.which != 'migration-apply-production'");
 const rehearsal = workflows['audit.yml'].jobs['migration-rehearsal'];
 assert.equal(rehearsal.if, "inputs.which == 'migration-rehearsal'");
 assert.equal(rehearsal.env, undefined);
@@ -59,6 +59,13 @@ assert.deepEqual(rehearsal.steps.at(-1).env, {
 });
 assert.equal(rehearsal.steps.at(-1).run, 'node scripts/rehearse-quote-migration.mjs');
 checks += 5;
+
+const apply = workflows['audit.yml'].jobs['migration-apply-production'];
+assert.equal(apply.if, "inputs.which == 'migration-apply-production'");
+assert.equal(apply.env, undefined);
+assert.equal(apply.steps.at(-1).run, 'node scripts/apply-quote-migration-production.mjs');
+assert.equal(apply.steps.at(-1).env.PRODUCTION_DATABASE_URL, '${{ secrets.DATABASE_URL }}');
+checks += 4;
 
 // Esegue i blocchi veri, ma sostituisce npm: nessun DB, provider o credito.
 const dir = mkdtempSync(join(tmpdir(), "dropalert-workflows-"));
