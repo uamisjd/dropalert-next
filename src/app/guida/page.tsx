@@ -63,7 +63,7 @@ export default function GuidaPage() {
     },
     inLanguage: "it-IT",
     datePublished: "2026-09-05",
-    dateModified: "2026-09-09",
+    dateModified: "2026-09-12",
     about: {
       "@type": "Thing",
       name: "Scommesse sportive quantitative",
@@ -269,10 +269,11 @@ export default function GuidaPage() {
             <Link href="/performance" className="font-semibold text-cyan-700 hover:underline">
               /performance
             </Link>
-            , sopra il numero. Se le osservazioni sono a basi miste, il CLV
-            medio somma numeri non confrontabili e non va letto come un
-            verdetto: il solo errore di base vale −1,86 pp, misurati
-            sull&apos;archivio congelato.
+            , sopra il numero. Il grafico, la media e le fasce usano solo
+            confronti grezzo contro grezzo. Le osservazioni con chiusura senza
+            margine contro segnale grezzo, base sconosciuta o dati non validi
+            sono conteggiate separatamente e non entrano nel campione mostrato.
+            Superare la soglia di 30 osservazioni non dimostra redditività.
           </li>
           <li>
             <strong>Il tetto dell&apos;indice.</strong> Con la fonte attuale —
@@ -285,7 +286,7 @@ export default function GuidaPage() {
           <li>
             <strong>La scomposizione, non il totale.</strong> Nella pagina della
             partita ogni componente dice se è misurata o se è una lacuna
-            (<code className="rounded bg-slate-100 px-1">GAP</code>). Un indice
+            (<code className="rounded bg-slate-100 px-1 text-slate-600">GAP</code>). Un indice
             basso perché manca il dato è una storia diversa da un indice basso
             perché il movimento è debole, e solo la scomposizione le distingue.
           </li>
@@ -372,9 +373,9 @@ export default function GuidaPage() {
         </ul>
         <p className="mt-2 text-[11px] leading-relaxed text-slate-500">
           Le tre voci sono scritte in{" "}
-          <code className="rounded bg-slate-100 px-1">docs/AUDIT-CONTENUTI.md</code>{" "}
+          <code className="rounded bg-slate-100 px-1 text-slate-600">docs/AUDIT-CONTENUTI.md</code>{" "}
           e in{" "}
-          <code className="rounded bg-slate-100 px-1">docs/RESEARCH-BACKLOG.md</code>
+          <code className="rounded bg-slate-100 px-1 text-slate-600">docs/RESEARCH-BACKLOG.md</code>
           , con i prerequisiti e i vincoli di budget.
         </p>
       </section>
@@ -400,7 +401,7 @@ export default function GuidaPage() {
             pagina della partita mostra la scomposizione dell&apos;indice,
             la serie storica, il Contesto 360° e — se disponibile — la linea
             sharp. Ogni componente dice se è misurata o se è un{" "}
-            <code className="rounded bg-slate-100 px-1">GAP</code>.
+            <code className="rounded bg-slate-100 px-1 text-slate-600">GAP</code>.
           </li>
           <li>
             <strong>Valuta il divario.</strong>{" "}
@@ -482,6 +483,25 @@ export default function GuidaPage() {
           Gioco responsabile →
         </Link>
       </p>
+      <section className="mt-6 rounded-xl border border-slate-200 bg-white p-4">
+        <h2 className="text-sm font-bold text-slate-900">Preferite e notifiche push</h2>
+        <p className="mt-2 text-sm text-slate-700">
+          Le preferite restano nel browser finché non scegli di sincronizzarle.
+          Per attivare gli avvisi, apri Preferite, autorizza le notifiche e clicca
+          la notifica di verifica entro cinque minuti. Il solo permesso del browser
+          non completa l’attivazione. Anche le iscrizioni precedenti vanno verificate.
+          Dopo aver modificato lista o soglie, usa il pulsante di sincronizzazione.
+        </p>
+        <p className="mt-2 text-sm text-slate-700">
+          È previsto al massimo un tentativo automatico per partita, iscrizione e
+          giornata italiana: un invio fallito o incerto non viene ritentato nello
+          stesso giorno. La consegna non è garantita. Le iscrizioni non rinnovate
+          da 90 giorni non ricevono nuovi avvisi: sincronizza per rinnovarle.
+          Disattiva gli avvisi prima di cancellare i dati del sito: senza la chiave
+          locale di gestione, la sola disiscrizione del browser non conferma la
+          cancellazione dal server. Non condividere link di verifica o chiavi.
+        </p>
+      </section>
     </main>
   );
 }

@@ -107,15 +107,19 @@ export default function MetodologiaPage() {
           media, con il 20,6% delle osservazioni che cambierebbe verso
           (<code className="rounded bg-slate-100 px-1">docs/STUDIO-PARTITE-FINITE.md</code>,
           §1.1). Le osservazioni nuove nascono già sulla base allineata; quelle
-          storiche scritte sulla base mista vengono ribasate con lo strumento
+          storiche scritte sulla base mista possono essere ribasate con lo strumento
           dedicato (<code className="rounded bg-slate-100 px-1">npm run clv:rebase</code>),
-          un passaggio che richiede il database di produzione. La base usata
+          solo dopo una verifica a secco e un’autorizzazione alla scrittura. La base usata
           per ogni osservazione è registrata e dichiarata in{" "}
           <Link href="/performance" className="font-semibold text-cyan-700 hover:underline">
             /performance
           </Link>{" "}
-          accanto al numero: un riepilogo a basi miste lo dice, invece di
-          lasciare che la media sembri un verdetto.
+          prima dei numeri: grafico, media e fasce includono soltanto
+          osservazioni valide grezzo contro grezzo. Le altre basi sono
+          conteggiate separatamente, senza correggere i valori in lettura.
+          I dati dimostrativi sono esclusi. La serie usa la giornata del
+          calcio d’inizio in ora italiana; le osservazioni senza indice valido
+          restano nel totale ma non nelle fasce.
         </p>
       </section>
 

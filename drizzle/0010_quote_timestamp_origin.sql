@@ -1,0 +1,2 @@
+CREATE TYPE "public"."quote_timestamp_origin" AS ENUM('unknown', 'provider_market', 'provider_bookmaker', 'collection_fallback');--> statement-breakpoint
+ALTER TABLE "odds_snapshots" ADD COLUMN "timestamp_origin" "quote_timestamp_origin" DEFAULT 'unknown' NOT NULL;

@@ -71,6 +71,13 @@
       "when": 1787576805100,
       "tag": "0009_sprint_cooldown_429",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1789244516205,
+      "tag": "0010_quote_timestamp_origin",
+      "breakpoints": true
     }
   ]
 }

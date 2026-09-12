@@ -56,6 +56,7 @@ export interface BookLine {
   selection: SelectionCode;
   price: number;
   observedAt: Date;
+  timestampOrigin?: OddsQuoteDTO["timestampOrigin"];
 }
 
 export interface ParseOddsOptions {
@@ -87,12 +88,22 @@ function validPrice(p: unknown): p is number {
   return typeof p === "number" && Number.isFinite(p) && p > 1;
 }
 
-function dateOf(iso: string | undefined, fallback: Date): Date {
-  if (typeof iso === "string") {
-    const d = new Date(iso);
-    if (!Number.isNaN(d.getTime())) return d;
+/** Priorità al timestamp del mercato; se presente ma invalido, non mascherarlo
+ * con quello del bookmaker. Il ripiego resta esplicitamente ora di raccolta. */
+export function quoteTimestamp(market: string | undefined, bookmaker: string | undefined, fallback: Date) {
+  const raw = market ?? bookmaker;
+  if (typeof raw === "string" && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/.test(raw)) {
+    const at = new Date(raw);
+    const [year, month, day, hour, minute, second] = raw.match(/\d+/g)!.slice(0, 6).map(Number);
+    const calendar = new Date(0);
+    calendar.setUTCFullYear(year, month - 1, day);
+    calendar.setUTCHours(0, 0, 0, 0);
+    const validCalendar = calendar.getUTCFullYear() === year && calendar.getUTCMonth() === month - 1 && calendar.getUTCDate() === day;
+    if (Number.isFinite(at.getTime()) && validCalendar && hour <= 23 && minute <= 59 && second <= 59) return {
+      at, origin: market !== undefined && market !== null ? "provider_market" as const : "provider_bookmaker" as const,
+    };
   }
-  return fallback;
+  return { at: fallback, origin: "collection_fallback" as const };
 }
 
 /**
@@ -116,7 +127,7 @@ export function extractBookLines(
     bookmakersSeen += 1;
 
     for (const market of book.markets ?? []) {
-      const at = dateOf(book.last_update ?? market.last_update, observedAt);
+      const timestamp = quoteTimestamp(market.last_update, book.last_update, observedAt);
 
       if (market.key === H2H) {
         for (const o of market.outcomes ?? []) {
@@ -137,7 +148,8 @@ export function extractBookLines(
             market: "1x2",
             selection,
             price: o.price,
-            observedAt: at,
+            observedAt: timestamp.at,
+            timestampOrigin: timestamp.origin,
           });
         }
       } else if (market.key === TOTALS && market.point === 2.5) {
@@ -158,7 +170,8 @@ export function extractBookLines(
             market: "ou_2_5",
             selection,
             price: o.price,
-            observedAt: at,
+            observedAt: timestamp.at,
+            timestampOrigin: timestamp.origin,
           });
         }
       }
@@ -187,6 +200,7 @@ export function parseOddsResponse(
     price: l.price,
     openingPrice: null,
     observedAt: l.observedAt,
+    timestampOrigin: l.timestampOrigin,
     agreement: null,
   }));
   const used = new Set(lines.map((l) => l.bookmakerKey));

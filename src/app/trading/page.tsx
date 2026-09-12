@@ -107,7 +107,7 @@ export default async function TradingPage() {
             </p>
           </div>
         </div>
-        <p className="mt-4 border-t border-slate-100 pt-3 text-[11px] text-slate-400">
+        <p className="mt-4 border-t border-slate-100 pt-3 text-[11px] text-slate-600">
           Letture aggiornate alle {fmtDateTime(data.generatedAt)} · la misura di qualità
           del resto del sito è il CLV, in{" "}
           <Link href="/performance" className="underline">

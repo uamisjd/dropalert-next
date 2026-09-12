@@ -24,7 +24,7 @@ export const sql =
        deve fallire e farsi dichiarare, non impiccare il giro di raccolta
        (il job ha un killer a 10 minuti). Connessione: 30 s al massimo. */
     connect_timeout: 30,
-    timeout: 120,
+    connection: { statement_timeout: 120_000 },
     // i numeric arrivano come stringa: li convertiamo esplicitamente dove serve
   });
 

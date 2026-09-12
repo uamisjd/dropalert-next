@@ -87,6 +87,8 @@ export interface FixtureDTO {
  * `isConsensus` è true e il consumatore SA che non si tratta di un
  * singolo operatore. Non si spaccia mai un consenso per un book.
  */
+export type QuoteTimestampOrigin = "unknown" | "provider_market" | "provider_bookmaker" | "collection_fallback";
+
 export interface OddsQuoteDTO {
   fixtureKey: string;
   bookmakerKey: string;
@@ -101,6 +103,8 @@ export interface OddsQuoteDTO {
   openingPrice: number | null;
   /** istante di osservazione dichiarato dalla fonte, o di raccolta */
   observedAt: Date;
+  /** Assente nei vecchi adapter: persistere unknown, non inferire dal timestamp. */
+  timestampOrigin?: QuoteTimestampOrigin;
   /**
    * Numero di bookmaker che secondo la FONTE concordano sul movimento,
    * es. "17/21". Dato osservato e riportato, mai calcolato da noi.

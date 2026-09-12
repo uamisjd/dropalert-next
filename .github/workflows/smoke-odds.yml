@@ -49,7 +49,13 @@ jobs:
   smoke:
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    defaults:
+      run:
+        shell: bash
     env:
+      INPUT_MODE: ${{ inputs.modalita }}
+      INPUT_MATCH_ID: ${{ inputs.match_id }}
+      INPUT_HOURS: ${{ inputs.ore }}
       # Database reale (Neon), lo stesso del giro di osservazione.
       DATABASE_URL: ${{ secrets.DATABASE_URL }}
       # Si accetta qualunque grafia già in uso: se la chiave sta su Vercel come
@@ -71,15 +77,10 @@ jobs:
           fi
           echo "DATABASE_URL presente, chiave presente."
 
-      - name: Parametri coerenti?
-        run: |
-          if [ "${{ inputs.modalita }}" = "smoke-test" ] && [ -z "${{ inputs.match_id }}" ]; then
-            echo "Per lo smoke-test serve il campo match_id."
-            echo "Esegui prima questa stessa workflow con modalita=trova-partita: stampa gli id utilizzabili."
-            exit 1
-          fi
-
       - uses: actions/checkout@v4
+      - name: Parametri coerenti?
+        run: bash scripts/validate-workflow-inputs.sh smoke
+
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -89,8 +90,8 @@ jobs:
 
       - name: Trova partita leggibile (0 crediti)
         if: inputs.modalita == 'trova-partita'
-        run: npm run odds:find -- --ore ${{ inputs.ore }}
+        run: npm run odds:find -- --ore "$INPUT_HOURS"
 
       - name: Smoke test live (1 credito)
         if: inputs.modalita == 'smoke-test'
-        run: npm run smoke:odds-api -- --match-id ${{ inputs.match_id }}
+        run: npm run smoke:odds-api -- --match-id "$INPUT_MATCH_ID"

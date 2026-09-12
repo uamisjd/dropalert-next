@@ -1,59 +1,53 @@
-/**
- * POST /api/push/subscribe — registra o aggiorna un'iscrizione push.
- * DELETE — la cancella.
- *
- * Nessun account: l'iscrizione è anonima e viaggia con la watchlist che il
- * browser invia. Di chi si iscrive conserviamo solo l'endpoint del servizio
- * push e le chiavi di cifratura, che senza il browser non identificano
- * nessuno.
- */
-import {
-  deleteSubscription,
-  pushConfigured,
-  saveSubscription,
-  vapidPublicKey,
-} from "@/lib/repo/push";
+/** Iscrizione push: aggiornamento autenticato oppure verifica via notifica. */
+import { readBoundedJson } from "@/lib/security/json-body";
+import { parseSubscription } from "@/lib/push/pure";
+import { MAX_PUSH_BODY_BYTES, MAX_PUSH_TARGET_BYTES } from "@/lib/push/validation";
+import { pushQuotaResponse } from "@/lib/repo/push-quota";
+import { pushConfigured, vapidPublicKey, sendToSubscription } from "@/lib/repo/push";
+import { beginPushVerification, updateOwnedSubscription, deleteOwnedSubscription } from "@/lib/repo/push-store";
+import { SITE_URL } from "@/lib/site";
 
 export const dynamic = "force-dynamic";
+const privateHeaders = { "Cache-Control": "no-store" };
 
 export async function GET(): Promise<Response> {
-  return Response.json({
-    configured: pushConfigured(),
-    publicKey: vapidPublicKey(),
-  });
+  return Response.json({ configured: pushConfigured(), publicKey: vapidPublicKey() }, { headers: privateHeaders });
 }
 
 export async function POST(request: Request): Promise<Response> {
-  if (!pushConfigured()) {
-    return Response.json(
-      { ok: false, reason: "notifiche non configurate sul server" },
-      { status: 503 },
-    );
-  }
-  let payload: unknown;
+  if (!pushConfigured()) return Response.json({ ok: false, reason: "notifiche non configurate sul server" }, { status: 503 });
+  const body = await readBoundedJson(request, MAX_PUSH_BODY_BYTES);
+  if (!body.ok) return body.response;
+  const record = parseSubscription(body.data, new Date());
+  if (!record) return Response.json({ ok: false, reason: "iscrizione o lista non valida: massimo 100 partite uniche con soglie tra 0 e 100" }, { status: 400 });
+  const limited = await pushQuotaResponse("subscribe", record.endpoint);
+  if (limited) return limited;
   try {
-    payload = await request.json();
+    const token = request.headers.get("x-push-token");
+    if (token !== null) {
+      const updated = await updateOwnedSubscription(record, token);
+      return Response.json({ ok: updated, reason: updated ? undefined : "iscrizione da verificare nuovamente" }, { status: updated ? 200 : 403, headers: privateHeaders });
+    }
+    const verificationLimit = await pushQuotaResponse("verify", record.endpoint);
+    if (verificationLimit) return verificationLimit;
+    const sent = await beginPushVerification(record, SITE_URL, sendToSubscription);
+    return Response.json({ ok: false, pending: sent, reason: sent ? "Apri la notifica di conferma entro 5 minuti. L’iscrizione non è ancora attiva." : "notifica di conferma non inviata: riprovare" }, { status: sent ? 202 : 502, headers: privateHeaders });
   } catch {
-    return Response.json({ ok: false, reason: "corpo non leggibile" }, { status: 400 });
+    return Response.json({ ok: false, reason: "registro non disponibile" }, { status: 503, headers: privateHeaders });
   }
-  const esito = await saveSubscription(payload, new Date()).catch(() => ({
-    ok: false as const,
-    reason: "registro non scrivibile",
-  }));
-  return Response.json(esito, { status: esito.ok ? 200 : 400 });
 }
 
 export async function DELETE(request: Request): Promise<Response> {
-  let endpoint = "";
+  const payload = await readBoundedJson(request, MAX_PUSH_TARGET_BYTES);
+  if (!payload.ok) return payload.response;
+  const body = payload.data;
+  const endpoint = typeof body === "object" && body !== null && "endpoint" in body ? body.endpoint : null;
+  if (typeof endpoint !== "string" || endpoint.length === 0 || endpoint.length > 4096) return Response.json({ ok: false, reason: "endpoint non valido" }, { status: 400 });
   try {
-    const body = (await request.json()) as { endpoint?: unknown };
-    endpoint = typeof body.endpoint === "string" ? body.endpoint : "";
+    // Fuori quota, ma non fuori autorizzazione. URL noti da soli non bastano.
+    const removed = await deleteOwnedSubscription(endpoint, request.headers.get("x-push-token"));
+    return Response.json({ ok: removed, reason: removed ? undefined : "iscrizione assente o autorizzazione non valida: verifica questo browser" }, { status: removed ? 200 : 403, headers: privateHeaders });
   } catch {
-    endpoint = "";
+    return Response.json({ ok: false, reason: "registro non scrivibile: riprovare la cancellazione" }, { status: 503 });
   }
-  if (endpoint === "") {
-    return Response.json({ ok: false, reason: "endpoint mancante" }, { status: 400 });
-  }
-  await deleteSubscription(endpoint).catch(() => undefined);
-  return Response.json({ ok: true });
 }

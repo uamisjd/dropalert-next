@@ -9,7 +9,7 @@
  *  4. nessun badge, classifica o testo celebrativo è costruito su questo dato.
  */
 import type { ClvMaturity } from "@/lib/repo/dashboard";
-import { CLV_INCONCLUSIVE_BELOW } from "@/lib/repo/dashboard";
+import { CLV_INCONCLUSIVE_BELOW } from "@/lib/view/clv-performance";
 import { InconclusiveBadge } from "./Badges";
 import { ND, fmtDateTime, fmtPp, fmtRate } from "./format";
 
@@ -42,12 +42,10 @@ export function ClvSection({ clv }: { clv: ClvMaturity }) {
         {clv.note}
       </p>
 
-      {/* base di confronto: va letta PRIMA del numero, non dopo. Con basi
-          miste la media sotto somma numeri non confrontabili, e chi legge ha
-          diritto di saperlo prima di darle un significato. */}
+      {/* La composizione dell’archivio precede i numeri del solo campione allineato. */}
       <p
         className={`mb-3 rounded border px-3 py-2 text-xs leading-relaxed ${
-          clv.basis.mixed
+          clv.basis.total > clv.sampleSize
             ? "border-amber-300 bg-amber-50 text-amber-900"
             : "border-slate-200 bg-white text-slate-600"
         }`}
@@ -76,9 +74,9 @@ export function ClvSection({ clv }: { clv: ClvMaturity }) {
               </div>
             </div>
             <div className="rounded border border-slate-200 px-3 py-2">
-              <div className="text-[11px] text-slate-500">Osservazioni</div>
+              <div className="text-[11px] text-slate-500">Osservazioni su base grezza</div>
               <div className="text-lg font-semibold tabular-nums text-slate-700">
-                {clv.sampleSize} / {CLV_INCONCLUSIVE_BELOW}
+                {clv.sampleSize} {clv.sampleSize < CLV_INCONCLUSIVE_BELOW ? `/ ${CLV_INCONCLUSIVE_BELOW}` : ""}
               </div>
             </div>
           </div>
@@ -89,6 +87,7 @@ export function ClvSection({ clv }: { clv: ClvMaturity }) {
             ricalcolarla a posteriori cambierebbe i dati già pubblicati. Sulle
             card la fascia è invece letta su base misurabile — alta da 78, media
             da 60 — e la differenza è dichiarata proprio per non confonderle.
+            {clv.unclassifiedN > 0 ? ` ${clv.unclassifiedN} osservazioni senza indice valido non entrano nelle fasce, ma restano nel totale.` : ""}
           </p>
 
           {/* Tetto strutturale: una fascia vuota sopra il tetto non significa
@@ -159,7 +158,7 @@ export function ClvSection({ clv }: { clv: ClvMaturity }) {
       ) : (
         <div className="rounded border border-slate-200 bg-slate-50 px-3 py-3 text-xs leading-relaxed text-slate-700">
           <p className="mb-1 font-medium text-slate-900">
-            Nessuna osservazione di CLV disponibile.
+            Nessuna osservazione di CLV utilizzabile su base grezza.
           </p>
           <p>
             Il CLV si calcola solo quando un segnale rilevato raggiunge il
@@ -183,7 +182,8 @@ export function ClvSection({ clv }: { clv: ClvMaturity }) {
             )}
           </p>
           <p className="mt-1 text-slate-600">
-            Storico attuale: {ND}. Il dato comparirà da solo, quando esisterà.
+            Riepilogo su base grezza: {ND}. Le osservazioni escluse sono
+            dichiarate sopra e restano in archivio.
           </p>
         </div>
       )}

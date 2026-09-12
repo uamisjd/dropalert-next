@@ -90,7 +90,7 @@ export default async function SurebetPage() {
             </p>
           </div>
         </div>
-        <p className="mt-4 border-t border-slate-100 pt-3 text-[11px] text-slate-400">
+        <p className="mt-4 border-t border-slate-100 pt-3 text-[11px] text-slate-600">
           I numeri dei due calcolatori non vengono dal database e non sono precaricati:
           sono prove di aritmetica su valori inseriti. Per i limiti personali,{" "}
           <Link href="/gioco-responsabile" className="underline">

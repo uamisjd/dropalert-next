@@ -21,6 +21,16 @@ on:
           - smoke-odds
           - smoke-wire
           - control
+          - migration-rehearsal
+          - migration-apply-production
+      migration_confirmation:
+        description: "Solo migration-apply-production: scrivere APPLICA-0010-PRODUCTION"
+        required: false
+        default: ""
+      migration_snapshot:
+        description: "Solo migration-apply-production: snapshot verificato 2026-09-12T21:57:06Z"
+        required: false
+        default: ""
       match_id:
         description: "Solo per smoke-odds: id partita. Vuoto = ricerca partita (0 crediti)"
         required: false
@@ -40,10 +50,18 @@ concurrency:
 
 jobs:
   audit:
+    if: inputs.which != 'migration-rehearsal' && inputs.which != 'migration-apply-production'
     runs-on: ubuntu-latest
     timeout-minutes: 12
+    defaults:
+      run:
+        shell: bash
 
     env:
+      INPUT_WHICH: ${{ inputs.which }}
+      INPUT_MATCH_ID: ${{ inputs.match_id }}
+      INPUT_HOURS: ${{ inputs.ore }}
+      INPUT_SPORT_KEY: ${{ inputs.sport_key }}
       DATABASE_URL: ${{ secrets.DATABASE_URL }}
       # Accettata con qualunque grafia già in uso: se la chiave sta su Vercel
       # come `theoddsapiKey` basta ricrearla qui con lo stesso nome. Il valore
@@ -53,6 +71,9 @@ jobs:
     steps:
       - name: Codice
         uses: actions/checkout@v4
+
+      - name: Valida input manuali
+        run: bash scripts/validate-workflow-inputs.sh audit
 
       - name: Node
         uses: actions/setup-node@v4
@@ -73,20 +94,22 @@ jobs:
       # Gli script non stampano la connection string, ma se il client fallisce
       # l'errore di `postgres` la include nell'message: si maschera in uscita.
       - name: Sguardo sui dati (read-only)
-        if: inputs.which != 'smoke-odds' && inputs.which != 'control'
+        if: inputs.which == 'value' || inputs.which == 'finished' || inputs.which == 'both'
         run: |
           status=0
           run_one() {
             echo "===== $1 ====="
+            set +e
             npm run "$1" 2>&1 \
               | sed -E 's#(postgres(ql)?://)[^[:space:]"'"'"']*#\1<redacted>#g'
-            local code=${PIPESTATUS[0]}
+            local code=$?
+            set -e
             if [ "$code" -ne 0 ]; then
               echo "::warning::$1 è uscito con codice $code"
               status=1
             fi
           }
-          case "${{ inputs.which }}" in
+          case "$INPUT_WHICH" in
             value) run_one audit:value-bets ;;
             finished) run_one audit:finished ;;
             *) run_one audit:value-bets; run_one audit:finished ;;
@@ -107,14 +130,15 @@ jobs:
             exit 1
           fi
           MASK='s#(postgres(ql)?://)[^[:space:]"'"'"']*#\1<redacted>#g'
-          if [ -n "${{ inputs.match_id }}" ]; then
-            SK=""; [ -n "${{ inputs.sport_key }}" ] && SK="--sport-key ${{ inputs.sport_key }}"
-            npm run smoke:odds-api -- --match-id ${{ inputs.match_id }} $SK 2>&1 | sed -E "$MASK"
-          elif [ -n "${{ inputs.sport_key }}" ]; then
+          if [ -n "$INPUT_MATCH_ID" ]; then
+            args=()
+            if [ -n "$INPUT_SPORT_KEY" ]; then args+=(--sport-key "$INPUT_SPORT_KEY"); fi
+            npm run smoke:odds-api -- --match-id "$INPUT_MATCH_ID" "${args[@]}" 2>&1 | sed -E "$MASK"
+          elif [ -n "$INPUT_SPORT_KEY" ]; then
             # Sonda gratuita: trova l'id giusto per una lega fuori mappa.
-            npm run odds:find -- --sonda ${{ inputs.sport_key }} 2>&1 | sed -E "$MASK"
+            npm run odds:find -- --sonda "$INPUT_SPORT_KEY" 2>&1 | sed -E "$MASK"
           else
-            npm run odds:find -- --ore ${{ inputs.ore }} 2>&1 | sed -E "$MASK"
+            npm run odds:find -- --ore "$INPUT_HOURS" 2>&1 | sed -E "$MASK"
           fi
       # Smoke test del cablaggio per-bookmaker (fase «1b» del ciclo): elenco
       # candidati (0 crediti) e lettura reale (1 credito) con la stessa
@@ -128,8 +152,8 @@ jobs:
             exit 1
           fi
           MASK='s#(postgres(ql)?://)[^[:space:]"'"'"']*#\1<redacted>#g'
-          if [ -n "${{ inputs.match_id }}" ]; then
-            npm run smoke:odds-wire -- --read ${{ inputs.match_id }} 2>&1 | sed -E "$MASK"
+          if [ -n "$INPUT_MATCH_ID" ]; then
+            npm run smoke:odds-wire -- --read "$INPUT_MATCH_ID" 2>&1 | sed -E "$MASK"
           else
             npm run smoke:odds-wire 2>&1 | sed -E "$MASK"
           fi
@@ -149,12 +173,11 @@ jobs:
             echo "::error::Chiave The Odds API assente fra i secrets."
             exit 1
           fi
-          EXTRA=""
-          if [ -n "${{ inputs.sport_key }}" ]; then EXTRA="--sport-key ${{ inputs.sport_key }}"; fi
-          # shellcheck disable=SC2086
+          args=()
+          if [ -n "$INPUT_SPORT_KEY" ]; then args+=(--sport-key "$INPUT_SPORT_KEY"); fi
           set +e
-          npm run odds:control -- --ore ${{ inputs.ore }} $EXTRA 2>&1 | tee /tmp/control.log | sed -E "$MASK"
-          code=${PIPESTATUS[0]}
+          npm run odds:control -- --ore "$INPUT_HOURS" "${args[@]}" 2>&1 | tee /tmp/control.log | sed -E "$MASK"
+          code=$?
           set -e
           # I log grezzi non sono scaricabili da fuori: l'esito viene fissato
           # nel Summary del run e nelle annotazioni, così è leggibile dalla UI
@@ -169,3 +192,55 @@ jobs:
             echo "::notice::$(echo "$line" | sed -E "$MASK")"
           done < <(grep -E "ESITO|Crediti spesi|origine" /tmp/control.log | head -4)
           exit "$code"
+
+  migration-rehearsal:
+    if: inputs.which == 'migration-rehearsal'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - name: Codice
+        uses: actions/checkout@v4
+      - name: Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Dipendenze senza script e senza secret
+        run: npm ci --ignore-scripts
+      - name: Prova su copia Neon con rollback obbligatorio
+        env:
+          MIGRATION_TEST_DATABASE_URL: ${{ secrets.MIGRATION_TEST_DATABASE_URL }}
+          PRODUCTION_DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: node scripts/rehearse-quote-migration.mjs
+
+  migration-apply-production:
+    if: inputs.which == 'migration-apply-production'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - name: Codice
+        uses: actions/checkout@v4
+      - name: Conferma migrazione e snapshot senza connessioni
+        env:
+          MIGRATION_CONFIRMATION: ${{ inputs.migration_confirmation }}
+          MIGRATION_SNAPSHOT: ${{ inputs.migration_snapshot }}
+        run: |
+          node --input-type=module -e "import {checkProductionConfirmation} from './scripts/apply-quote-migration-core.mjs'; checkProductionConfirmation(process.env.MIGRATION_CONFIRMATION, process.env.MIGRATION_SNAPSHOT)"
+      - name: Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Dipendenze senza script e senza secret
+        run: npm ci --ignore-scripts
+      - name: Applica soltanto 0010 alla produzione
+        env:
+          MIGRATION_CONFIRMATION: ${{ inputs.migration_confirmation }}
+          MIGRATION_SNAPSHOT: ${{ inputs.migration_snapshot }}
+          MIGRATION_TEST_DATABASE_URL: ${{ secrets.MIGRATION_TEST_DATABASE_URL }}
+          PRODUCTION_DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: node scripts/apply-quote-migration-production.mjs

@@ -127,7 +127,13 @@ export default async function CoveragePage() {
         </div>
       ) : view !== null ? (
         <CoveragePanel view={view} rateLimit={rateLimit}>
-          <CollectNowButton />
+          {process.env.NODE_ENV === "development" ? (
+            <CollectNowButton />
+          ) : (
+            <p className="text-xs text-slate-500">
+              Raccolta gestita dallo scheduler. I giri manuali richiedono accesso al workflow autorizzato.
+            </p>
+          )}
         </CoveragePanel>
       ) : null}
 

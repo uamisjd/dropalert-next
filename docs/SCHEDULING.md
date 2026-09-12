@@ -476,3 +476,19 @@ profondità.
   install latest version of drizzle-orm». La variabile non si mette sul job.
 - `tsx --env-file=.env` esce con codice 9 dove `.env` non esiste (il runner CI,
   giustamente). Gli script `job:*` usano `--env-file-if-exists`.
+
+
+### API: saltare il calcolo di chiusura (verificato 12/09/2026)
+
+`POST /api/jobs/analyze` con `closing: false` salta la cattura delle closing
+line e il calcolo CLV. L’analisi dei dati già raccolti continua: può quindi
+marcare un segnale come chiuso quando il kickoff è passato. Non è una
+modalità read-only. Per evitare anche le richieste di raccolta usare
+`collect: false`; le notifiche restano governate dalla configurazione del server.
+
+La risposta conserva `closing: null`. Nel registro del run la fase risulta
+`closingExecuted: false` e i contatori di chiusura sono zero. Il giro non
+aggiorna l’heartbeat `scheduler:last_cycle`, evitando di rinviare il prossimo
+ciclo completo. Una raccolta eventualmente eseguita continua invece ad
+aggiornare il proprio gate. Omettendo `closing`, oppure passando `true`, il
+comportamento completo resta invariato.

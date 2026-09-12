@@ -510,6 +510,8 @@ export interface CycleOptions {
   mode?: CycleMode;
   /** salta la raccolta e analizza soltanto ciò che è già a registro */
   skipCollect?: boolean;
+  /** salta cattura delle closing line e calcolo CLV; l’analisi resta attiva */
+  skipClosing?: boolean;
   /** ignora l'intervallo minimo (uso manuale e test di percorso) */
   force?: boolean;
   /** limita l'analisi a partite specifiche */
@@ -861,15 +863,17 @@ export async function runCycle(options: CycleOptions = {}): Promise<CycleReport>
     for (const e of detection.errors) errors.push(`analisi match ${e.matchId}: ${e.message}`);
 
     /* --- 3. chiusura e CLV ------------------------------------------- */
-    const closing = await runClosingJob(now, { matchIds: options.matchIds });
-    report.closing = {
-      executed: true,
-      matchesProcessed: closing.matchesProcessed,
-      linesCaptured: closing.linesCaptured,
-      fairLinesCaptured: closing.fairLinesCaptured,
-      clvComputed: closing.clvComputed,
-    };
-    for (const e of closing.errors) errors.push(`chiusura match ${e.matchId}: ${e.message}`);
+    if (!options.skipClosing) {
+      const closing = await runClosingJob(now, { matchIds: options.matchIds });
+      report.closing = {
+        executed: true,
+        matchesProcessed: closing.matchesProcessed,
+        linesCaptured: closing.linesCaptured,
+        fairLinesCaptured: closing.fairLinesCaptured,
+        clvComputed: closing.clvComputed,
+      };
+      for (const e of closing.errors) errors.push(`chiusura match ${e.matchId}: ${e.message}`);
+    }
 
     /* --- 4. notifiche dovute ------------------------------------------ */
     /* Stanno DENTRO il ciclo e non in una rotta a parte: lo scheduler che
@@ -911,9 +915,9 @@ export async function runCycle(options: CycleOptions = {}): Promise<CycleReport>
         wireExecuted: report.wire.enabled,
         wireRead: report.wire.read,
         wireCreditsSpent: report.wire.creditsSpent,
-        closingLinesCaptured: closing.linesCaptured,
-        fairLinesCaptured: closing.fairLinesCaptured,
-        clvComputed: closing.clvComputed,
+        closingLinesCaptured: report.closing.linesCaptured,
+        fairLinesCaptured: report.closing.fairLinesCaptured,
+        clvComputed: report.closing.clvComputed,
         pendingClosings: report.pending.length,
         notificationsSent: report.notifications.sent,
         notificationsExecuted: report.notifications.executed,
@@ -927,8 +931,8 @@ export async function runCycle(options: CycleOptions = {}): Promise<CycleReport>
       collectionExecuted: report.collect.executed,
       snapshotsWritten: report.collect.snapshotsWritten,
       signalsTouched: detection.created + detection.updated,
-      closingLinesCaptured: closing.linesCaptured,
-      clvComputed: closing.clvComputed,
+      closingLinesCaptured: report.closing.linesCaptured,
+      clvComputed: report.closing.clvComputed,
     };
 
     if (report.collect.executed) {
@@ -937,7 +941,8 @@ export async function runCycle(options: CycleOptions = {}): Promise<CycleReport>
     /* Il ciclo completo avanza il proprio heartbeat anche se una raccolta
        recente è stata saltata: le fasi DB sono state realmente eseguite e il
        gate pre-install non deve reinstallarle quattro volte l'ora. */
-    await writeLastCycle(completedState);
+    // Un’analisi manuale senza CLV non deve rinviare il prossimo ciclo completo.
+    if (!options.skipClosing) await writeLastCycle(completedState);
 
     return report;
   } catch (err) {

@@ -60,7 +60,7 @@ export function ValueScannerTable({ scanner }: Props) {
               Soglia di divario
             </label>
             <select
-              value={minEdge}
+              aria-label="Soglia di divario" value={minEdge}
               onChange={(e) => setMinEdge(Number(e.target.value))}
               className="mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-900 focus:border-cyan-500 focus:outline-none"
             >
@@ -76,7 +76,7 @@ export function ValueScannerTable({ scanner }: Props) {
               Fascia quota
             </label>
             <select
-              value={oddsRange}
+              aria-label="Fascia quota" value={oddsRange}
               onChange={(e) => setOddsRange(e.target.value as OddsBand)}
               className="mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-900 focus:border-cyan-500 focus:outline-none"
             >
@@ -94,7 +94,7 @@ export function ValueScannerTable({ scanner }: Props) {
             <input
               type="text"
               placeholder="squadra o campionato"
-              value={searchTerm}
+              aria-label="Cerca partita" value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:border-cyan-500 focus:outline-none"
             />

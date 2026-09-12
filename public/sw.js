@@ -15,6 +15,13 @@ self.addEventListener("activate", (event) => {
   event.waitUntil(self.clients.claim());
 });
 
+function safeNotificationUrl(value) {
+  try {
+    const url = new URL(typeof value === "string" ? value : "/preferite", self.location.origin);
+    return url.origin === self.location.origin && !url.username && !url.password ? url.href : new URL("/preferite", self.location.origin).href;
+  } catch { return new URL("/preferite", self.location.origin).href; }
+}
+
 self.addEventListener("push", (event) => {
   let data = {};
   try {
@@ -23,11 +30,12 @@ self.addEventListener("push", (event) => {
     /* payload non leggibile: si mostra comunque un avviso onesto */
     data = {};
   }
-  const title = data.title || "DropAlert";
+  if (typeof data !== "object" || data === null) data = {};
+  const title = typeof data.title === "string" ? data.title : "DropAlert";
   const body =
-    data.body ||
+    (typeof data.body === "string" && data.body) ||
     "Una partita che segui ha superato la tua soglia. Nessuna vincita garantita: gioca responsabilmente.";
-  const url = data.url || "/preferite";
+  const url = safeNotificationUrl(data.url);
 
   event.waitUntil(
     self.registration.showNotification(title, {
@@ -43,13 +51,12 @@ self.addEventListener("push", (event) => {
 
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
-  const url = (event.notification.data && event.notification.data.url) || "/preferite";
+  const url = safeNotificationUrl(event.notification.data && event.notification.data.url);
   event.waitUntil(
     self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((list) => {
       for (const client of list) {
         if ("focus" in client) {
-          client.navigate(url);
-          return client.focus();
+          return client.navigate(url).then(() => client.focus());
         }
       }
       return self.clients.openWindow(url);

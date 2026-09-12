@@ -38,11 +38,15 @@ jobs:
     timeout-minutes: 15
 
     env:
+      INPUT_MODE: ${{ inputs.mode }}
       DATABASE_URL: ${{ secrets.DATABASE_URL }}
 
     steps:
       - name: Codice
         uses: actions/checkout@v4
+
+      - name: Valida modalità
+        run: bash scripts/validate-workflow-inputs.sh rebase
 
       - name: Node
         uses: actions/setup-node@v4
@@ -75,7 +79,7 @@ jobs:
       - name: Ribasatura (${{ inputs.mode }})
         run: |
           args=()
-          if [ "${{ inputs.mode }}" = "apply" ]; then
+          if [ "$INPUT_MODE" = "apply" ]; then
             echo "::warning::Modalità apply: le righe di CLV verranno riscritte."
             args+=(--apply)
           fi

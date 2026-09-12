@@ -1,28 +1,22 @@
+import { parsePushTarget } from "@/lib/push/validation";
 /**
  * Iscrizioni push e invio (Sprint ENH-1, Fase B).
  *
  * Le iscrizioni vivono in `system_state`, come gli altri stati del
- * progetto: nessuna migrazione, nessun account, nessun dato personale.
- * Di chi si iscrive conserviamo solo l'endpoint del browser e le chiavi
- * necessarie a cifrare il messaggio — nessuna email, nessun profilo.
+ * progetto: nessuna migrazione, nessun account. Endpoint e chiavi sono
+ * identificativi tecnici pseudonimi; conserviamo anche watchlist e soglie
+ * necessarie a selezionare gli avvisi — nessuna email.
  *
  * L'invio è deliberatamente semplice: nessuna coda, nessun ritentativo in
  * loop. Se un endpoint è morto (410/404) l'iscrizione si cancella, perché
  * tenere un indirizzo che non riceve più è solo rumore.
  */
-import { eq, like } from "drizzle-orm";
-import { db } from "@/db/client";
-import { systemState } from "@/db/schema";
-import {
-  dedupeKey,
-  parseSubscription,
-  selectNotifications,
-  subscriptionKey,
-  type LiveValue,
-  type NotificaDaInviare,
-  type PushSubscriptionRecord,
-} from "@/lib/push/pure";
+import { selectNotifications, type LiveValue } from "@/lib/push/pure";
 import { SITE_URL } from "@/lib/site";
+import {
+  cleanupPushState, readVerifiedSubscriptions, claimPushDelivery,
+  finishPushDelivery, removeGoneSubscription, type PushSender,
+} from "./push-store";
 
 /** Chiave pubblica VAPID, esposta al browser (non è un segreto). */
 export function vapidPublicKey(): string | null {
@@ -38,82 +32,6 @@ function vapidPrivateKey(): string | null {
 /** true quando il server può davvero inviare: chiavi presenti. */
 export function pushConfigured(): boolean {
   return vapidPublicKey() !== null && vapidPrivateKey() !== null;
-}
-
-/* ------------------------------------------------------------------ */
-/* Registro delle iscrizioni                                           */
-/* ------------------------------------------------------------------ */
-
-export async function saveSubscription(
-  payload: unknown,
-  now: Date = new Date(),
-): Promise<{ ok: boolean; reason?: string }> {
-  const record = parseSubscription(payload, now);
-  if (record === null) {
-    return { ok: false, reason: "iscrizione incompleta: non viene salvata" };
-  }
-  const key = subscriptionKey(record.endpoint);
-  await db
-    .insert(systemState)
-    .values({ key, value: record, updatedAt: now })
-    .onConflictDoUpdate({
-      target: systemState.key,
-      set: { value: record, updatedAt: now },
-    });
-  return { ok: true };
-}
-
-export async function deleteSubscription(endpoint: string): Promise<void> {
-  await db.delete(systemState).where(eq(systemState.key, subscriptionKey(endpoint)));
-}
-
-export async function listSubscriptions(): Promise<PushSubscriptionRecord[]> {
-  const rows = await db
-    .select({ value: systemState.value })
-    .from(systemState)
-    .where(like(systemState.key, "push:sub:%"));
-  const out: PushSubscriptionRecord[] = [];
-  for (const r of rows) {
-    const v = r.value as Partial<PushSubscriptionRecord>;
-    if (typeof v.endpoint === "string" && v.keys !== undefined) {
-      out.push(v as PushSubscriptionRecord);
-    }
-  }
-  return out;
-}
-
-/* ------------------------------------------------------------------ */
-/* Dedupe: una notifica per partita al giorno                          */
-/* ------------------------------------------------------------------ */
-
-async function alreadySentKeys(
-  endpoint: string,
-  matchKeys: string[],
-  now: Date,
-): Promise<Set<string>> {
-  if (matchKeys.length === 0) return new Set();
-  const wanted = matchKeys.map((m) => dedupeKey(endpoint, m, now));
-  const rows = await db
-    .select({ key: systemState.key })
-    .from(systemState)
-    .where(like(systemState.key, "push:sent:%"));
-  const presenti = new Set(rows.map((r) => r.key));
-  return new Set(wanted.filter((w) => presenti.has(w)));
-}
-
-async function markSent(
-  endpoint: string,
-  matchKey: string,
-  now: Date,
-): Promise<void> {
-  const key = dedupeKey(endpoint, matchKey, now);
-  await db
-    .insert(systemState)
-    .values({ key, value: { at: now.toISOString() }, updatedAt: now })
-    .onConflictDoUpdate({
-      target: systemState.key,
-      set: { value: { at: now.toISOString() }, updatedAt: now },
-    });
 }
 
 /* ------------------------------------------------------------------ */
@@ -148,13 +66,16 @@ export async function sendToSubscription(
   sub: { endpoint: string; keys: { p256dh: string; auth: string } },
   payload: { title: string; body: string; url: string },
 ): Promise<{ ok: boolean; gone: boolean; reason?: string }> {
+  if (parsePushTarget(sub) === null) {
+    return { ok: false, gone: false, reason: "destinazione push non valida o non supportata" };
+  }
   if (!pushConfigured()) {
     return { ok: false, gone: false, reason: "chiavi VAPID non configurate" };
   }
   try {
     const webpush = (await import("web-push")).default;
     webpush.setVapidDetails(
-      `mailto:notifiche@${new URL(SITE_URL).hostname}`,
+      process.env.VAPID_SUBJECT?.trim() || SITE_URL,
       vapidPublicKey()!,
       vapidPrivateKey()!,
     );
@@ -162,6 +83,7 @@ export async function sendToSubscription(
       webpush.sendNotification(
         { endpoint: sub.endpoint, keys: sub.keys },
         JSON.stringify(payload),
+        { timeout: PUSH_SEND_TIMEOUT_MS },
       ),
       PUSH_SEND_TIMEOUT_MS,
       `push verso ${sub.endpoint.slice(0, 60)}`,
@@ -199,6 +121,7 @@ export interface DispatchReport {
 export async function dispatchNotifications(
   live: Map<string, LiveValue>,
   now: Date = new Date(),
+  send: PushSender = sendToSubscription,
 ): Promise<DispatchReport> {
   const report: DispatchReport = {
     subscriptions: 0,
@@ -209,41 +132,23 @@ export async function dispatchNotifications(
   };
   if (!report.configured) return report;
 
-  const subs = await listSubscriptions().catch(() => []);
+  await cleanupPushState();
+  const subs = await readVerifiedSubscriptions(); // guasto DB: propagato, non lista vuota
   report.subscriptions = subs.length;
 
   for (const sub of subs) {
-    const giaInviate = await alreadySentKeys(
-      sub.endpoint,
-      sub.watchlist.map((w) => w.matchKey),
-      now,
-    ).catch(() => new Set<string>());
-
-    const daInviare: NotificaDaInviare[] = selectNotifications(
-      sub.watchlist,
-      live,
-      giaInviate,
-      sub.endpoint,
-      now,
-      SITE_URL,
-    );
-
-    for (const n of daInviare) {
-      const esito = await sendToSubscription(sub, {
-        title: n.title,
-        body: n.body,
-        url: n.url,
-      });
-      if (esito.ok) {
-        report.sent += 1;
-        await markSent(sub.endpoint, n.matchKey, now).catch(() => undefined);
-      } else if (esito.gone) {
-        report.removed += 1;
-        await deleteSubscription(sub.endpoint).catch(() => undefined);
+    const due = selectNotifications(sub.watchlist, live, new Set(), sub.endpoint, now, SITE_URL);
+    for (const notification of due) {
+      const claim = await claimPushDelivery(sub, notification.matchKey, now);
+      if (!claim) { report.skipped++; continue; }
+      const result = await send(sub, notification);
+      await finishPushDelivery(claim, result.ok ? "sent" : "failed");
+      if (result.ok) report.sent++;
+      else if (result.gone) {
+        await removeGoneSubscription(sub);
+        report.removed++;
         break;
-      } else {
-        report.skipped += 1;
-      }
+      } else report.skipped++;
     }
   }
   return report;

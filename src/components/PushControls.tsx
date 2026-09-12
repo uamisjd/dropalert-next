@@ -12,6 +12,7 @@
  * solo quali partite hai chiesto di seguire e con quale soglia.
  */
 import { useCallback, useEffect, useState } from "react";
+import { readPushToken, savePushToken, clearPushToken, pushHeaders, verificationFromHash } from "@/lib/push/client";
 import {
   DEDUPE_NOTE,
   PLATFORM_NOTE,
@@ -27,6 +28,7 @@ type Stato =
   | "non-supportato"
   | "non-configurato"
   | "spento"
+  | "attesa"
   | "attivo"
   | "negato";
 
@@ -77,6 +79,7 @@ export function PushControls() {
   const [publicKey, setPublicKey] = useState<string | null>(null);
   const [messaggio, setMessaggio] = useState<string | null>(null);
   const [inCorso, setInCorso] = useState(false);
+  const [listaModificata, setListaModificata] = useState(false);
 
   const supportato = useCallback(
     () =>
@@ -111,7 +114,7 @@ export function PushControls() {
         setStato(
           Notification.permission === "denied"
             ? "negato"
-            : sub
+            : sub && readPushToken(sub.endpoint)
               ? "attivo"
               : "spento",
         );
@@ -124,7 +127,43 @@ export function PushControls() {
     };
   }, [supportato]);
 
-  async function attiva() {
+  useEffect(() => {
+    const changed = () => setListaModificata(true);
+    const confirm = async () => {
+      const proof = verificationFromHash(window.location.hash);
+      if (!proof) return;
+      // Rimuovi subito il segreto dalla barra e dalla cronologia corrente.
+      window.history.replaceState(null, "", window.location.pathname + window.location.search);
+      setInCorso(true);
+      try {
+        const response = await fetch("/api/push/confirm", {
+          method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(proof),
+        });
+        const body = await response.json() as { ok?: boolean; endpoint?: string; token?: string; reason?: string };
+        if (!response.ok || !body.ok || !body.endpoint || !body.token) throw new Error(body.reason ?? "conferma non riuscita");
+        const reg = await navigator.serviceWorker.getRegistration();
+        const sub = await reg?.pushManager.getSubscription();
+        if (sub?.endpoint !== body.endpoint) throw new Error("apri la conferma sul browser che ha richiesto le notifiche");
+        savePushToken(body.endpoint, body.token);
+        setStato("attivo");
+        setMessaggio("Notifiche verificate e attive. Usa Aggiorna lista quando cambi partite o soglie.");
+      } catch (error) {
+        setStato("spento");
+        setMessaggio(`Conferma non completata: ${error instanceof Error ? error.message : "riprovare"}.`);
+      } finally { setInCorso(false); }
+    };
+    void confirm();
+    window.addEventListener("hashchange", confirm);
+    window.addEventListener("dropalert:watchlist", changed);
+    window.addEventListener("storage", changed);
+    return () => {
+      window.removeEventListener("hashchange", confirm);
+      window.removeEventListener("dropalert:watchlist", changed);
+      window.removeEventListener("storage", changed);
+    };
+  }, []);
+
+  async function attiva(forceVerification = false) {
     if (publicKey === null) return;
     setInCorso(true);
     setMessaggio(null);
@@ -145,16 +184,25 @@ export function PushControls() {
         }));
       const res = await fetch("/api/push/subscribe", {
         method: "POST",
-        headers: { "content-type": "application/json" },
+        headers: forceVerification ? { "content-type": "application/json" } : pushHeaders(sub.endpoint),
         body: JSON.stringify(payloadFor(sub)),
       });
-      if (!res.ok) throw new Error("registrazione non riuscita");
+      if (res.status === 202) {
+        setStato("attesa");
+        setMessaggio("Apri la notifica di conferma entro 5 minuti. L’iscrizione non è ancora attiva; se non arriva puoi richiedere una nuova verifica.");
+        return;
+      }
+      if (!res.ok) {
+        const error = await res.json().catch(() => null) as { reason?: unknown } | null;
+        throw new Error(typeof error?.reason === "string" ? error.reason : "registrazione non riuscita");
+      }
       setStato("attivo");
+      setListaModificata(false);
       setMessaggio(
         "Notifiche attive su questo browser. La lista seguita è stata inviata insieme all'iscrizione.",
       );
-    } catch {
-      setMessaggio("Attivazione non riuscita: nessuna iscrizione è stata salvata.");
+    } catch (error) {
+      setMessaggio(`Attivazione non completata: ${error instanceof Error ? error.message : "riprovare più tardi"}.`);
     } finally {
       setInCorso(false);
     }
@@ -167,17 +215,22 @@ export function PushControls() {
       const reg = await navigator.serviceWorker.getRegistration();
       const sub = await reg?.pushManager.getSubscription();
       if (sub) {
-        await fetch("/api/push/subscribe", {
+        const token = readPushToken(sub.endpoint);
+        if (token) {
+        const response = await fetch("/api/push/subscribe", {
           method: "DELETE",
-          headers: { "content-type": "application/json" },
+          headers: pushHeaders(sub.endpoint),
           body: JSON.stringify({ endpoint: sub.endpoint }),
-        }).catch(() => undefined);
+        });
+        if (!response.ok) throw new Error("cancellazione sul server non riuscita");
+        }
         await sub.unsubscribe();
       }
+      clearPushToken();
       setStato("spento");
-      setMessaggio("Notifiche disattivate: l'iscrizione è stata cancellata.");
+      setMessaggio("Notifiche disattivate su questo browser. Le iscrizioni verificate con autorizzazione disponibile sono state cancellate dal server; eventuali dati legacy scadranno secondo l’informativa.");
     } catch {
-      setMessaggio("Disattivazione non riuscita.");
+      setMessaggio("Disattivazione non completata. Riprova prima di cancellare i dati del browser.");
     } finally {
       setInCorso(false);
     }
@@ -199,7 +252,7 @@ export function PushControls() {
       };
       const res = await fetch("/api/push/test", {
         method: "POST",
-        headers: { "content-type": "application/json" },
+        headers: pushHeaders(sub.endpoint),
         body: JSON.stringify({ subscription: json }),
       });
       const body = (await res.json()) as { ok?: boolean; reason?: string };
@@ -232,7 +285,7 @@ export function PushControls() {
       </h2>
 
       <div className="flex flex-wrap gap-2">
-        {stato === "attivo" ? (
+        {stato === "attivo" || stato === "attesa" ? (
           <button
             type="button"
             onClick={disattiva}
@@ -244,13 +297,24 @@ export function PushControls() {
         ) : (
           <button
             type="button"
-            onClick={attiva}
+            onClick={() => void attiva()}
             disabled={disabilitato}
             className="rounded border border-slate-300 px-3 py-1 text-xs font-medium text-slate-800 hover:border-slate-500 disabled:cursor-not-allowed disabled:opacity-50"
           >
             Attiva notifiche
           </button>
         )}
+        {stato === "attivo" ? (
+          <button type="button" onClick={() => void attiva()} disabled={inCorso}
+            className="rounded border border-slate-300 px-3 py-1 text-xs font-medium text-slate-700 disabled:opacity-50">
+            Aggiorna lista{listaModificata ? " (modificata)" : ""}
+          </button>
+        ) : null}
+        <button type="button" disabled={disabilitato}
+          onClick={() => void attiva(true)}
+          className="rounded border border-slate-300 px-3 py-1 text-xs font-medium text-slate-700 disabled:opacity-50">
+          Verifica di nuovo
+        </button>
         <button
           type="button"
           onClick={prova}
@@ -262,7 +326,7 @@ export function PushControls() {
       </div>
 
       {messaggio !== null ? (
-        <p className="mt-2 rounded border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-[11px] text-slate-700">
+        <p role="status" aria-live="polite" className="mt-2 rounded border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-[11px] text-slate-700">
           {messaggio}
         </p>
       ) : null}
@@ -278,7 +342,14 @@ export function PushControls() {
         Ricevi un avviso solo per le partite in questa lista che superano la
         soglia che hai impostato: mai per altre partite. {DEDUPE_NOTE}{" "}
         {PLATFORM_NOTE} L&apos;avviso descrive un movimento di mercato:
-        nessuna vincita garantita.
+        nessuna vincita garantita. Si possono sincronizzare al massimo 100
+        partite. Le prove sono limitate a 3 ogni 15 minuti per iscrizione;
+        sono previsti anche limiti complessivi del servizio. Un limite temporaneo
+        non impedisce di disattivare le notifiche. L’attivazione richiede
+        l’apertura della notifica di conferma. Il browser conserva una chiave
+        di gestione locale: se la perdi, usa «Verifica di nuovo». Dopo aver
+        cambiato preferite o soglie, premi «Aggiorna lista». La sincronizzazione
+        rinnova per 90 giorni l’iscrizione; senza rinnovo scade.
       </p>
     </section>
   );
