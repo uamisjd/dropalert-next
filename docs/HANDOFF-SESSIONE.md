@@ -1,17 +1,110 @@
 # Handoff — DropAlert: stato lavori, infrastruttura live, cosa continuare
 
 > Documento di continuità fra sessioni di lavoro. Ultimo aggiornamento: **2026-09-21**.
-> **Leggi prima §0 (aggiornamento 2026-09-21)**: dice dove siamo, cosa è acceso e
-> cosa fare adesso. Da `## 0. RIPARTENZA — aggiornamento 2026-09-13` in poi il
-> testo è **storico** (PR #26–#34): utile come contesto — la mappa dei file, le
-> verifiche senza terminale e le trappole di quel blocco (§0.5–§0.7) restano
-> riferimenti validi — ma non come stato corrente.
+> **Leggi prima §0 (aggiornamento 2026-09-21, terza passata)**: i tre passi
+> umani del giorno — migrazione `0010` verificata presente in produzione,
+> storico CLV ribasato (dry-run #5 + apply #6), lettura live di `/performance`
+> — e cosa resta da fare. Da `## 0. RIPARTENZA — aggiornamento 2026-09-21
+> (seconda passata)` in poi il testo è **storico** (PR #26–#35): utile come
+> contesto — la mappa dei file, le verifiche senza terminale e le trappole di
+> quel blocco (§0.5–§0.7) restano riferimenti validi — ma non come stato
+> corrente; in particolare la §0.3 della seconda passata dà per non fatti i
+> passi 1–2, chiusi poche ore dopo (qui sotto).
 > Gli orari di questo documento sono in UTC quando hanno la `Z`; le pagine del
 > sito li mostrano in ora italiana (estate = UTC+2) — non confondere i due.
 
 ---
 
-## 0. RIPARTENZA — aggiornamento 2026-09-21
+## 0. RIPARTENZA — aggiornamento 2026-09-21 (terza passata: passi umani 1–2 chiusi)
+
+> Sessione `arena/01a0c499-dropalert-next` (da `51b3113`, merge di PR #35).
+> Passata di **sola documentazione**: nessun codice, nessun workflow, nessuna
+> scrittura su produzione, nessun lancio. I tre fatti sotto sono **passi umani
+> eseguiti dal gestore** il pomeriggio del 21/09. Ciò che la sandbox poteva
+> verificare è stato riletto con `gh` (metadati dei run, orari, esiti,
+> annotazioni dei job); ciò che non poteva — corpo dei log e sito live — è
+> dichiarato come lettura del gestore, punto per punto. Stessa regola delle
+> passate precedenti: niente numeri a memoria.
+
+### 0.1 Migrazione `0010` — verificata presente in produzione (passo umano 1: CHIUSO)
+
+- Run **#25** di «Verifica dati reali (manuale)» (`35612076675`), da **`main`
+  @ `51b3113`**, partito alle **14:25:35Z** (16:25 italiane), `success` in
+  1m44s — metadati letti con `gh run view`.
+- Annotazione del job (notice, titolo «Migrazione produzione 0010», letta con
+  `gh api repos/.../check-runs/<job>/annotations`): **«GIÀ APPLICATA: schema e
+  journal verificati; nessuna nuova migrazione eseguita.»** — è il ramo di
+  riesecuzione documentato in `docs/APPLICA-MIGRAZIONE-0010.md`: la procedura
+  ha trovato la `0010_quote_timestamp_origin` già registrata nel journal
+  Drizzle e lo schema già corretto, e **non ha scritto nulla**.
+- Nota di onestà: l'annotazione **attesta la presenza** (schema + journal
+  verificati), non il momento della prima applicazione — in Actions non
+  risulta un run applicativo su produzione precedente (la prova tracciata del
+  12/09 era su **copia Neon** con rollback: run #23, `34721053463`). Ciò che
+  chiude il passo è la presenza verificata in produzione con la procedura
+  documentata.
+
+### 0.2 Ribasatura CLV storico — dry-run #5, poi apply #6 (passo umano 2: CHIUSO)
+
+Sequenza eseguita come prescritto dal workflow: prima a secco («si legge
+prima, si applica dopo»), confronto, poi la scrittura.
+
+- **Dry-run**: run **#5** di «Ribasatura CLV (manuale)» (`35613656881`),
+  `main` @ `51b3113`, **14:39:47Z** (16:39 italiane), `success` in 2m28s.
+  L'**assenza** fra le annotazioni dell'avviso «Modalità apply» conferma la
+  modalità sola lettura. **Numeri letti dal gestore nel log** (la sandbox non
+  scarica il corpo dei log: i blob di Actions rispondono EOF, dichiarato):
+  **390 righe** a registro, di cui **56 `fair_novig → raw_consensus`**,
+  **334 già allineate**, variazione media sulle righe cambiate **+3,43 pp**,
+  **41 righe cambiano verso**. Lettura coerente col quadro atteso: le 56 sono
+  esattamente le osservazioni «senza margine» escluse e dichiarate da PR #32.
+- **Apply**: run **#6** (`35615395270`), `main` @ `51b3113`, **14:55:09Z**
+  (16:55 italiane), `success` in 2m27s, **con** l'annotazione di servizio
+  «Modalità apply: le righe di CLV verranno riscritte.» (letta con `gh`).
+  Lettura del gestore: **scrittura identica al dry-run**.
+
+### 0.3 `/performance` dopo la ribasatura — lettura live del gestore (17:03 italiane)
+
+Letta nel browser ~5 minuti dopo la fine dell'apply (14:57:36Z). La sandbox
+**non raggiunge il sito** (`curl https://dropalert-next.vercel.app/performance`
+→ errore SSL/`000`, riverificato oggi): questi numeri sono del gestore.
+
+- **Archivio 390 · campione mostrato 390 · escluse 0** — il campione è ora
+  interamente grezzo-contro-grezzo: le 56 osservazioni con chiusura senza
+  margine non sono più escluse. Per confronto, la lettura del 13/09 diceva
+  «Archivio: 322 osservazioni. Campione mostrato: 266 … escluse 56 senza
+  margine» (§0.1 del 13/09): l'archivio è cresciuto raccogliendo, e la
+  ribasatura ha azzerato le esclusioni.
+- **CLV medio +0,05 pp · segnali che battono la chiusura 37% · fasce
+  175+214+1** (somma 390, sull'indice grezzo — la scala dichiarata dalla
+  tabella).
+
+### 0.4 Cosa resta (elenco umano aggiornato)
+
+**Chiusi** i passi 1 (migrazione `0010`) e 2 (ribasatura CLV) dell'elenco
+§0.3 della seconda passata — che corrispondevano alle voci 1 e 3 del §0.4 del
+13/09. **Aperti**, invariati nel contenuto:
+
+3. **Rallentamento BetExplorer 12→8 / 4000→6000** — decide il gestore sul gate
+   del §0.3 del 13/09 (fonte `degraded` **e** `rate_limited > 95`); i contatori
+   vanno riletti oggi su `/api/health` (questa sandbox non li vede).
+4. **Lettura reale del cablaggio (`smoke-wire`)** e, solo dopo il confronto
+   prima/dopo sui punteggi, **accensione dei due flag wire su Vercel**.
+5. **Collaudo push su dispositivi reali.**
+
+### 0.5 Cosa ha fatto questa sessione (21/09, terza passata)
+
+Solo documentazione: riletti con `gh` i run #25, #5 e #6 (metadati e
+annotazioni reali; corpo dei log non raggiungibile dalla sandbox, dichiarato);
+aggiornato questo handoff (nuovo §0, suffisso «seconda passata» al §0 del
+mattino) e `docs/BACKLOG.md` (aggiornamento 21/09 in testa, sezione 2 e debiti
+minori). Nessuna modifica di codice o workflow, nessuna scrittura su
+produzione, nessun credito provider, nessun workflow avviato (il lancio resta
+del gestore: 403 dell'integrazione agente ri-verificato nelle passate precedenti).
+
+---
+
+## 0. RIPARTENZA — aggiornamento 2026-09-21 (seconda passata)
 
 > Sessione `arena/01a0c3f1-dropalert-next` (da `825d61f`). Tutto sotto è stato
 > letto o eseguito oggi; i numeri di produzione arrivano da `gh`, non dalla
