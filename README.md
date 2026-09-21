@@ -416,7 +416,7 @@ giornaliero di 50 chiamate con hard-stop dichiarato nel pannello.
 
 | Variabile | Default | Effetto |
 |---|---|---|
-| `COLLECT_INTERVAL_MINUTES` | `15` | intervallo minimo fra due raccolte (minimo assoluto 5) |
+| `COLLECT_INTERVAL_MINUTES` | `45` | intervallo minimo fra due raccolte (minimo assoluto 5) |
 | `COLLECT_HORIZON_HOURS` | `72` | quanto avanti guardare nel calendario |
 | `COLLECT_MAX_FIXTURES` | `25` | tetto di partite per giro |
 | `COLLECT_WITH_RESULTS` | `true` | aggiorna anche i risultati finali |

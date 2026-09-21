@@ -23,7 +23,7 @@
  * - Velocità di esecuzione (le quote cambiano in secondi)
  * - Verifica dei limiti di puntata
  */
-import { and, desc, eq, gte, inArray, sql } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, notLike, sql } from "drizzle-orm";
 import { db } from "@/db/client";
 import {
   bookmakers,
@@ -263,6 +263,9 @@ export async function scanArbitrage(
         and(
           eq(matches.status, "scheduled"),
           gte(matches.kickoffAt, now),
+          /* dati dimostrativi esclusi per impostazione predefinita, come in
+             tutte le altre letture del sito (dashboard, segnali, performance) */
+          notLike(matches.key, "demo-%"),
         ),
       );
 

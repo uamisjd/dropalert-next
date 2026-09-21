@@ -2,7 +2,7 @@
  * Feed JSON dei segnali attivi (Sprint ENH-1, punto 4).
  * Stesso contenuto dell'RSS, nel formato JSON Feed 1.1.
  */
-import { FEED_DISCLAIMER, getFeedItems } from "@/lib/repo/feed";
+import { getFeedItems } from "@/lib/repo/feed";
 import { SITE_DESCRIPTION, SITE_NAME, SITE_URL } from "@/lib/site";
 
 export const revalidate = 300;
@@ -15,7 +15,9 @@ export async function GET(): Promise<Response> {
     title: `${SITE_NAME} — movimenti rilevati`,
     home_page_url: SITE_URL,
     feed_url: `${SITE_URL}/feed.json`,
-    description: `${SITE_DESCRIPTION} ${FEED_DISCLAIMER}`,
+    // La descrizione del sito chiude già col disclaimer: non va duplicato
+    // nel canale (i singoli elementi lo portano da sé, vedi feed.ts).
+    description: SITE_DESCRIPTION,
     language: "it-IT",
     items: items.map((i) => ({
       id: i.id,

@@ -223,8 +223,8 @@ export default async function YesterdayPage() {
 
             {view.underpowered ? (
               <p className="mt-2 text-xs font-medium leading-relaxed text-slate-800">
-                {view.settled} esiti risolti su {view.minForTrend}:{" "}
-                <span className="underline">non è una tendenza</span>.
+                Esiti risolti: {view.settled} — sotto la soglia minima di{" "}
+                {view.minForTrend}, <span className="underline">non è una tendenza</span>.
               </p>
             ) : (
               <p className="mt-2 text-xs leading-relaxed text-slate-600">

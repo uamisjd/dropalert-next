@@ -6,11 +6,7 @@
  * nel canale E in ogni elemento, perché negli aggregatori l'intestazione
  * non si vede.
  */
-import {
-  FEED_DISCLAIMER,
-  getFeedItems,
-  xmlEscape,
-} from "@/lib/repo/feed";
+import { getFeedItems, xmlEscape } from "@/lib/repo/feed";
 import { SITE_DESCRIPTION, SITE_NAME, SITE_URL } from "@/lib/site";
 
 export const revalidate = 300;
@@ -25,7 +21,9 @@ export async function GET(): Promise<Response> {
     "<channel>",
     `<title>${xmlEscape(`${SITE_NAME} — movimenti rilevati`)}</title>`,
     `<link>${SITE_URL}</link>`,
-    `<description>${xmlEscape(`${SITE_DESCRIPTION} ${FEED_DISCLAIMER}`)}</description>`,
+    // La descrizione del sito chiude già col disclaimer: non va duplicato
+    // nel canale (i singoli elementi lo portano da sé, vedi feed.ts).
+    `<description>${xmlEscape(SITE_DESCRIPTION)}</description>`,
     "<language>it-IT</language>",
     `<lastBuildDate>${now.toUTCString()}</lastBuildDate>`,
     `<atom:link href="${SITE_URL}/feed/rss.xml" rel="self" type="application/rss+xml" />`,
