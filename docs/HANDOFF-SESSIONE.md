@@ -77,8 +77,12 @@ Nessuna novità di codice: restano **solo azioni umane**, quelle del §0.4 del
 4. **Lettura reale del cablaggio (`smoke-wire`) e accensione dei due flag** su
    Vercel, dopo il confronto prima/dopo.
 5. **Collaudo push su dispositivi reali.**
-6. **Decisione aperta**: cablare o deprecare l'adapter SharpAPI
-   (`docs/BACKLOG.md`, Debiti minori).
+6. ~~Decisione aperta: cablare o deprecare l'adapter SharpAPI~~ — **chiusa il
+   21/09**: scelto «deprecato, non cablato». Intestazione di
+   `src/lib/providers/sharp-api/index.ts` riscritta con lo stato reale e le
+   cinque esportazioni marcate `@deprecated`; il modulo resta nel repository
+   per l'uso a mano dagli script. Motivazione e condizioni per riaprirla in
+   `docs/BACKLOG.md` (Debiti minori).
 
 ---
 
