@@ -237,6 +237,15 @@ reale su una partita campione.
 
 ## Debiti minori già noti
 
+- **Adapter SharpAPI orfano** (`src/lib/providers/sharp-api/`): modulo
+  standalone leggibile con `SHARP_API_KEY`, ma non importato da nessuna rotta,
+  né dal registry dei provider, né dal ciclo di raccolta. Finché non c'è un
+  cablaggio deliberato, configurare la chiave non cambia nulla nel sito: la
+  linea sharp usata dal monitor è quella di The Odds API
+  (`odds-api-sharp.ts`, dietro il doppio flag del cablaggio). Decisione da
+  prendere: cablarlo (nuova fonte nel registry, budget, test) o marcarlo
+  deprecato nel suo header per non farlo trovare. `GUIDA-OPERATIVA.md` è
+  stata allineata lo stato reale il 21/09/2026 (non dice più «obbligatorio»).
 - **`/domani` non è un calendario**: legge l'archivio del monitor, cioè le
   partite che la fonte ha esposto nell'elenco dei movimenti. Le competizioni
   mai esposte non compariranno mai: dichiarato nell'empty state della

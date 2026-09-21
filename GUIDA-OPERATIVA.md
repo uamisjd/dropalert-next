@@ -20,22 +20,14 @@ nano .env  # o vim, o vscode
 
 **Cosa configurare:**
 
-#### SharpAPI (OBBLIGATORIO) — Linea sharp Pinnacle
-1. Vai su https://sharpapi.io
-2. Registrati (free tier: 12 req/min, sufficiente)
-3. Copia la API key
-4. Incolla in `.env`:
-   ```
-   SHARP_API_KEY="sk_live_..."
-   ```
+> **Cosa usa davvero il sito (stato al 21/09/2026):** la fonte principale è
+> BetExplorer (nessuna chiave). La **linea sharp** che alimenta il
+> «conferma sharp» e la chiusura sharp arriva da **The Odds API** (Pinnacle
+> fra i bookmaker), dietro i flag del cablaggio per-bookmaker
+> (`ODDS_WIRE_COLLECT=true` + `DROP_EXCLUDE_CONSENSUS_BOOKS=true`,
+> `docs/STUDIO-CABLAGGIO-ODDS.md`). Il resto sotto è opzionale.
 
-**Perché SharpAPI:**
-- Fornisce quote Pinnacle (il bookmaker più sharp del mondo)
-- +EV detection built-in
-- Latenza <89ms
-- Free tier generoso
-
-#### The Odds API (opzionale) — Backup multi-bookmaker
+#### The Odds API (la linea sharp del sito) — Quote per singolo bookmaker
 1. Vai su https://the-odds-api.com
 2. Registrati (free tier: 500 crediti/mese)
 3. Copia la API key
@@ -55,13 +47,29 @@ nano .env  # o vim, o vscode
 > raggiungibile. Procedura completa e codici di uscita:
 > `docs/SMOKE-THE-ODDS-API.md`.
 
+#### SharpAPI (facoltativo — adapter standalone, NON nel ciclo del sito)
+1. Vai su https://sharpapi.io
+2. Registrati (free tier: 12 req/min)
+3. Copia la API key
+4. Incolla in `.env`:
+   ```
+   SHARP_API_KEY="sk_live_..."
+   ```
+
+> **Attenzione:** l'adapter `src/lib/providers/sharp-api/` è un modulo
+> standalone: puoi interrogarlo dai script (sezione «Testa SharpAPI» sotto),
+> ma **non è cablato nel ciclo di raccolta né nelle pagine**: configurare la
+> chiave non cambia ciò che il sito mostra. La linea sharp usata dal sito è
+> quella di The Odds API sopra. Se vuoi che entri nel flusso, è un lavoro di
+> cablaggio da dichiarare nel backlog (`docs/BACKLOG.md`).
+
 #### OddsPapi (opzionale) — Dati storici per backtesting
 1. Vai su https://oddspapi.io
 2. Registrati (free tier: 250 req/mese, **dati storici inclusi**)
 3. Copia la API key
 4. Incolla in `.env`:
    ```
-   ODDSPAPI_KEY="..."
+   ODDS_PAPI_KEY="..."
    ```
 
 ### 2. Avvia il Server (2 minuti)
@@ -72,9 +80,10 @@ npm run dev
 
 Apri http://localhost:3000
 
-### 3. Testa SharpAPI (5 minuti)
+### 3. (Opzionale) Testa l'adapter SharpAPI (5 minuti)
 
-Crea un file di test rapido:
+L'adapter è standalone: il test verifica che la chiave funzioni, non che il
+sito la stia usando (non la usa, vedi sopra).
 
 ```bash
 cat > test-sharp.ts << 'EOF'
@@ -94,7 +103,8 @@ EOF
 npx tsx test-sharp.ts
 ```
 
-Se vedi le quote Pinnacle, funziona!
+Se vedi le quote Pinnacle, l'adapter e la chiave funzionano — ma ricorda:
+fino a un cablaggio dichiarato nel backlog, il sito non le mostrerà.
 
 ### 4. Configura il Bankroll (2 minuti)
 
@@ -110,18 +120,26 @@ Il bankroll è salvato nel tuo browser (localStorage), mai inviato al server.
 
 ### Mattina (5-10 minuti)
 
-1. **Apri `/value-bets`** — vedi i divari di prezzo
-2. **Filtra per edge > 2%** — solo le opportunità reali
-3. **Controlla Kelly** — se Kelly > 0.5%, la size è significativa
+1. **Apri `/value-bets`** — vedi i divari di prezzo (consenso contro no-vig
+   della stessa fonte: è un auto-confronto, la riga resta **NO BET** finché
+   non esiste un prezzo eseguibile e una fair indipendente)
+2. **Filtra per divario > 2%** — le righe sopra soglia, le negative restano
+   visibili con «mostra tutto»
+3. **La size la calcoli tu in `/strumenti`** — il sito non pubblica Kelly né
+   euro: il peso della varianza (Kelly frazionaria) e la surebet sono lì, con
+   i numeri che inserisci tu
 4. **Leggi il contesto 360°** — forma, assenze, motivazioni supportano il segnale?
 
 ### Durante il Giorno
 
-1. **Ricevi alert push** (se configurati) — solo per edge > 2% e Kelly > 0.5%
-2. **Piazza la scommessa** — usa il bookmaker che offre la quota migliore
+1. **Ricevi alert push** (se configurati) — solo per le partite in `/preferite`
+   che superano **la tua soglia personale sull'indice di fiducia** (la stessa
+   scala della card); mai da altre partite, massimo un avviso al giorno per partita
+2. **Piazza la scommessa** — con il bookmaker che offri a te stesso, alla quota
+   che il mercato ti dà davvero (il consenso BetExplorer non è acquistabile)
 3. **Registra in `/mio-bankroll`**:
    - Match, selezione, quota, puntata
-   - Edge %, Kelly %
+   - Divario %, size scelta
    - Note (perché hai scommesso)
 
 ### Sera (2 minuti)
@@ -146,18 +164,19 @@ Il bankroll è salvato nel tuo browser (localStorage), mai inviato al server.
 
 ### Scommetti SOLO se:
 
-✅ **Edge > 2%** (soglia minima per coprire varianza)  
-✅ **Kelly > 0.5%** (altrimenti la size è troppo piccola)  
-✅ **CLV storico > 0%** (il sistema batte la chiusura)  
-✅ **Contesto 360° supporta** (niente assenze chiave, forma ok)  
+✅ **Divario > 2%** su `/value-bets` (soglia minima per coprire varianza)
+✅ **La size calcolata in `/strumenti` è ≥ 0.5% Kelly frazionaria** (altrimenti è troppo piccola)
+✅ **CLV storico > 0%** (il sistema batte la chiusura; sotto le 30 osservazioni è non concludente)
+✅ **Contesto 360° supporta** (niente assenze chiave, forma ok)
 ✅ **Kickoff tra 1-24 ore** (non troppo presto, non troppo tardi)
+✅ **Esiste un prezzo davvero eseguibile** (la riga NO BET non è una scommessa: è l'onestà del gate)
 
 ### NON scommettere se:
 
-❌ Edge < 2% (margine insufficiente)  
-❌ Kelly < 0.5% (size troppo piccola, non vale il tempo)  
-❌ Contesto contraddice il segnale (assenze, squalifiche, motivazioni)  
-❌ Hai già raggiunto il limite giornaliero (max 3-5 scommesse/giorno)  
+❌ Divario < 2% (margine insufficiente)
+❌ Size < 0.5% Kelly frazionaria (troppo piccola, non vale il tempo)
+❌ Contesto contraddice il segnale (assenze, squalifiche, motivazioni)
+❌ Hai già raggiunto il limite giornaliero (max 3-5 scommesse/giorno)
 ❌ Bankroll in drawdown > 20% (fermati, rivedi i filtri)
 
 ---
@@ -206,18 +225,20 @@ Il bankroll è salvato nel tuo browser (localStorage), mai inviato al server.
 - Controlla la documentazione: https://sharpapi.io/docs
 - Alcuni match minori non sono coperti
 
-### "Non trovo value bets con edge > 2%"
-- Normale: i value bets veri sono rari (5-10 al giorno su centinaia di match)
-- Se non ne trovi per giorni, il mercato è efficiente
+### "Non trovo righe con divario > 2%"
+- Normale: il divario è misurato contro il no-vig della stessa fonte (auto-confronto):
+  intorno a −margine è la condizione attesa, non un guasto
+- Se la lista è vuota su tutte le giornate, il collo di bottiglia è la finestra
+  di lettura, non la regola: `docs/DECISIONI-APERTE.md` §3
 - Non abbassare la soglia: meglio poche scommesse buone che tante mediocri
 
 ### "CLV negativo dopo 30 scommesse"
 - Il sistema non batte la chiusura
 - Possibili cause:
-  1. Edge sovrastimato (la fair non è corretta)
+  1. Divario sovrastimato (la fair non è corretta)
   2. Scommetti troppo tardi (il mercato si è già allineato)
   3. Bookmaker soft troppo lenti ad aggiornare
-- Soluzione: alza la soglia di edge a 3-4%, scommetti prima
+- Soluzione: alza la soglia di divario a 3-4%, scommetti prima
 
 ### "Drawdown > 20%"
 - Size troppo aggressive
@@ -263,9 +284,10 @@ Il bankroll è salvato nel tuo browser (localStorage), mai inviato al server.
 ## 🚀 Prossimi Passi
 
 ### Oggi
-- [ ] Configura SharpAPI
-- [ ] Testa su 5 match
-- [ ] Imposta il bankroll
+- [ ] Avvia il server e imposta il bankroll in `/mio-bankroll`
+- [ ] (Se vuoi la linea sharp nel sito) configura The Odds API e leggi
+      `docs/SMOKE-THE-ODDS-API.md` per il smoke test
+- [ ] (Facoltativo) testa l'adapter SharpAPI standalone
 - [ ] Piazza la prima scommessa (piccola, €5-10)
 
 ### Questa settimana

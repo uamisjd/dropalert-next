@@ -87,7 +87,7 @@ export default async function ValueBetsPage() {
             <div className="rounded-xl border border-white/15 bg-white/5 px-3.5 py-2">
             <span className="text-slate-400">Metodo: </span>
               <span className="font-bold text-cyan-300">
-                no-vig proporzionale ({data.method})
+                {`no-vig proporzionale (${data.method})`}
               </span>
             </div>
           </div>
