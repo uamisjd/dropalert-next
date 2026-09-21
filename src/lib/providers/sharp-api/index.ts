@@ -1,13 +1,33 @@
 /**
- * SharpAPI Adapter — Linea sharp (Pinnacle) come benchmark per value betting.
+ * SharpAPI Adapter — modulo DEPRECATO, standalone, non cablato nel sito.
  *
- * SharpAPI fornisce quote da Pinnacle (e altri sharp bookmaker) con +EV detection
- * built-in e latenza <89ms. Free tier: 12 req/min (17.280/giorno).
+ * STATO (deciso il 21/09/2026, `docs/BACKLOG.md` → «Debiti minori»): nessuna
+ * rotta, nessun registry (`src/lib/providers/registry.ts`, composizione in
+ * `src/lib/providers/index.ts`) e nessun giro di raccolta importa questo file.
+ * Verificato con grep il 21/09: zero importazioni esterne, e le cinque funzioni
+ * esportate non sono chiamate da nessuna parte del progetto.
  *
- * Questo adapter permette di confrontare le quote soft (da BetExplorer) con la
- * linea sharp (Pinnacle) per calcolare il vero Expected Value.
+ * Conseguenza pratica: **configurare `SHARP_API_KEY` non cambia nulla di ciò
+ * che il sito mostra**. La linea sharp usata dal monitor è quella di
+ * The Odds API (`src/lib/providers/optional/odds-api-sharp.ts`), dietro il
+ * doppio flag del cablaggio (`ODDS_WIRE_COLLECT` +
+ * `DROP_EXCLUDE_CONSENSUS_BOOKS`).
  *
- * Configurazione:
+ * Perché resta nel repository: è interrogabile a mano dagli script (vedere
+ * `GUIDA-OPERATIVA.md` §«Testa l'adapter SharpAPI») e resta il riferimento per
+ * un eventuale cablaggio futuro. Quel lavoro non è una riga di codice: chiede
+ * l'ingresso nel registry con le capacità dichiarate, un budget e un backoff
+ * propri, i test di contratto e una decisione sul costo del provider.
+ *
+ * Finché non viene fatto: non estendere questo modulo e non farci
+ * affidamento. Le esportazioni sono marcate `@deprecated` perché gli editor e
+ * `tsc` lo dicano a chi le incontra.
+ *
+ * Cosa fa, se interrogato direttamente: legge la linea sharp (Pinnacle e altri
+ * libri di riferimento) e la confronta con quote soft per +EV e arbitraggio.
+ * Free tier dichiarato dal provider: 12 req/min (17.280/giorno).
+ *
+ * Configurazione (solo per l'uso standalone):
  * - SHARP_API_KEY nel file .env (mai committare!)
  * - SHARP_API_BASE_URL opzionale (default: https://sharpapi.io)
  */
@@ -47,6 +67,8 @@ export interface SharpMatchOdds {
 
 /**
  * Controlla se l'adapter SharpAPI è configurato e disponibile.
+ *
+ * @deprecated Modulo non cablato: vedere l'intestazione del file.
  */
 export function isSharpApiAvailable(): boolean {
   return Boolean(SHARP_API_KEY);
@@ -55,6 +77,7 @@ export function isSharpApiAvailable(): boolean {
 /**
  * Recupera le quote sharp (Pinnacle) per un match specifico.
  *
+ * @deprecated Modulo non cablato: vedere l'intestazione del file.
  * @param matchId - ID del match nel formato SharpAPI (es. "soccer/england/premier-league/arsenal-chelsea")
  * @returns Quote sharp per 1X2, o null se non disponibili
  */
@@ -96,6 +119,7 @@ export async function getSharpOdds(matchId: string): Promise<SharpMatchOdds | nu
 /**
  * Recupera le quote sharp per più match in batch.
  *
+ * @deprecated Modulo non cablato: vedere l'intestazione del file.
  * @param matchIds - Array di ID match
  * @returns Map di matchId -> SharpMatchOdds
  */
@@ -138,6 +162,8 @@ export async function getSharpOddsBatch(matchIds: string[]): Promise<Map<string,
 /**
  * Confronta quote soft (nostre) con quote sharp (Pinnacle) e calcola EV.
  *
+ * @deprecated Modulo non cablato: il divario di prezzo del sito è in
+ * `src/lib/repo/value-bets.ts` e usa la linea realmente raccolta.
  * @param softPrices - Quote dal nostro bookmaker [1, X, 2]
  * @param sharpPrices - Quote da Pinnacle [1, X, 2]
  * @returns Array di value bets con edge > 0
@@ -192,6 +218,8 @@ export function findValueBets(
  *
  * Arbitraggio esiste se: somma(1/best_odds) < 1
  *
+ * @deprecated Modulo non cablato: lo scanner di arbitraggio del sito è
+ * `src/lib/quant/arbitrage.ts`, che legge i prezzi realmente raccolti.
  * @param softPrices - Quote dal nostro bookmaker [1, X, 2]
  * @param sharpPrices - Quote da Pinnacle [1, X, 2]
  * @returns Info arbitraggio se esiste

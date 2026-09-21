@@ -118,8 +118,11 @@ async function main(): Promise<void> {
     },
     {
       name: "il divario medio non è un margine di comodo",
-      ok: Math.abs(data.averageEdgePct) < 12,
-      detail: `media ${data.averageEdgePct.toFixed(2)} pp — un valore intorno a −4/+5 pp è il margine della linea; un ordine di grandezza diverso qui significa una formula reinventata`,
+      ok: rows.length === 0 || Math.abs(data.averageEdgePct) < 12,
+      detail:
+        rows.length === 0
+          ? "nessuna riga in elenco: il divario medio non è misurabile, non è uno zero misurato"
+          : `media ${data.averageEdgePct.toFixed(2)} pp — un valore intorno a −4/+5 pp è il margine della linea; un ordine di grandezza diverso qui significa una formula reinventata`,
     },
     {
       name: "la terna simultanea esiste nei dati (non è la regola a azzerare la lista)",
@@ -154,18 +157,24 @@ async function main(): Promise<void> {
 
   console.log("\n## Distribuzione dei divari elencati\n");
   console.log(
-    `- righe: ${rows.length} · mediana ${quantile(edges, 0.5)?.toFixed(2)} pp · ` +
+    `- righe: ${rows.length} · mediana ${
+      quantile(edges, 0.5)?.toFixed(2) ?? "n/d"
+    } pp · ` +
       `min ${edges.length ? Math.min(...edges).toFixed(2) : "n/d"} pp · ` +
       `max ${edges.length ? Math.max(...edges).toFixed(2) : "n/d"} pp · ` +
       `sopra zero ${pc(rows.length === 0 ? null : rows.filter((o) => o.edgePct > 0).length / rows.length)}`,
   );
   console.log(
-    `- bookmaker con terna completa per riga: media ${(mean(books) ?? 0).toFixed(2)} · ` +
+    `- bookmaker con terna completa per riga: media ${
+      mean(books)?.toFixed(2) ?? "n/d"
+    } · ` +
       `massimo ${books.length ? Math.max(...books) : "n/d"} (con un solo operatore in ` +
       `fonte questo numero non può salire: è il limite da rimuovere per parlare di valore)`,
   );
   console.log(
-    `- età delle letture usate: mediana ${quantile(ages, 0.5)?.toFixed(0)} min · ` +
+    `- età delle letture usate: mediana ${
+      quantile(ages, 0.5)?.toFixed(0) ?? "n/d"
+    } min · ` +
       `massimo ${ages.length ? Math.max(...ages).toFixed(0) : "n/d"} min`,
   );
   console.log(
