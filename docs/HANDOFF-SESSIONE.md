@@ -1,11 +1,137 @@
 # Handoff — DropAlert: stato lavori, infrastruttura live, cosa continuare
 
-> Documento di continuità fra sessioni di lavoro. Ultimo aggiornamento: **2026-09-11**.
-> **Leggi prima §0** (ripartenza di oggi): dice dove siamo, cosa è acceso e
-> cosa fare adesso. Da `## Stato decisionale — aggiornamento 2026-09-06` in poi
-> il testo è **storico** (PR #11–#22): utile come contesto, non come stato corrente.
+> Documento di continuità fra sessioni di lavoro. Ultimo aggiornamento: **2026-09-13**.
+> **Leggi prima §0 (aggiornamento 2026-09-13)**: dice dove siamo, cosa è acceso e
+> cosa fare adesso. Da `## 0. RIPARTENZA — aggiornamento 2026-09-10` in poi il
+> testo è **storico** (PR #26–#32): utile come contesto — la mappa dei file, le
+> verifiche senza terminale e le trappole di quel blocco (§0.5–§0.7) restano
+> riferimenti validi — ma non come stato corrente.
 > Gli orari di questo documento sono in UTC quando hanno la `Z`; le pagine del
 > sito li mostrano in ora italiana (estate = UTC+2) — non confondere i due.
+
+---
+
+## 0. RIPARTENZA — aggiornamento 2026-09-13
+
+> Sessione `arena/01a09a1a-dropalert-next` (da `c7efe19`). Tutto sotto è
+> verificato oggi con letture reali (UTC con `Z`); niente numeri a memoria.
+
+### 0.1 Dove siamo (verificato, non a memoria)
+
+- **PR #32 MERGIATA su `main`** — merge commit **`c7efe19`** (12/09 22:12 UTC).
+  Contenuto: sicurezza push (quote atomiche persistenti, prova di possesso via
+  notifica cifrata, invio atomico, retention), CLV omogeneo in `/performance`
+  e dashboard (campione solo grezzo-grezzo `raw_consensus`, esclusi conteggiati
+  e dichiarati), audit completo di rilascio (`docs/AUDIT-2026-09-12.md`),
+  scanner indipendente `audit:candidate` (`docs/SCANNER-INDIPENDENTE.md`),
+  migrazione additiva `0010_quote_timestamp_origin` con procedura di
+  applicazione production (`docs/APPLICA-MIGRAZIONE-0010.md`), workflow manuali
+  con input validati (`test:workflows`, 95 verifiche).
+- **`Verifica` post-merge su `main` verde** (run `34722118636`, 2m10s).
+- **Produzione gira il codice nuovo** (fotogramma §0.2): `/performance`
+  dichiara la base nuova («Archivio: 322 osservazioni. Campione mostrato: 266,
+  solo chiusura grezza contro segnale grezzo; escluse 56 senza margine»), che
+  solo il codice di #32 produce.
+- `main` = `c7efe19` (verificato con `git ls-remote origin main`); nessun PR
+  aperto al 13/09 09:40 UTC.
+- **Ri-verificato oggi**: l'integrazione agente NON può lanciare workflow
+  (`gh workflow run` → HTTP 403 «Resource not accessible by integration»,
+  riprovato il 13/09): ogni `Verifica dati reali (manuale)` e ogni
+  `Ribasatura CLV` resta avvio manuale del gestore (UI Actions o terminale col
+  token dell'owner).
+
+### 0.2 Fotogramma live del 13/09/2026 (letture reali)
+
+| Lettura (UTC) | Esito |
+|---|---|
+| `/api/health` (09:39) | `partial_data`; DB raggiungibile (latenza 2002 ms, pool freddo); BetExplorer **`degraded`** (2 errori consecutivi, ultimo 429 alle 09:02:12); wire **SPENTO** (mancano i due flag, motivo dichiarato); `dataGaps` 1252 aperti (bookmaker_missing 1003, rate_limited **135**, provider_unavailable 74, result_not_published 40); segnali 4 attivi / 322 chiusi; matches 854, snapshots 15.327, CLV **322** (era 318 il 12/09: i full continuano a chiudere) |
+| `/api/cron/status` (09:39) | gate sano: ping fuori cadenza `lastPingSkipped: true`; ultimo `collect_only` 09:00 (78 s, `partial`); `lastFullCycleAt` 05:25 (Actions) |
+| Actions «Osservazione DropAlert» | 3 full consecutivi `success` sotto i 10 min (13/09 05:25 → 6m13s; 13/09 00:50 → 4m5s; 12/09 22:57 → 5m25s); un solo `cancelled` per timeout (12/09 18:28, isolato: i tre giri dopo sono verdi) |
+| Seconda gamba `collect_only` (giri amessi a ritmo orario dal gate) | 09:00 `partial` 78 s · 08:00 `partial` 91 s · 07:00 **`failed` 5,3 s** — isolato, non classificato (l'agente non ha il DB: se si ripete, leggere `collector_runs.meta` prima di concludere) |
+| `/coverage` (run 1725, 11:00 italiane) | 34 righe viste, 12 di calcio, **0 importate, 12 perse «Non raggiunte»** (429 nella fase dettaglio); **251 episodi 429** totali da quando la fonte è registrata (225 alle 14:00 del 12/09); profondità 30 giri schedulati |
+| `/value-bets` (10:40 italiane) | 200 segnali letti, 199 già al kickoff, 0 divisibili — empty state onesto della domenica mattina, non un guasto |
+| Ribasatura CLV | nessun run `Ribasatura CLV (manuale)` dopo il 06/09 (i 4 run letti predata l'allineamento di base di #29): lo storico resta non allineato e le 56 osservazioni senza margine restano escluse e dichiarate |
+
+### 0.3 Analisi dei 429 prima di toccare la frequenza (audit P1.1)
+
+La regola documentata (vecchio §9.4, riconfermata nel vecchio §0.8):
+rallentare **solo se** la fonte è `degraded` **e** `rate_limited > 95`
+(baseline 95 del 05/09). Oggi **entrambe le condizioni sono vere**: fonte
+`degraded`, contatore **135** (serie: 95 → 116 il 11/09 → 123 il 12/09 → 135).
+
+Cosa esiste già nel codice, e perché da solo non basta:
+- backoff adattivo del giro di rete (`src/lib/providers/backoff.ts`): scala
+  45→90→180 min, poi raddoppio fino a 24 h, azzerato solo da un giro senza 429;
+- backoff intra-chiamata sul Retry-After;
+- gate e claim che impediscono giri doppi fra le due gambe;
+- ma il giro 1725 di oggi ha comunque perso **12/12** righe di calcio nella
+  fase dettaglio: il limite che resta è il ritmo base.
+
+Il ritmo base è `BETEXPLORER_RPM` (default **12**) e
+`BETEXPLORER_MIN_INTERVAL_MS` (default **4000**), letti dal codice
+(`src/lib/providers/betexplorer/index.ts:212-213`). Oggi **non sono imposti in
+nessun posto**: `collect.yml` non li passa (il giro Actions usa i default) e
+`/api/health` mostra esattamente 12/4000 (il giro Vercel `collect_only` usa i
+default). Quindi il rallentamento 12→8 / 4000→6000 prescritto dalla regola si
+applica come variabili d'ambiente, in due punti — **entrambi azione umana**
+(l'agente non può pushare `.github/workflows/` e non tocca Vercel):
+
+1. **Actions (full)**: nel blocco `env` del job in `collect.yml` aggiungere
+   `BETEXPLORER_RPM: ${{ vars.BETEXPLORER_RPM || '8' }}` e
+   `BETEXPLORER_MIN_INTERVAL_MS: ${{ vars.BETEXPLORER_MIN_INTERVAL_MS || '6000' }}`;
+2. **Vercel (`collect_only`)**: le stesse due variabili nell'ambiente del
+   progetto.
+
+Decisione del gestore, come da regola; questo documento la riporta con i
+numeri del giorno. Se il rallentamento non viene applicato, il prossimo
+fotogramma va riletto alla luce della crescita del contatore e delle perse del
+giro 1725.
+
+### 0.4 Azioni umane restanti (in ordine)
+
+1. **Migrazione 0010 su produzione** — procedura pronta e riprovata su copia
+   Neon (run `34721053463`, rollback confermato); **non eseguita dopo il
+   merge**. Dopo il merge cambia il branch di esecuzione: il workflow è in
+   `main`, quindi eseguire con **branch `main`** (la tabella di
+   `APPLICA-MIGRAZIONE-0010.md` citava il ramo della sessione: stesso codice,
+   `main` è la scelta canonica). Snapshot dichiarato: `2026-09-12T21:57:06Z`;
+   se il gestore vuole un punto di ripristino più vicino, crearne uno nuovo e
+   usare il suo timestamp in `migration_snapshot`. Input: `which=
+   migration-apply-production`, `migration_confirmation=APPLICA-0010-
+   PRODUCTION`, `match_id`/`sport_key` vuoti. **Questa modalità scrive in
+   produzione; non è la prova con rollback.**
+   Nota: senza la migrazione la raccolta NON è bloccata (gli scrittori che
+   usano `timestamp_origin` stanno dietro flag spenti in produzione o in run
+   manuali one-off); resta bloccata la provenienza temporale dello scanner
+   indipendente, e lo storico resta `unknown` per design.
+2. **Rallentamento BetExplorer 12→8 / 4000→6000** — se il gestore conferma il
+   gate §0.3; le due sedi esatte sono lì.
+3. **Ribasatura CLV** — workflow `Ribasatura CLV (manuale)`: prima `dry-run`
+   (sola lettura: mostra cosa cambierebbe), confronto, poi eventuale `apply`.
+   È il passo che rende `/performance` omogeneo anche sullo storico (oggi le
+   56 osservazioni senza margine restano escluse e dichiarate, nessun
+   ricalcolo).
+4. **Lettura reale del cablaggio (`smoke-wire`)** — ultimo elenco: 12/09 20:02
+   (run `34715864943`), 0 segnali ≥ 45; oggi 4 segnali attivi ma i loro indici
+   non sono letti da questa sessione. Con un giro che produce segnali
+   `active` ≥ 45 su competizione coperta: `which=smoke-wire` senza `match_id`
+   (elenco, 0 crediti), poi con `match_id` (1 credito). La diagnostica aggiunta
+   in #32 stampa anche i segnali sotto soglia e un riepilogo strutturato.
+5. **Accensione dei due flag wire su Vercel** — solo dopo la lettura reale +
+   confronto prima/dopo sui punteggi (STUDIO-CABLAGGIO-ODDS §4.7: senza
+   `DROP_EXCLUDE_CONSENSUS_BOOKS` le linee per-book inquinano la mediana).
+6. **Collaudo push su dispositivi reali** — ricezione e click della prova,
+   riverifica delle iscrizioni esistenti (richiedono conferma), sincronizzazione
+   lista/soglie, cancellazione e comportamento dopo perdita dello storage.
+
+### 0.5 Cosa ha fatto questa sessione (13/09)
+
+Sola lettura + documentazione: verificato merge, deploy e fotogramma live
+(§0.1–0.2); analisi dei 429 per la decisione di frequenza (§0.3); aggiornato
+questo handoff e `docs/BACKLOG.md` (stati superati, rimossi solo dopo la
+verifica live). Nessuna modifica di codice, nessuna scrittura su produzione,
+nessun credito provider, nessun workflow avviato (il lancio resta al gestore:
+403 re-verificato oggi, §0.1).
 
 ---
 

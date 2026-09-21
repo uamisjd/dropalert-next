@@ -1,6 +1,17 @@
 # DropAlert — Coda di lavoro dichiarata
 
-Ultimo aggiornamento della verifica: 12/09/2026.
+Ultimo aggiornamento della verifica: 13/09/2026 (sessione
+`arena/01a09a1a-dropalert-next`, dopo il merge di PR #32 — fotogramma e analisi
+dei 429 in `docs/HANDOFF-SESSIONE.md` §0 del 13/09).
+
+**Verifica live 13/09:** fonte BetExplorer `degraded` con contatore 429 a 135
+(baseline 95): le due condizioni del gate documentato sono entrambe vere, il
+rallentamento 12→8 / 4000→6000 resta da applicare come variabili d'ambiente
+(azioni del gestore, sedi esatte nell'handoff §0.3). Lo storico CLV non è
+ancora ribasato (nessun run dopo il 06/09); `/performance` mostra il campione
+allineato (266 su 322) con le 56 osservazioni senza margine escluse e
+dichiarate. La migrazione `0010_quote_timestamp_origin` è pronta e provata su
+copia Neon; l'applicazione su produzione resta un avvio manuale del gestore.
 
 **Audit recente:** vedere [AUDIT-2026-09-12.md](AUDIT-2026-09-12.md) per
 riscontri live, correzioni verificate e priorità ancora aperte. Le sezioni
@@ -89,6 +100,16 @@ Da fare:
 **Vincolo:** nessuna deduzione di quote per le partite non coperte. Una partita
 fuori copertura resta fuori copertura e viene dichiarata tale.
 
+**Fotogramma 13/09/2026 (verifica live):** la fonte è `degraded` con 251
+episodi 429 da quando è registrata; l'ultimo giro strumentato (run 1725) ha
+perso **12/12** righe di calcio nella fase dettaglio («Non raggiunte», 429) e
+ha importato 0 partite. Il backoff adattivo del giro (45→90→180 min, tetto 24
+h) esiste già nel codice; il ritmo base (12 RPM / 4000 ms, default del codice
+non imposti da nessuna sede) è la leva che resta, e il gate documentato
+(fonte `degraded` E `rate_limited > 95`) è oggi soddisfatto: la decisione e
+l'applicazione sono del gestore, sedi esatte in
+`docs/HANDOFF-SESSIONE.md` §0.3 del 13/09.
+
 ---
 
 ## 2. Fonte quote multi-bookmaker per rendere calcolabile `sharpConfirms`
@@ -124,6 +145,20 @@ Per quelli serve una **seconda fonte** (SportsGameOdds o OddsPapi, Pinnacle
 diretto), come da decisione «due fasi» in STUDIO-CABLAGGIO-ODDS §6. Questo punto
 resta quindi aperto per la parte minori.
 
+**Avanzamento 12–13/09/2026 (PR #32, verificato live dopo il merge):**
+esiste ora lo **scanner indipendente** `audit:candidate` (comando
+`npm run audit:candidate -- <id> <operatore> <esito>`, dettaglio in
+`docs/SCANNER-INDIPENDENTE.md`): confronta un operatore target con riferimento
+Pinnacle su snapshot di produzione, espone i gate mancanti e arriva al massimo
+a CANDIDATA — non rimpiazza lo scanner pubblico né abilita BET. La
+persistenza della **provenienza temporale** dei nuovi snapshot è implementata
+con la migrazione additiva `0010_quote_timestamp_origin` (storico `unknown`
+per design, nessuna reinterpretazione retroattiva): provata su copia Neon con
+rollback confermato, **da applicare su produzione** con l'avvio manuale
+documentato in `docs/APPLICA-MIGRAZIONE-0010.md` (branch `main`, conferma
+`APPLICA-0010-PRODUCTION`). Finché non parte, la raccolta non è bloccata: gli
+scrittori che usano la colonna stanno dietro i flag wire, spenti in produzione.
+
 **Vincolo:** nessun valore per-book inventato o ripartito dalla media. Finché la
 fonte non esiste, il gap resta aperto e dichiarato.
 
@@ -155,6 +190,15 @@ dell'avviso lo dichiara, e non assomiglia a un consiglio di giocata.
 
 Da fare, se si vuole: una pagina che mostri a chi legge **che cosa** gli è stato
 inviato e quando, oggi la traccia sta solo a registro.
+
+**Aggiornamento 12–13/09/2026 (PR #32, in produzione dopo il merge):**
+completati la prova di possesso dell'iscrizione (codice monouso via notifica
+cifrata, conferma entro 5 minuti), la chiave di gestione per aggiornamento/
+prova/cancellazione, l'invio automatico a prenotazione atomica (al massimo un
+tentativo per partita/giorno/iscrizione) e la retention opportunistica (verifiche
+> 10 min, marcatori > 7 giorni, iscrizioni inattive > 90 giorni). Le
+iscrizioni preesistenti richiederanno la riverifica: da dichiarare al
+rilascio. Resta il collaudo su dispositivi reali (audit §9, gate di rilascio).
 
 ---
 
@@ -250,11 +294,18 @@ reale su una partita campione.
   maggiore.
 - **Nessun auto-refresh**: la dashboard e il dettaglio si aggiornano solo al
   ricaricamento della pagina.
-- **CLV ancora vuoto**: `clv_records` è a zero perché nessun segnale rilevato ha
-  ancora raggiunto il proprio kickoff con una linea di chiusura registrata. Non
-  è un difetto, è il tempo che manca: il vincolo delle 30 osservazioni resta.
-- **Workflow GitHub Actions mai eseguito**: `.github/workflows/collect.yml`
-  esiste ma richiede un repository remoto e il secret `JOBS_TOKEN`.
+- **CLV**: non più vuoto — al 13/09/2026 ci sono **322** osservazioni
+  (`clv_records`), con 266 su base allineata grezzo-grezzo e 56 escluse per
+  chiusura senza margine. La misura è ora omogenea nelle viste pubbliche
+  (PR #32) ma lo storico non è ancora ribasato: resta un avvio manuale del
+  gestore (dry-run prima). Il vincolo delle 30 osservazioni per concludere
+  resta valido.
+- **Workflow GitHub Actions**: `.github/workflows/collect.yml` (Osservazione
+  DropAlert) gira regolarmente in produzione; i workflow manuali
+  (`audit.yml`, `smoke-odds.yml`, `rebase-clv.yml`) sono avviabili a mano.
+  L'integrazione agente NON li può lanciare (403 su `gh workflow run`,
+  ri-verificato 13/09): l'avvio resta al gestore da UI Actions o terminale
+  con token owner.
 - **Test sui componenti React parziali**: `test:client` copre in un DOM reale
   il toggle delle preferite, gli strumenti, la card segnale e il Contesto 360°;
   per gli altri componenti il rendering resta verificato per ispezione
