@@ -1,13 +1,84 @@
 # Handoff — DropAlert: stato lavori, infrastruttura live, cosa continuare
 
-> Documento di continuità fra sessioni di lavoro. Ultimo aggiornamento: **2026-09-13**.
-> **Leggi prima §0 (aggiornamento 2026-09-13)**: dice dove siamo, cosa è acceso e
-> cosa fare adesso. Da `## 0. RIPARTENZA — aggiornamento 2026-09-10` in poi il
-> testo è **storico** (PR #26–#32): utile come contesto — la mappa dei file, le
+> Documento di continuità fra sessioni di lavoro. Ultimo aggiornamento: **2026-09-21**.
+> **Leggi prima §0 (aggiornamento 2026-09-21)**: dice dove siamo, cosa è acceso e
+> cosa fare adesso. Da `## 0. RIPARTENZA — aggiornamento 2026-09-13` in poi il
+> testo è **storico** (PR #26–#34): utile come contesto — la mappa dei file, le
 > verifiche senza terminale e le trappole di quel blocco (§0.5–§0.7) restano
 > riferimenti validi — ma non come stato corrente.
 > Gli orari di questo documento sono in UTC quando hanno la `Z`; le pagine del
 > sito li mostrano in ora italiana (estate = UTC+2) — non confondere i due.
+
+---
+
+## 0. RIPARTENZA — aggiornamento 2026-09-21
+
+> Sessione `arena/01a0c3f1-dropalert-next` (da `825d61f`). Tutto sotto è stato
+> letto o eseguito oggi; i numeri di produzione arrivano da `gh`, non dalla
+> memoria. La sandbox **non raggiunge il sito** (`curl
+> https://dropalert-next.vercel.app/api/health` → `000`): niente fotogramma
+> live in questa passata, per quello serve il browser del gestore o un
+> workflow.
+
+### 0.1 Dove siamo (verificato oggi)
+
+- **PR #34 MERGIATA su `main`** il 21/09 11:09 UTC (merge commit `825d61f`):
+  audit completo 21/09, 7 difetti corretti, 404 in italiano, `.env.example`,
+  `GUIDA-OPERATIVA.md` allineata, debito SharpAPI a backlog
+  (`docs/AUDIT-2026-09-21.md`).
+- **`Verifica` su `main` verde** dopo il merge: run `35599463503`, 2m16s.
+- **Il ciclo di raccolta sta girando**: 8 run schedulati consecutivi di
+  «Osservazione DropAlert» in `success`, l'ultimo ~2 h fa in 6m12s (letti con
+  `gh run list --workflow "Osservazione DropAlert"`).
+- **Nessun run manuale dal 13/09**: «Ribasatura CLV (manuale)» ultimo run 15
+  giorni fa, «Verifica dati reali (manuale)» ultimo run 8 giorni fa. Quindi i
+  passi umani del §0.4 qui sotto — inclusa l'**applicazione in produzione
+  della migrazione `0010`** — **non sono ancora stati fatti**.
+
+### 0.2 Cosa ha fatto questa sessione (21/09, seconda passata)
+
+Riesecuzione indipendente del gate su sandbox pulita, senza riusare le
+letture dell'audit: PostgreSQL 16.2 avviato in locale sulla porta 5433
+(binari `pgserver` da PyPI, nessun pacchetto di sistema disponibile),
+migrazioni Drizzle su DB vergine, `db:seed --demo`, `job:analyze`,
+`next build` + `next start` e 33 letture HTTP. Esito:
+
+- `typegen` · `typecheck` · `lint` ✓; `test:all` **exit 0** (56 passi npm,
+  71 file di test, 991 controlli ✓, 0 fallimenti, 1 suite saltata per
+  progetto: `test:odds-live` senza fixture live); `build` ✓ con **38 voci di
+  rotta** (19 pagine + `/_not-found`, 13 API, 5 di servizio).
+- Testo visibile delle 19 rotte analizzato con jsdom (script e style
+  rimossi): **0** `undefined` / `NaN` / `[object`.
+- Sicurezza campionata: `POST /api/jobs/analyze` → **401** con motivo
+  dichiarato, `GET` → **405**; `/api/health` su DB senza raccolte dichiara
+  `no_sources`, non inventa copertura.
+- **Un difetto trovato e corretto**: `src/scripts/audit-value-bets.ts` su
+  elenco vuoto stampava `mediana undefined pp` e `media 0.00` (zero spacciato
+  per misura). Ora `n/d` e «non misurabile», come già fa `audit-finished.ts`.
+  Gate rieseguito dopo la correzione: verde.
+- Corretti i conteggi dichiarati nell'audit (44 suite → 56 passi npm su 71
+  file; 26 rotte → 38 voci, 13 API non 11) e aggiunto §8 con la metodologia.
+
+Nota d'ambiente: il file `.env` scritto per i test (`DATABASE_URL` sulla
+5433) **non è committato** — `.env*` è in `.gitignore`, con `!.env.example`.
+
+### 0.3 Cosa resta (invariato, con la verifica di oggi)
+
+Nessuna novità di codice: restano **solo azioni umane**, quelle del §0.4 del
+13/09 qui sotto, nell'ordine indicato lì. In sintesi, con lo stato letto oggi:
+
+1. **Migrazione `0010` su produzione** — nessun run manuale dal 13/09, quindi
+   non applicata. Procedura: `docs/APPLICA-MIGRAZIONE-0010.md`, branch `main`.
+2. **Ribasatura CLV storico** — nessun run dal 06/09: prima `dry-run`, poi
+   eventuale `apply`.
+3. **Rallentamento BetExplorer 12→8 / 4000→6000** — decide il gestore sul gate
+   del §0.3 del 13/09 (fonte `degraded` **e** `rate_limited > 95`); i contatori
+   vanno riletti oggi, questa sandbox non vede `/api/health`.
+4. **Lettura reale del cablaggio (`smoke-wire`) e accensione dei due flag** su
+   Vercel, dopo il confronto prima/dopo.
+5. **Collaudo push su dispositivi reali.**
+6. **Decisione aperta**: cablare o deprecare l'adapter SharpAPI
+   (`docs/BACKLOG.md`, Debiti minori).
 
 ---
 
