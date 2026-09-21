@@ -1,8 +1,21 @@
 # DropAlert — Coda di lavoro dichiarata
 
-Ultimo aggiornamento della verifica: 13/09/2026 (sessione
-`arena/01a09a1a-dropalert-next`, dopo il merge di PR #32 — fotogramma e analisi
-dei 429 in `docs/HANDOFF-SESSIONE.md` §0 del 13/09).
+Ultimo aggiornamento della verifica: 21/09/2026 (sessione
+`arena/01a0c499-dropalert-next`, dopo il merge di PR #35 — i tre passi umani
+del giorno in `docs/HANDOFF-SESSIONE.md` §0 del 21/09, terza passata).
+
+**Aggiornamento 21/09 (passi umani del gestore: migrazione e ribasatura
+CHIUSE):** la migrazione `0010_quote_timestamp_origin` è **verificata presente
+in produzione** — run #25 di «Verifica dati reali (manuale)» da `main`
+(`51b3113`), annotazione «GIÀ APPLICATA: schema e journal verificati; nessuna
+nuova migrazione eseguita». Lo **storico CLV è ribasato**: dry-run #5 di
+«Ribasatura CLV (manuale)» letto e coerente (390 righe: 56
+`fair_novig → raw_consensus`, 334 già allineate, media +3,43 pp sulle righe
+cambiate, 41 cambiano verso), poi apply #6 con scrittura identica al dry-run.
+`/performance` alle 17:03 italiane: Archivio 390 · campione mostrato 390 ·
+escluse 0 · CLV medio +0,05 pp · batte la chiusura 37% · fasce 175+214+1.
+Metadati dei run e annotazioni riletti con `gh`; corpo dei log e lettura live
+del sito sono del gestore (la sandbox non li raggiunge, dichiarato nell'handoff).
 
 **Verifica live 13/09:** fonte BetExplorer `degraded` con contatore 429 a 135
 (baseline 95): le due condizioni del gate documentato sono entrambe vere, il
@@ -158,6 +171,13 @@ rollback confermato, **da applicare su produzione** con l'avvio manuale
 documentato in `docs/APPLICA-MIGRAZIONE-0010.md` (branch `main`, conferma
 `APPLICA-0010-PRODUCTION`). Finché non parte, la raccolta non è bloccata: gli
 scrittori che usano la colonna stanno dietro i flag wire, spenti in produzione.
+
+**Aggiornamento 21/09/2026:** la migrazione `0010` è **verificata presente in
+produzione** — run #25 di «Verifica dati reali (manuale)» da `main` @
+`51b3113`, annotazione «GIÀ APPLICATA: schema e journal verificati; nessuna
+nuova migrazione eseguita» (il ramo di riesecuzione della procedura
+documentata: nessuna nuova scrittura). Il passo umano è chiuso; lo storico
+resta `unknown` per design, nessuna reinterpretazione retroattiva.
 
 **Vincolo:** nessun valore per-book inventato o ripartito dalla media. Finché la
 fonte non esiste, il gap resta aperto e dichiarato.
@@ -316,13 +336,23 @@ reale su una partita campione.
   chiusura senza margine. La misura è ora omogenea nelle viste pubbliche
   (PR #32) ma lo storico non è ancora ribasato: resta un avvio manuale del
   gestore (dry-run prima). Il vincolo delle 30 osservazioni per concludere
-  resta valido.
+  resta valido. **Al 21/09/2026 lo storico è ribasato**: dry-run #5 letto e
+  coerente (390 righe: 56 `fair_novig → raw_consensus`, 334 già allineate,
+  media +3,43 pp sulle righe cambiate, 41 cambiano verso), poi apply #6 con
+  scrittura identica al dry-run. Le osservazioni sono **390, tutte su base
+  allineata grezzo-grezzo**; `/performance` (lettura live 17:03 italiane)
+  mostra Archivio 390 · campione mostrato 390 · escluse 0 · CLV medio
+  +0,05 pp · batte la chiusura 37% · fasce 175+214+1. Il vincolo delle 30
+  osservazioni per concludere resta valido ed è superato dal campione mostrato
+  (n=390); la lettura del valore della misura resta al gestore.
 - **Workflow GitHub Actions**: `.github/workflows/collect.yml` (Osservazione
   DropAlert) gira regolarmente in produzione; i workflow manuali
   (`audit.yml`, `smoke-odds.yml`, `rebase-clv.yml`) sono avviabili a mano.
   L'integrazione agente NON li può lanciare (403 su `gh workflow run`,
   ri-verificato 13/09): l'avvio resta al gestore da UI Actions o terminale
-  con token owner.
+  con token owner. Il 21/09 il percorso è stato usato così dal gestore:
+  run #25 «Verifica dati reali (manuale)» (migrazione 0010 verificata
+  presente) e run #5/#6 «Ribasatura CLV (manuale)» (dry-run, poi apply).
 - **Test sui componenti React parziali**: `test:client` copre in un DOM reale
   il toggle delle preferite, gli strumenti, la card segnale e il Contesto 360°;
   per gli altri componenti il rendering resta verificato per ispezione
